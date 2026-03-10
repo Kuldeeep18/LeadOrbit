@@ -1,0 +1,221 @@
+:root {
+    --ink-900: #0f172a;
+    --ink-700: #334155;
+    --ink-500: #64748b;
+    --line: #dbe4ef;
+    --panel: #ffffff;
+    --canvas: #f4f8fb;
+    --primary: #0ea5a2;
+    --primary-dark: #0f766e;
+}
+
+* {
+    font-family: 'Manrope', sans-serif;
+}
+
+body {
+    margin: 0;
+    min-height: 100vh;
+    background: radial-gradient(circle at top left, #ecfeff 0%, #f8fafc 35%, #eff6ff 100%);
+    color: var(--ink-900);
+}
+
+.app-shell {
+    display: flex;
+    min-height: 100vh;
+}
+
+.sidebar {
+    width: 250px;
+    background: linear-gradient(190deg, #0f172a 0%, #13263f 100%);
+    color: #f8fafc;
+    border-right: 1px solid rgba(148, 163, 184, 0.2);
+    padding: 1rem;
+    display: flex;
+    flex-direction: column;
+}
+
+.brand {
+    font-family: 'Sora', sans-serif;
+    font-weight: 700;
+    font-size: 1.45rem;
+    letter-spacing: -0.03em;
+    background: linear-gradient(135deg, #22d3ee, #2dd4bf);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+}
+
+.sidebar .nav-link {
+    color: #cbd5e1;
+    border-radius: 10px;
+    font-weight: 600;
+    padding: 0.65rem 0.75rem;
+    transition: all 0.2s ease;
+}
+
+.sidebar .nav-link:hover {
+    background: rgba(148, 163, 184, 0.16);
+    color: #f8fafc;
+}
+
+.sidebar .nav-link.active {
+    background: linear-gradient(135deg, #0ea5a2, #14b8a6);
+    color: #fff;
+}
+
+.sidebar-footer {
+    margin-top: auto;
+    border-top: 1px solid rgba(148, 163, 184, 0.45);
+    padding-top: 0.8rem;
+}
+
+.main-area {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.top-header {
+    background: rgba(255, 255, 255, 0.9);
+    backdrop-filter: blur(8px);
+    border-bottom: 1px solid var(--line);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    padding: 0.9rem 1rem;
+}
+
+.page-title {
+    font-family: 'Sora', sans-serif;
+    font-size: 1.32rem;
+    font-weight: 700;
+    margin-bottom: 0.1rem;
+    letter-spacing: -0.02em;
+}
+
+.title-meta {
+    color: var(--ink-500);
+    font-size: 0.86rem;
+}
+
+.content-wrap {
+    padding: 1.3rem;
+}
+
+.glass-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+}
+
+.kpi-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 0.9rem;
+}
+
+.kpi-card {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    padding: 1rem;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+}
+
+.kpi-label {
+    color: var(--ink-500);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    font-weight: 700;
+}
+
+.kpi-value {
+    font-family: 'Sora', sans-serif;
+    font-size: 1.45rem;
+    font-weight: 700;
+    margin-top: 0.25rem;
+}
+
+.kpi-sub {
+    color: var(--ink-500);
+    font-size: 0.78rem;
+}
+
+.section-title {
+    font-size: 1.02rem;
+    font-weight: 800;
+    margin-bottom: 0.9rem;
+}
+
+.search-wrap {
+    min-width: 260px;
+    max-width: 360px;
+}
+
+.search-wrap .input-group-text {
+    border-color: var(--line);
+    background: #fff;
+    color: var(--ink-500);
+}
+
+.search-wrap .form-control {
+    border-color: var(--line);
+    box-shadow: none;
+}
+
+.search-wrap .form-control:focus {
+    border-color: #2dd4bf;
+}
+
+.table-shell {
+    background: #fff;
+    border: 1px solid var(--line);
+    border-radius: 14px;
+    overflow: hidden;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+}
+
+.table-shell thead th {
+    color: var(--ink-500);
+    font-weight: 700;
+    font-size: 0.78rem;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+}
+
+.chip {
+    border-radius: 999px;
+    padding: 0.2rem 0.55rem;
+    font-size: 0.72rem;
+    font-weight: 700;
+}
+
+@media (max-width: 1199px) {
+    .kpi-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 991px) {
+    .sidebar {
+        display: none;
+    }
+}
+
+@media (max-width: 767px) {
+    .content-wrap {
+        padding: 1rem;
+    }
+
+    .kpi-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .search-wrap {
+        min-width: 100%;
+        max-width: 100%;
+    }
+}

@@ -1,0 +1,300 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - Lime</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700&display=swap" rel="stylesheet">
+    <link href="/theme.css" rel="stylesheet">
+</head>
+
+<body>
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="d-flex align-items-center mb-4 mt-2">
+                <div class="brand">Lime</div>
+            </div>
+            <ul class="nav nav-pills flex-column mb-auto">
+                <li class="nav-item mb-2">
+                    <a href="/dashboard.html" class="nav-link d-flex align-items-center">
+                        <i class="bi bi-grid-1x2 me-2"></i> Dashboard
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a href="/leads.html" class="nav-link d-flex align-items-center">
+                        <i class="bi bi-people me-2"></i> Leads
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a href="/campaigns.html" class="nav-link d-flex align-items-center">
+                        <i class="bi bi-megaphone me-2"></i> Campaigns
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a href="/analytics.html" class="nav-link d-flex align-items-center">
+                        <i class="bi bi-bar-chart-line me-2"></i> Analytics
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a href="/settings.html" class="nav-link active d-flex align-items-center">
+                        <i class="bi bi-gear me-2"></i> Settings
+                    </a>
+                </li>
+            </ul>
+            <div class="sidebar-footer small">
+                <span class="text-white opacity-75 user-display-name">Loading...</span>
+            </div>
+        </aside>
+
+        <main class="main-area">
+            <header class="top-header">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                    <div>
+                        <div class="page-title">Workspace Settings</div>
+                        <div class="title-meta">Manage profile, organization, sender accounts, and AI personalization.</div>
+                    </div>
+                    <button id="logout-btn" class="btn btn-sm btn-outline-dark">Logout</button>
+                </div>
+            </header>
+
+            <section class="content-wrap">
+                <div class="row g-4">
+                    <div class="col-lg-6">
+                        <div class="glass-card p-4">
+                            <div class="section-title"><i class="bi bi-person-circle me-2 text-primary"></i>Profile</div>
+                            <div class="mb-3">
+                                <label class="form-label small text-muted fw-semibold">Email</label>
+                                <input type="email" class="form-control" id="profile-email" disabled>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small text-muted fw-semibold">Role</label>
+                                <input type="text" class="form-control" id="profile-role" disabled>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small text-muted fw-semibold">New Password</label>
+                                <input type="password" class="form-control" id="new-password" placeholder="Leave blank to keep current">
+                            </div>
+                            <button class="btn btn-primary" id="save-profile-btn">Save Changes</button>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-6">
+                        <div class="glass-card p-4">
+                            <div class="section-title"><i class="bi bi-building me-2 text-primary"></i>Organization</div>
+                            <div class="mb-3">
+                                <label class="form-label small text-muted fw-semibold">Organization Name</label>
+                                <input type="text" class="form-control" id="org-name" placeholder="Your Company">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small text-muted fw-semibold">Organization ID</label>
+                                <input type="text" class="form-control" id="org-id" disabled>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-6">
+                        <div class="glass-card p-4">
+                            <div class="section-title"><i class="bi bi-envelope-check me-2 text-primary"></i>Email Accounts</div>
+
+                            <div id="google-auth-success" class="alert alert-success d-none" role="alert">
+                                <i class="bi bi-check-circle me-1"></i>
+                                <span id="google-auth-message">Google account connected successfully!</span>
+                            </div>
+
+                            <div id="connected-accounts-list" class="mb-3">
+                                <p class="text-muted small"><i class="bi bi-hourglass-split me-1"></i> Loading connected accounts...</p>
+                            </div>
+
+                            <hr>
+                            <p class="text-muted small mb-3">
+                                <i class="bi bi-info-circle me-1"></i>
+                                Connect your own Google account to send emails from your own inbox via Gmail API.
+                            </p>
+                            <button id="google-connect-btn" class="btn btn-outline-danger d-flex align-items-center justify-content-center gap-2"
+                                style="max-width: 280px;">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 48 48">
+                                    <path fill="#EA4335"
+                                        d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z" />
+                                    <path fill="#4285F4"
+                                        d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z" />
+                                    <path fill="#FBBC05"
+                                        d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z" />
+                                    <path fill="#34A853"
+                                        d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z" />
+                                </svg>
+                                Connect with Google
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="col-lg-6">
+                        <div class="glass-card p-4">
+                            <div class="section-title"><i class="bi bi-stars me-2 text-warning"></i>AI Personalization</div>
+                            <div class="mb-3">
+                                <label class="form-label small text-muted fw-semibold">Gemini API Key</label>
+                                <input type="password" class="form-control" placeholder="Enter your Gemini API key">
+                            </div>
+                            <div class="form-check mb-3">
+                                <input class="form-check-input" type="checkbox" id="enable-ai" checked>
+                                <label class="form-check-label" for="enable-ai">Enable AI email personalization</label>
+                            </div>
+                            <p class="text-muted small mb-0">
+                                <i class="bi bi-info-circle me-1"></i>
+                                AI personalization uses Gemini to tailor outreach copy for each lead.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="col-12">
+                        <div class="glass-card p-4 border border-danger-subtle">
+                            <div class="section-title text-danger"><i class="bi bi-exclamation-triangle me-2"></i>Danger Zone</div>
+                            <p class="text-muted mb-3">These actions are irreversible.</p>
+                            <button class="btn btn-outline-danger btn-sm me-2">Delete All Leads</button>
+                            <button class="btn btn-outline-danger btn-sm">Delete Organization</button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script type="module" src="/main.js"></script>
+    <script type="module">
+        import { fetchWithAuth } from '/api.js';
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const res = await fetchWithAuth('/auth/me/');
+                if (res.ok) {
+                    const user = await res.json();
+                    document.getElementById('profile-email').value = user.email;
+                    document.getElementById('profile-role').value = user.role || 'ADMIN';
+                    if (user.organization) {
+                        document.getElementById('org-name').value = user.organization.name;
+                        document.getElementById('org-id').value = user.organization.id;
+                    }
+                }
+            } catch (e) {
+                console.error(e);
+            }
+
+            const saveBtn = document.getElementById('save-profile-btn');
+            if (saveBtn) {
+                saveBtn.addEventListener('click', async () => {
+                    const organization_name = document.getElementById('org-name').value.trim();
+                    const new_password = document.getElementById('new-password').value;
+
+                    const payload = {};
+                    if (organization_name) payload.organization_name = organization_name;
+                    if (new_password) payload.new_password = new_password;
+
+                    if (Object.keys(payload).length === 0) {
+                        alert('Nothing to update.');
+                        return;
+                    }
+
+                    saveBtn.disabled = true;
+                    saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Saving...';
+
+                    try {
+                        const res = await fetchWithAuth('/auth/me/', {
+                            method: 'PATCH',
+                            body: JSON.stringify(payload),
+                        });
+
+                        if (!res.ok) {
+                            const err = await res.json().catch(() => ({}));
+                            const msg = err.new_password?.[0] || err.organization_name?.[0] || err.detail || 'Failed to save settings.';
+                            alert(msg);
+                        } else {
+                            const updated = await res.json();
+                            if (updated.organization) {
+                                document.getElementById('org-name').value = updated.organization.name || organization_name;
+                            }
+                            document.getElementById('new-password').value = '';
+                            alert('Settings saved.');
+                        }
+                    } catch (e) {
+                        alert('Could not save settings right now.');
+                    } finally {
+                        saveBtn.disabled = false;
+                        saveBtn.textContent = 'Save Changes';
+                    }
+                });
+            }
+
+            const params = new URLSearchParams(window.location.search);
+            const authStatus = params.get('google_auth');
+            if (authStatus) {
+                const email = params.get('email') || '';
+                const reason = params.get('reason') || '';
+                const msgEl = document.getElementById('google-auth-message');
+                const alertEl = document.getElementById('google-auth-success');
+                const reasonText = {
+                    google_access_denied: 'Google denied access. If OAuth app is in Testing mode, add this email under OAuth Consent Screen > Test users.',
+                    no_code: 'Google did not return an authorization code. Please try again.',
+                };
+
+                if (authStatus === 'error') {
+                    alertEl.className = 'alert alert-danger';
+                    msgEl.textContent = reasonText[reason] || `Failed to connect Google account. Reason: ${reason}`;
+                } else if (authStatus === 'connected') {
+                    alertEl.className = 'alert alert-success';
+                    msgEl.textContent = `Successfully connected ${email}!`;
+                } else {
+                    alertEl.className = 'alert alert-success';
+                    msgEl.textContent = `Credentials updated for ${email}.`;
+                }
+                alertEl.classList.remove('d-none');
+                window.history.replaceState({}, document.title, '/settings.html');
+            }
+
+            const googleBtn = document.getElementById('google-connect-btn');
+            if (googleBtn) {
+                googleBtn.addEventListener('click', () => {
+                    const token = localStorage.getItem('access_token');
+                    if (!token) {
+                        alert('Please log in first to connect your Google account.');
+                        window.location.href = '/login.html';
+                        return;
+                    }
+                    window.location.href = 'http://localhost:8000/api/v1/auth/google/login?token=' + encodeURIComponent(token);
+                });
+            }
+
+            try {
+                const res = await fetchWithAuth('/connected-accounts/');
+                const container = document.getElementById('connected-accounts-list');
+                if (res.ok) {
+                    const accounts = await res.json();
+                    if (accounts.length === 0) {
+                        container.innerHTML = '<p class="text-muted small"><i class="bi bi-inbox me-1"></i>No email accounts connected yet.</p>';
+                    } else {
+                        container.innerHTML = accounts.map(account => `
+                            <div class="d-flex align-items-center justify-content-between p-2 mb-2 bg-light rounded-2">
+                                <div class="d-flex align-items-center gap-2">
+                                    <i class="bi bi-google text-danger fs-5"></i>
+                                    <div>
+                                        <div class="fw-semibold small">${account.email}</div>
+                                        <div class="text-muted" style="font-size:0.75rem;">${account.provider} &middot; Connected</div>
+                                    </div>
+                                </div>
+                                <span class="badge bg-success-subtle text-success"><i class="bi bi-check-circle me-1"></i>Active</span>
+                            </div>
+                        `).join('');
+                    }
+                } else {
+                    container.innerHTML = '<p class="text-muted small">Sign in to view connected accounts.</p>';
+                }
+            } catch (e) {
+                document.getElementById('connected-accounts-list').innerHTML = '<p class="text-muted small">Could not load accounts.</p>';
+            }
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>

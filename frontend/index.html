@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lime - Outreach Platform</title>
+  <script>
+    // If user has a token, go to dashboard; otherwise go to login
+    if (localStorage.getItem('access_token')) {
+      window.location.href = '/dashboard.html';
+    } else {
+      window.location.href = '/login.html';
+    }
+  </script>
+</head>
+
+<body></body>
+
+</html>

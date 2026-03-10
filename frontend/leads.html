@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Leads - Lime</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700&display=swap" rel="stylesheet">
+    <link href="/theme.css" rel="stylesheet">
+</head>
+
+<body>
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="d-flex align-items-center mb-4 mt-2">
+                <div class="brand">Lime</div>
+            </div>
+            <ul class="nav nav-pills flex-column mb-auto">
+                <li class="nav-item mb-2">
+                    <a href="/dashboard.html" class="nav-link d-flex align-items-center">
+                        <i class="bi bi-grid-1x2 me-2"></i> Dashboard
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a href="/leads.html" class="nav-link active d-flex align-items-center">
+                        <i class="bi bi-people me-2"></i> Leads
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a href="/campaigns.html" class="nav-link d-flex align-items-center">
+                        <i class="bi bi-megaphone me-2"></i> Campaigns
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a href="/analytics.html" class="nav-link d-flex align-items-center">
+                        <i class="bi bi-bar-chart-line me-2"></i> Analytics
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a href="/settings.html" class="nav-link d-flex align-items-center">
+                        <i class="bi bi-gear me-2"></i> Settings
+                    </a>
+                </li>
+            </ul>
+            <div class="sidebar-footer small">
+                <span class="text-white opacity-75 user-display-name">Loading...</span>
+            </div>
+        </aside>
+
+        <main class="main-area">
+            <header class="top-header">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                    <div>
+                        <div class="page-title">Lead Workspace</div>
+                        <div class="title-meta">Upload, review, and segment leads for campaign enrollment.</div>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="search-wrap">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                                <input type="text" id="lead-search" class="form-control" placeholder="Search name, email, company">
+                            </div>
+                        </div>
+                        <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#uploadModal">
+                            <i class="bi bi-upload me-1"></i> Import CSV
+                        </button>
+                        <button id="logout-btn" class="btn btn-sm btn-outline-dark">Logout</button>
+                    </div>
+                </div>
+            </header>
+
+            <section class="content-wrap">
+                <div class="kpi-grid mb-4">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Total Leads</div>
+                        <div class="kpi-value" id="leads-count">0</div>
+                        <div class="kpi-sub">All leads in your account</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Active</div>
+                        <div class="kpi-value" id="active-leads-count">0</div>
+                        <div class="kpi-sub">Eligible for outreach</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Unsubscribed</div>
+                        <div class="kpi-value" id="unsubscribed-count">0</div>
+                        <div class="kpi-sub">Do-not-contact leads</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Quality Score</div>
+                        <div class="kpi-value" id="avg-score">0</div>
+                        <div class="kpi-sub">Average lead score</div>
+                    </div>
+                </div>
+
+                <div class="table-shell">
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0 align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Company</th>
+                                    <th>Score</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody id="leads-table-body">
+                                <tr>
+                                    <td colspan="5" class="text-center py-4 text-muted">
+                                        <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                                        Loading leads...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <div class="modal fade" id="uploadModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content rounded-3 shadow">
+                <div class="modal-header border-0">
+                    <h5 class="modal-title fw-bold">Import Leads via CSV</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info small mb-3">
+                        <i class="bi bi-info-circle me-1"></i>
+                        CSV must include an <strong>email</strong> column.
+                        Optional fields: <strong>firstName/first_name</strong>, <strong>lastName/last_name</strong>,
+                        <strong>companyName/company</strong>, <strong>linkedinUrl/linkedin_url</strong>,
+                        <strong>phone</strong>.
+                    </div>
+                    <form id="upload-form">
+                        <div class="mb-3">
+                            <label class="form-label">Select CSV file</label>
+                            <input type="file" class="form-control" id="csv-file" accept=".csv" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100" id="upload-btn">
+                            <i class="bi bi-cloud-upload me-1"></i> Upload and Process
+                        </button>
+                        <div id="upload-status" class="mt-2 text-center small"></div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="/main.js"></script>
+    <script type="module">
+        import { fetchWithAuth } from '/api.js';
+
+        let allLeads = [];
+
+        function renderLeadRows(leads) {
+            const tbody = document.getElementById('leads-table-body');
+            if (leads.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="5" class="text-center py-5 text-muted">
+                    <i class="bi bi-people" style="font-size: 2rem;"></i>
+                    <p class="mt-2 mb-0">No leads found in this account.</p>
+                </td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = leads.map(lead => `
+                <tr>
+                    <td class="fw-semibold">${lead.first_name || ''} ${lead.last_name || ''}</td>
+                    <td>${lead.email}</td>
+                    <td>${lead.company || '<span class="text-muted">-</span>'}</td>
+                    <td><span class="chip" style="background:#e0f2fe;color:#0369a1;">${lead.score}</span></td>
+                    <td>${lead.global_unsubscribe
+                        ? '<span class="chip" style="background:#fee2e2;color:#b91c1c;">Unsubscribed</span>'
+                        : '<span class="chip" style="background:#dcfce7;color:#166534;">Active</span>'}</td>
+                </tr>
+            `).join('');
+        }
+
+        function renderStats(leads) {
+            document.getElementById('leads-count').textContent = leads.length;
+            const active = leads.filter(l => !l.global_unsubscribe).length;
+            document.getElementById('active-leads-count').textContent = active;
+            document.getElementById('unsubscribed-count').textContent = leads.length - active;
+            const avgScore = leads.length ? (leads.reduce((sum, l) => sum + Number(l.score || 0), 0) / leads.length).toFixed(1) : '0.0';
+            document.getElementById('avg-score').textContent = avgScore;
+        }
+
+        function applySearch() {
+            const q = (document.getElementById('lead-search').value || '').trim().toLowerCase();
+            if (!q) {
+                renderLeadRows(allLeads);
+                return;
+            }
+            const filtered = allLeads.filter(lead => {
+                const row = `${lead.first_name || ''} ${lead.last_name || ''} ${lead.email || ''} ${lead.company || ''}`.toLowerCase();
+                return row.includes(q);
+            });
+            renderLeadRows(filtered);
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const res = await fetchWithAuth('/leads/');
+                if (res.ok) {
+                    allLeads = await res.json();
+                    renderStats(allLeads);
+                    renderLeadRows(allLeads);
+                }
+            } catch (e) {
+                console.error('Error fetching leads:', e);
+            }
+
+            document.getElementById('lead-search').addEventListener('input', applySearch);
+
+            document.getElementById('upload-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const fileInput = document.getElementById('csv-file');
+                if (!fileInput.files.length) return;
+
+                const btn = document.getElementById('upload-btn');
+                const statusEl = document.getElementById('upload-status');
+
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Uploading...';
+
+                const formData = new FormData();
+                formData.append('file', fileInput.files[0]);
+
+                try {
+                    const res = await fetchWithAuth('/leads/import_csv/', {
+                        method: 'POST',
+                        body: formData,
+                    });
+
+                    if (res.status === 202) {
+                        statusEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1"></i>File uploaded. Processing now...</span>';
+                        setTimeout(() => window.location.reload(), 1800);
+                    } else {
+                        statusEl.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle me-1"></i>Upload failed.</span>';
+                    }
+                } catch (err) {
+                    statusEl.innerHTML = `<span class="text-danger">Error: ${err.message}</span>`;
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="bi bi-cloud-upload me-1"></i> Upload and Process';
+                }
+            });
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>

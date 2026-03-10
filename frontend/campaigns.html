@@ -1,0 +1,755 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Campaigns - Lime</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --ink-900: #0f172a;
+            --ink-700: #334155;
+            --ink-500: #64748b;
+            --line: #dbe4ef;
+            --canvas: #f4f8fb;
+            --panel: #ffffff;
+            --primary: #0ea5a2;
+            --primary-dark: #0f766e;
+            --active-bg: #dcfce7;
+            --active-fg: #166534;
+            --draft-bg: #e2e8f0;
+            --draft-fg: #334155;
+            --paused-bg: #ffedd5;
+            --paused-fg: #9a3412;
+            --completed-bg: #dbeafe;
+            --completed-fg: #1d4ed8;
+        }
+
+        * {
+            font-family: 'Manrope', sans-serif;
+        }
+
+        body {
+            margin: 0;
+            background: radial-gradient(circle at top left, #ecfeff 0%, #f8fafc 35%, #eff6ff 100%);
+            color: var(--ink-900);
+            min-height: 100vh;
+        }
+
+        .app-shell {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 250px;
+            background: linear-gradient(190deg, #0f172a 0%, #13263f 100%);
+            color: #f8fafc;
+            border-right: 1px solid rgba(148, 163, 184, 0.2);
+        }
+
+        .brand {
+            font-family: 'Sora', sans-serif;
+            font-weight: 700;
+            font-size: 1.45rem;
+            letter-spacing: -0.03em;
+            background: linear-gradient(135deg, #22d3ee, #2dd4bf);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .sidebar .nav-link {
+            color: #cbd5e1;
+            border-radius: 10px;
+            font-weight: 600;
+            padding: 0.65rem 0.75rem;
+            transition: all 0.2s ease;
+        }
+
+        .sidebar .nav-link:hover {
+            background: rgba(148, 163, 184, 0.16);
+            color: #f8fafc;
+        }
+
+        .sidebar .nav-link.active {
+            background: linear-gradient(135deg, #0ea5a2, #14b8a6);
+            color: #fff;
+        }
+
+        .main-area {
+            flex: 1;
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .top-header {
+            background: rgba(255, 255, 255, 0.9);
+            backdrop-filter: blur(8px);
+            border-bottom: 1px solid var(--line);
+            position: sticky;
+            top: 0;
+            z-index: 10;
+        }
+
+        .page-title {
+            font-family: 'Sora', sans-serif;
+            font-size: 1.32rem;
+            font-weight: 700;
+            margin-bottom: 0.1rem;
+            letter-spacing: -0.02em;
+        }
+
+        .title-meta {
+            color: var(--ink-500);
+            font-size: 0.86rem;
+        }
+
+        .search-wrap {
+            min-width: 260px;
+            max-width: 340px;
+        }
+
+        .search-wrap .input-group-text {
+            border-color: var(--line);
+            background: #fff;
+            color: var(--ink-500);
+        }
+
+        .search-wrap .form-control {
+            border-color: var(--line);
+            box-shadow: none;
+            font-size: 0.9rem;
+        }
+
+        .search-wrap .form-control:focus {
+            border-color: #2dd4bf;
+        }
+
+        .content-wrap {
+            padding: 1.5rem;
+        }
+
+        .overview-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 0.9rem;
+            margin-bottom: 1.1rem;
+        }
+
+        .overview-card {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: 1rem 1rem;
+            box-shadow: 0 8px 20px rgba(15, 23, 42, 0.04);
+        }
+
+        .overview-label {
+            color: var(--ink-500);
+            font-weight: 600;
+            font-size: 0.8rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .overview-value {
+            font-family: 'Sora', sans-serif;
+            font-weight: 700;
+            font-size: 1.35rem;
+            margin-top: 0.25rem;
+            line-height: 1.2;
+        }
+
+        .overview-sub {
+            color: var(--ink-500);
+            font-size: 0.78rem;
+            margin-top: 0.2rem;
+        }
+
+        .filter-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.55rem;
+            margin-bottom: 1rem;
+        }
+
+        .filter-chip {
+            border: 1px solid var(--line);
+            background: #fff;
+            color: var(--ink-700);
+            border-radius: 999px;
+            padding: 0.45rem 0.75rem;
+            font-size: 0.82rem;
+            font-weight: 700;
+            transition: all 0.15s ease;
+        }
+
+        .filter-chip:hover {
+            border-color: #7dd3fc;
+            color: var(--ink-900);
+        }
+
+        .filter-chip.active {
+            background: linear-gradient(135deg, #0ea5a2, #14b8a6);
+            color: #fff;
+            border-color: transparent;
+        }
+
+        .filter-chip .count {
+            margin-left: 0.35rem;
+            font-size: 0.74rem;
+            opacity: 0.9;
+            font-weight: 700;
+        }
+
+        .campaign-card {
+            background: #fff;
+            border: 1px solid var(--line);
+            border-radius: 16px;
+            box-shadow: 0 8px 26px rgba(15, 23, 42, 0.06);
+            height: 100%;
+            transition: transform 0.2s ease, box-shadow 0.2s ease;
+            overflow: hidden;
+        }
+
+        .campaign-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 16px 34px rgba(15, 23, 42, 0.1);
+        }
+
+        .campaign-accent {
+            height: 5px;
+            width: 100%;
+        }
+
+        .campaign-accent.ACTIVE {
+            background: linear-gradient(90deg, #34d399, #16a34a);
+        }
+
+        .campaign-accent.DRAFT {
+            background: linear-gradient(90deg, #cbd5e1, #94a3b8);
+        }
+
+        .campaign-accent.PAUSED {
+            background: linear-gradient(90deg, #fdba74, #f97316);
+        }
+
+        .campaign-accent.COMPLETED {
+            background: linear-gradient(90deg, #93c5fd, #3b82f6);
+        }
+
+        .campaign-body {
+            padding: 1rem;
+        }
+
+        .campaign-title {
+            font-size: 1.02rem;
+            font-weight: 800;
+            color: var(--ink-900);
+            line-height: 1.3;
+        }
+
+        .campaign-created {
+            color: var(--ink-500);
+            font-size: 0.76rem;
+            margin-top: 0.2rem;
+        }
+
+        .status-pill {
+            border-radius: 999px;
+            font-size: 0.72rem;
+            font-weight: 800;
+            padding: 0.3rem 0.65rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .status-pill.ACTIVE {
+            background: var(--active-bg);
+            color: var(--active-fg);
+        }
+
+        .status-pill.DRAFT {
+            background: var(--draft-bg);
+            color: var(--draft-fg);
+        }
+
+        .status-pill.PAUSED {
+            background: var(--paused-bg);
+            color: var(--paused-fg);
+        }
+
+        .status-pill.COMPLETED {
+            background: var(--completed-bg);
+            color: var(--completed-fg);
+        }
+
+        .campaign-metrics {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 0.55rem;
+            margin: 0.85rem 0 0.75rem 0;
+        }
+
+        .metric-box {
+            border: 1px solid var(--line);
+            border-radius: 10px;
+            padding: 0.55rem;
+            background: #f8fafc;
+        }
+
+        .metric-label {
+            color: var(--ink-500);
+            font-size: 0.7rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            font-weight: 700;
+        }
+
+        .metric-value {
+            font-size: 0.92rem;
+            font-weight: 800;
+            margin-top: 0.1rem;
+            color: var(--ink-900);
+        }
+
+        .step-preview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.35rem;
+            margin-bottom: 0.9rem;
+        }
+
+        .step-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.3rem;
+            background: #eef2ff;
+            color: #3730a3;
+            border-radius: 999px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            padding: 0.28rem 0.55rem;
+        }
+
+        .empty-state {
+            background: #fff;
+            border: 1px dashed #cbd5e1;
+            border-radius: 14px;
+            padding: 2rem;
+        }
+
+        @media (max-width: 1199px) {
+            .overview-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 991px) {
+            .sidebar {
+                display: none;
+            }
+        }
+
+        @media (max-width: 767px) {
+            .content-wrap {
+                padding: 1rem;
+            }
+
+            .overview-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .search-wrap {
+                min-width: 100%;
+                max-width: 100%;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-shell">
+        <aside class="sidebar p-3 d-flex flex-column">
+            <div class="d-flex align-items-center mb-4 mt-2">
+                <div class="brand">Lime</div>
+            </div>
+            <ul class="nav nav-pills flex-column mb-auto">
+                <li class="nav-item mb-2">
+                    <a href="/dashboard.html" class="nav-link d-flex align-items-center">
+                        <i class="bi bi-grid-1x2 me-2"></i> Dashboard
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a href="/leads.html" class="nav-link d-flex align-items-center">
+                        <i class="bi bi-people me-2"></i> Leads
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a href="/campaigns.html" class="nav-link active d-flex align-items-center">
+                        <i class="bi bi-megaphone me-2"></i> Campaigns
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a href="/analytics.html" class="nav-link d-flex align-items-center">
+                        <i class="bi bi-bar-chart-line me-2"></i> Analytics
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a href="/settings.html" class="nav-link d-flex align-items-center">
+                        <i class="bi bi-gear me-2"></i> Settings
+                    </a>
+                </li>
+            </ul>
+            <div class="mt-auto border-top border-secondary pt-3 small">
+                <span class="text-white opacity-75 user-display-name">Loading...</span>
+            </div>
+        </aside>
+
+        <main class="main-area">
+            <header class="top-header p-3">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                    <div>
+                        <div class="page-title">Campaign Command Center</div>
+                        <div class="title-meta">Build, monitor, and launch outreach sequences faster.</div>
+                    </div>
+                    <div class="d-flex flex-wrap align-items-center gap-2">
+                        <div class="search-wrap">
+                            <div class="input-group input-group-sm">
+                                <span class="input-group-text"><i class="bi bi-search"></i></span>
+                                <input type="text" id="campaign-search" class="form-control" placeholder="Search campaign name or status">
+                            </div>
+                        </div>
+                        <a href="/campaign-builder.html" class="btn btn-sm btn-primary px-3">
+                            <i class="bi bi-plus-lg me-1"></i> New Campaign
+                        </a>
+                        <button id="logout-btn" class="btn btn-sm btn-outline-dark">Logout</button>
+                    </div>
+                </div>
+            </header>
+
+            <section class="content-wrap">
+                <div class="overview-grid">
+                    <div class="overview-card">
+                        <div class="overview-label">Total Campaigns</div>
+                        <div class="overview-value" id="stat-total">0</div>
+                        <div class="overview-sub">Across all statuses</div>
+                    </div>
+                    <div class="overview-card">
+                        <div class="overview-label">Live Campaigns</div>
+                        <div class="overview-value" id="stat-active">0</div>
+                        <div class="overview-sub">Currently sending or waiting</div>
+                    </div>
+                    <div class="overview-card">
+                        <div class="overview-label">Leads Enrolled</div>
+                        <div class="overview-value" id="stat-leads">0</div>
+                        <div class="overview-sub">Total leads assigned</div>
+                    </div>
+                    <div class="overview-card">
+                        <div class="overview-label">Avg Steps</div>
+                        <div class="overview-value" id="stat-avg-steps">0</div>
+                        <div class="overview-sub">Sequence depth per campaign</div>
+                    </div>
+                </div>
+
+                <div class="filter-row" id="filter-row">
+                    <button class="filter-chip active" data-filter="all">All <span class="count" data-count-for="all">0</span></button>
+                    <button class="filter-chip" data-filter="ACTIVE">Active <span class="count" data-count-for="ACTIVE">0</span></button>
+                    <button class="filter-chip" data-filter="DRAFT">Draft <span class="count" data-count-for="DRAFT">0</span></button>
+                    <button class="filter-chip" data-filter="PAUSED">Paused <span class="count" data-count-for="PAUSED">0</span></button>
+                    <button class="filter-chip" data-filter="COMPLETED">Completed <span class="count" data-count-for="COMPLETED">0</span></button>
+                </div>
+
+                <div class="row g-3" id="campaigns-grid">
+                    <div class="col-12 text-center py-5">
+                        <div class="spinner-border text-primary" role="status"></div>
+                        <p class="text-muted mt-2 mb-0">Loading campaigns...</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script type="module" src="/main.js"></script>
+    <script type="module">
+        import { fetchWithAuth } from '/api.js';
+
+        const STEP_LABELS = {
+            EMAIL: 'Email',
+            WAIT: 'Delay',
+            LINKEDIN: 'LinkedIn',
+            MANUAL: 'Manual',
+            CONDITION_OPEN: 'Opened?',
+            CONDITION_REPLY: 'Replied?',
+            CONDITION_CLICK: 'Clicked?',
+            SMS: 'SMS',
+            WHATSAPP: 'WhatsApp',
+        };
+
+        const STATUS_DETAILS = {
+            ACTIVE: { label: 'Active' },
+            DRAFT: { label: 'Draft' },
+            PAUSED: { label: 'Paused' },
+            COMPLETED: { label: 'Completed' },
+        };
+
+        let allCampaigns = [];
+        let activeFilter = 'all';
+        let searchQuery = '';
+
+        const escapeHtml = (value) => String(value ?? '')
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#39;');
+
+        function normalizeStatus(value) {
+            const status = String(value || 'DRAFT').toUpperCase();
+            return STATUS_DETAILS[status] ? status : 'DRAFT';
+        }
+
+        function getStepCount(campaign) {
+            if (Array.isArray(campaign.steps) && campaign.steps.length > 0) return campaign.steps.length;
+            if (Array.isArray(campaign.settings?.steps)) return campaign.settings.steps.length;
+            return 0;
+        }
+
+        function getStepPreview(campaign) {
+            const source = Array.isArray(campaign.settings?.steps) && campaign.settings.steps.length > 0
+                ? campaign.settings.steps
+                : (Array.isArray(campaign.steps) ? campaign.steps : []);
+
+            return source.slice(0, 4).map(step => {
+                const type = String(step.type || step.channel_type || 'EMAIL').toUpperCase();
+                return STEP_LABELS[type] || type;
+            });
+        }
+
+        function formatDate(isoDate) {
+            if (!isoDate) return 'Created recently';
+            const date = new Date(isoDate);
+            if (Number.isNaN(date.getTime())) return 'Created recently';
+            return `Created ${date.toLocaleDateString()}`;
+        }
+
+        function setFilterChipState() {
+            document.querySelectorAll('.filter-chip').forEach(btn => {
+                btn.classList.toggle('active', btn.dataset.filter === activeFilter);
+            });
+        }
+
+        function renderCounts() {
+            const counts = {
+                all: allCampaigns.length,
+                ACTIVE: 0,
+                DRAFT: 0,
+                PAUSED: 0,
+                COMPLETED: 0,
+            };
+
+            allCampaigns.forEach(campaign => {
+                const status = normalizeStatus(campaign.status);
+                counts[status] = (counts[status] || 0) + 1;
+            });
+
+            document.querySelectorAll('[data-count-for]').forEach(el => {
+                const key = el.dataset.countFor;
+                el.textContent = String(counts[key] || 0);
+            });
+        }
+
+        function renderOverview() {
+            const total = allCampaigns.length;
+            const active = allCampaigns.filter(c => normalizeStatus(c.status) === 'ACTIVE').length;
+            const leads = allCampaigns.reduce((sum, c) => sum + (Number(c.enrolled_count) || 0), 0);
+            const totalSteps = allCampaigns.reduce((sum, c) => sum + getStepCount(c), 0);
+            const avgSteps = total > 0 ? (totalSteps / total).toFixed(1) : '0.0';
+
+            document.getElementById('stat-total').textContent = String(total);
+            document.getElementById('stat-active').textContent = String(active);
+            document.getElementById('stat-leads').textContent = String(leads);
+            document.getElementById('stat-avg-steps').textContent = avgSteps;
+        }
+
+        function getFilteredCampaigns() {
+            const query = searchQuery.trim().toLowerCase();
+
+            return allCampaigns.filter(campaign => {
+                const status = normalizeStatus(campaign.status);
+                if (activeFilter !== 'all' && status !== activeFilter) return false;
+                if (!query) return true;
+
+                const searchable = [
+                    campaign.name,
+                    status,
+                    String(campaign.enrolled_count || 0),
+                    ...getStepPreview(campaign),
+                ].join(' ').toLowerCase();
+
+                return searchable.includes(query);
+            });
+        }
+
+        function buildStatusPill(status) {
+            const safeStatus = normalizeStatus(status);
+            const label = STATUS_DETAILS[safeStatus].label;
+            return `<span class="status-pill ${safeStatus}">${label}</span>`;
+        }
+
+        function renderCampaignGrid() {
+            const visibleCampaigns = getFilteredCampaigns();
+            const grid = document.getElementById('campaigns-grid');
+
+            if (visibleCampaigns.length === 0) {
+                grid.innerHTML = `
+                    <div class="col-12">
+                        <div class="empty-state text-center">
+                            <i class="bi bi-megaphone display-6 text-muted"></i>
+                            <h5 class="mt-3 mb-2">No campaigns found</h5>
+                            <p class="text-muted mb-3">Try another filter or create a brand new sequence.</p>
+                            <a href="/campaign-builder.html" class="btn btn-primary">
+                                <i class="bi bi-plus-lg me-1"></i> Create Campaign
+                            </a>
+                        </div>
+                    </div>`;
+                return;
+            }
+
+            grid.innerHTML = visibleCampaigns.map(campaign => {
+                const status = normalizeStatus(campaign.status);
+                const stepCount = getStepCount(campaign);
+                const previewSteps = getStepPreview(campaign);
+                const previewHtml = previewSteps.length > 0
+                    ? previewSteps.map(label => `<span class="step-chip"><i class="bi bi-dot"></i>${escapeHtml(label)}</span>`).join('')
+                    : '<span class="text-muted small">No sequence steps configured</span>';
+
+                const toggleTarget = status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
+                const toggleLabel = status === 'ACTIVE' ? 'Pause' : 'Activate';
+                const toggleIcon = status === 'ACTIVE' ? 'bi-pause-circle' : 'bi-play-circle';
+
+                return `
+                    <div class="col-12 col-md-6 col-xl-4">
+                        <div class="campaign-card">
+                            <div class="campaign-accent ${status}"></div>
+                            <div class="campaign-body">
+                                <div class="d-flex justify-content-between align-items-start gap-2">
+                                    <div>
+                                        <div class="campaign-title">${escapeHtml(campaign.name || 'Untitled campaign')}</div>
+                                        <div class="campaign-created">${formatDate(campaign.created_at)}</div>
+                                    </div>
+                                    ${buildStatusPill(status)}
+                                </div>
+
+                                <div class="campaign-metrics">
+                                    <div class="metric-box">
+                                        <div class="metric-label">Leads</div>
+                                        <div class="metric-value">${Number(campaign.enrolled_count) || 0}</div>
+                                    </div>
+                                    <div class="metric-box">
+                                        <div class="metric-label">Steps</div>
+                                        <div class="metric-value">${stepCount}</div>
+                                    </div>
+                                    <div class="metric-box">
+                                        <div class="metric-label">Mode</div>
+                                        <div class="metric-value">${status === 'ACTIVE' ? 'Live' : 'Idle'}</div>
+                                    </div>
+                                </div>
+
+                                <div class="step-preview">${previewHtml}</div>
+
+                                <div class="d-flex gap-2">
+                                    <a href="/campaign-builder.html?id=${campaign.id}" class="btn btn-sm btn-outline-primary flex-grow-1">
+                                        <i class="bi bi-pencil me-1"></i> Edit
+                                    </a>
+                                    <button class="btn btn-sm btn-outline-success"
+                                        data-toggle-id="${campaign.id}"
+                                        data-current-status="${status}"
+                                        data-toggle-target="${toggleTarget}">
+                                        <i class="bi ${toggleIcon} me-1"></i>${toggleLabel}
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>`;
+            }).join('');
+
+            grid.querySelectorAll('[data-toggle-id]').forEach(button => {
+                button.addEventListener('click', async () => {
+                    const campaignId = button.dataset.toggleId;
+                    const nextStatus = button.dataset.toggleTarget;
+                    const originalLabel = button.innerHTML;
+
+                    button.disabled = true;
+                    button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Updating';
+
+                    try {
+                        const res = await fetchWithAuth(`/campaigns/${campaignId}/`, {
+                            method: 'PATCH',
+                            body: JSON.stringify({ status: nextStatus }),
+                        });
+
+                        if (!res.ok) {
+                            throw new Error('Failed to update campaign status.');
+                        }
+
+                        allCampaigns = allCampaigns.map(campaign => {
+                            if (String(campaign.id) !== String(campaignId)) return campaign;
+                            return { ...campaign, status: nextStatus };
+                        });
+                        renderApp();
+                    } catch (error) {
+                        button.disabled = false;
+                        button.innerHTML = originalLabel;
+                        alert(error.message || 'Could not update campaign status.');
+                    }
+                });
+            });
+        }
+
+        function renderApp() {
+            setFilterChipState();
+            renderCounts();
+            renderOverview();
+            renderCampaignGrid();
+        }
+
+        async function loadCampaigns() {
+            const res = await fetchWithAuth('/campaigns/');
+            if (!res.ok) throw new Error('Failed to load campaigns.');
+            allCampaigns = await res.json();
+            renderApp();
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            document.querySelectorAll('.filter-chip').forEach(button => {
+                button.addEventListener('click', () => {
+                    activeFilter = button.dataset.filter;
+                    renderApp();
+                });
+            });
+
+            const searchInput = document.getElementById('campaign-search');
+            searchInput.addEventListener('input', () => {
+                searchQuery = searchInput.value || '';
+                renderCampaignGrid();
+            });
+
+            try {
+                await loadCampaigns();
+            } catch (error) {
+                document.getElementById('campaigns-grid').innerHTML = `
+                    <div class="col-12">
+                        <div class="alert alert-danger mb-0">Failed to load campaigns. Please refresh.</div>
+                    </div>`;
+            }
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>

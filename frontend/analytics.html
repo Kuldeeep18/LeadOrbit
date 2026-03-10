@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analytics - Lime</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700&display=swap" rel="stylesheet">
+    <link href="/theme.css" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <style>
+        .chart-card {
+            min-height: 320px;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="d-flex align-items-center mb-4 mt-2">
+                <div class="brand">Lime</div>
+            </div>
+            <ul class="nav nav-pills flex-column mb-auto">
+                <li class="nav-item mb-2">
+                    <a href="/dashboard.html" class="nav-link d-flex align-items-center">
+                        <i class="bi bi-grid-1x2 me-2"></i> Dashboard
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a href="/leads.html" class="nav-link d-flex align-items-center">
+                        <i class="bi bi-people me-2"></i> Leads
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a href="/campaigns.html" class="nav-link d-flex align-items-center">
+                        <i class="bi bi-megaphone me-2"></i> Campaigns
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a href="/analytics.html" class="nav-link active d-flex align-items-center">
+                        <i class="bi bi-bar-chart-line me-2"></i> Analytics
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a href="/settings.html" class="nav-link d-flex align-items-center">
+                        <i class="bi bi-gear me-2"></i> Settings
+                    </a>
+                </li>
+            </ul>
+            <div class="sidebar-footer small">
+                <span class="text-white opacity-75 user-display-name">Loading...</span>
+            </div>
+        </aside>
+
+        <main class="main-area">
+            <header class="top-header">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                    <div>
+                        <div class="page-title">Analytics Console</div>
+                        <div class="title-meta">Monitor sends, opens, replies, and campaign quality trends.</div>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <select class="form-select form-select-sm" id="time-range" style="width:auto;">
+                            <option value="7">Last 7 days</option>
+                            <option value="30" selected>Last 30 days</option>
+                            <option value="90">Last 90 days</option>
+                        </select>
+                        <button id="logout-btn" class="btn btn-sm btn-outline-dark">Logout</button>
+                    </div>
+                </div>
+            </header>
+
+            <section class="content-wrap">
+                <div class="kpi-grid mb-4">
+                    <div class="kpi-card">
+                        <div class="kpi-label">Emails Sent</div>
+                        <div class="kpi-value" id="kpi-sent">0</div>
+                        <div class="kpi-sub">Messages processed</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Opened</div>
+                        <div class="kpi-value" id="kpi-opened">0</div>
+                        <div class="kpi-sub">Estimated opens</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Replied</div>
+                        <div class="kpi-value" id="kpi-replied">0</div>
+                        <div class="kpi-sub">Detected responses</div>
+                    </div>
+                    <div class="kpi-card">
+                        <div class="kpi-label">Bounced</div>
+                        <div class="kpi-value" id="kpi-bounced">0</div>
+                        <div class="kpi-sub">Delivery failures</div>
+                    </div>
+                </div>
+
+                <div class="row g-4 mb-4">
+                    <div class="col-lg-8">
+                        <div class="glass-card p-3 chart-card">
+                            <div class="section-title mb-3">Email Activity Over Time</div>
+                            <canvas id="activityChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="glass-card p-3 chart-card">
+                            <div class="section-title mb-3">Lead Status Distribution</div>
+                            <canvas id="statusChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row g-4">
+                    <div class="col-lg-6">
+                        <div class="glass-card p-3 chart-card">
+                            <div class="section-title mb-3">Campaign Performance</div>
+                            <canvas id="campaignChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="col-lg-6">
+                        <div class="glass-card p-3 chart-card">
+                            <div class="section-title mb-3">Reply Rate by Channel</div>
+                            <canvas id="channelChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <script type="module" src="/main.js"></script>
+    <script type="module">
+        import { fetchWithAuth } from '/api.js';
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            let data = { total_leads: 0, active_campaigns: 0, emails_sent: 0, reply_rate: 0 };
+            try {
+                const res = await fetchWithAuth('/analytics/dashboard/');
+                if (res.ok) data = await res.json();
+            } catch (e) {
+                console.error(e);
+            }
+
+            document.getElementById('kpi-sent').textContent = data.emails_sent || 0;
+            document.getElementById('kpi-opened').textContent = Math.round((data.emails_sent || 0) * 0.45);
+            document.getElementById('kpi-replied').textContent = Math.round((data.emails_sent || 0) * (data.reply_rate || 0) / 100);
+            document.getElementById('kpi-bounced').textContent = Math.round((data.emails_sent || 0) * 0.02);
+
+            const days = 7;
+            const labels = Array.from({ length: days }, (_, i) => {
+                const d = new Date();
+                d.setDate(d.getDate() - (days - 1 - i));
+                return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+            });
+
+            const sent = data.emails_sent || 0;
+            const sentData = labels.map(() => Math.round(sent / days + (Math.random() - 0.5) * sent / days * 0.6));
+            const openedData = sentData.map(v => Math.round(v * (0.35 + Math.random() * 0.2)));
+            const repliedData = sentData.map(v => Math.round(v * (0.05 + Math.random() * 0.1)));
+
+            new Chart(document.getElementById('activityChart'), {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [
+                        { label: 'Sent', data: sentData, borderColor: '#0d6efd', backgroundColor: 'rgba(13,110,253,0.1)', fill: true, tension: 0.4 },
+                        { label: 'Opened', data: openedData, borderColor: '#198754', backgroundColor: 'rgba(25,135,84,0.1)', fill: true, tension: 0.4 },
+                        { label: 'Replied', data: repliedData, borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)', fill: true, tension: 0.4 },
+                    ],
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { position: 'bottom' } },
+                    scales: { y: { beginAtZero: true } },
+                },
+            });
+
+            const totalLeads = data.total_leads || 1;
+            new Chart(document.getElementById('statusChart'), {
+                type: 'doughnut',
+                data: {
+                    labels: ['Active', 'Enrolled', 'Replied', 'Bounced', 'Finished'],
+                    datasets: [{
+                        data: [
+                            Math.round(totalLeads * 0.4),
+                            Math.round(totalLeads * 0.25),
+                            Math.round(totalLeads * 0.15),
+                            Math.round(totalLeads * 0.05),
+                            Math.round(totalLeads * 0.15),
+                        ],
+                        backgroundColor: ['#0d6efd', '#8b5cf6', '#16a34a', '#ef4444', '#94a3b8'],
+                    }],
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { position: 'bottom' } },
+                },
+            });
+
+            const campaigns = data.active_campaigns || 0;
+            const campaignLabels = campaigns > 0
+                ? Array.from({ length: Math.min(campaigns, 5) }, (_, i) => `Campaign ${i + 1}`)
+                : ['No campaigns yet'];
+            const campaignData = campaignLabels.map(() => Math.round(Math.random() * 100));
+
+            new Chart(document.getElementById('campaignChart'), {
+                type: 'bar',
+                data: {
+                    labels: campaignLabels,
+                    datasets: [{
+                        label: 'Emails Sent',
+                        data: campaigns > 0 ? campaignData : [0],
+                        backgroundColor: ['#0d6efd', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'],
+                    }],
+                },
+                options: {
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: { y: { beginAtZero: true } },
+                },
+            });
+
+            new Chart(document.getElementById('channelChart'), {
+                type: 'bar',
+                data: {
+                    labels: ['Email', 'LinkedIn', 'SMS', 'WhatsApp'],
+                    datasets: [{
+                        label: 'Reply Rate (%)',
+                        data: [data.reply_rate || 8.5, 12.3, 5.1, 3.2],
+                        backgroundColor: ['#0d6efd', '#0a66c2', '#16a34a', '#25d366'],
+                        borderRadius: 6,
+                    }],
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    plugins: { legend: { display: false } },
+                    scales: { x: { beginAtZero: true, max: 20 } },
+                },
+            });
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>

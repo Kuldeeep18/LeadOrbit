@@ -1,0 +1,1731 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Campaign Builder - Lime</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background: #eef3f8;
+        }
+
+        /* â”€â”€ Top Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+        .top-bar {
+            height: 56px;
+            background: #fff;
+            border-bottom: 1px solid #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            z-index: 10;
+        }
+
+        .top-bar .campaign-name {
+            border: none;
+            background: transparent;
+            font-weight: 700;
+            font-size: 1rem;
+            width: 280px;
+            padding: 4px 8px;
+            border-radius: 6px;
+        }
+
+        .top-bar .campaign-name:focus {
+            outline: 2px solid #3b82f6;
+            background: #f8fafc;
+        }
+
+        .tab-pills {
+            display: flex;
+            gap: 4px;
+            background: #f1f5f9;
+            border-radius: 8px;
+            padding: 3px;
+        }
+
+        .tab-pills .tab {
+            padding: 6px 18px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 500;
+            color: #64748b;
+            transition: all .15s;
+        }
+
+        .tab-pills .tab.active {
+            background: #fff;
+            color: #1e293b;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, .08);
+        }
+
+        .tab-pills .tab:hover:not(.active) {
+            color: #1e293b;
+        }
+
+        .status-toggle {
+            width: 42px;
+            height: 22px;
+            border-radius: 999px;
+            border: none;
+            cursor: pointer;
+            position: relative;
+            transition: background .2s;
+        }
+
+        .status-toggle.off {
+            background: #cbd5e1;
+        }
+
+        .status-toggle.on {
+            background: #22c55e;
+        }
+
+        .status-toggle::after {
+            content: '';
+            width: 18px;
+            height: 18px;
+            background: #fff;
+            border-radius: 50%;
+            position: absolute;
+            top: 2px;
+            transition: left .2s;
+        }
+
+        .status-toggle.off::after {
+            left: 2px;
+        }
+
+        .status-toggle.on::after {
+            left: 22px;
+        }
+
+        /* â”€â”€ Main Layout: Canvas + Editor Panel â”€â”€ */
+        .main-layout {
+            display: flex;
+            height: calc(100vh - 56px);
+        }
+
+        .canvas-area {
+            flex: 1;
+            overflow: auto;
+            padding: 40px 0;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background: linear-gradient(135deg, #eef3f8 0%, #e0e8f0 100%);
+        }
+
+        .editor-panel {
+            width: 480px;
+            background: #fff;
+            border-left: 1px solid #e2e8f0;
+            overflow-y: auto;
+            padding: 24px;
+            flex-shrink: 0;
+        }
+
+        .editor-panel.hidden {
+            display: none;
+        }
+
+        /* â”€â”€ Flow Nodes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+        .flow-node {
+            background: #fff;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 14px 20px;
+            min-width: 260px;
+            max-width: 320px;
+            cursor: pointer;
+            transition: all .15s;
+            position: relative;
+        }
+
+        .flow-node:hover {
+            border-color: #93c5fd;
+            box-shadow: 0 2px 12px rgba(59, 130, 246, .12);
+        }
+
+        .flow-node.selected {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, .15);
+        }
+
+        .flow-node.start-node {
+            background: #f8fafc;
+            border-style: dashed;
+        }
+
+        .flow-node .node-icon {
+            width: 32px;
+            height: 32px;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: .95rem;
+            flex-shrink: 0;
+        }
+
+        .flow-node .node-icon.email {
+            background: #dbeafe;
+            color: #2563eb;
+        }
+
+        .flow-node .node-icon.wait {
+            background: #fef3c7;
+            color: #d97706;
+        }
+
+        .flow-node .node-icon.linkedin {
+            background: #e0e7ff;
+            color: #4f46e5;
+        }
+
+        .flow-node .node-icon.condition {
+            background: #fce7f3;
+            color: #db2777;
+        }
+
+        .flow-node .node-icon.manual {
+            background: #d1fae5;
+            color: #059669;
+        }
+
+        .flow-node .node-label {
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: #1e293b;
+        }
+
+        .flow-node .node-meta {
+            font-size: 0.75rem;
+            color: #94a3b8;
+        }
+
+        .node-error {
+            color: #ef4444;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        /* â”€â”€ Connectors & Add Buttons â”€â”€â”€â”€ */
+        .connector {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .connector-line {
+            width: 2px;
+            height: 24px;
+            background: #cbd5e1;
+        }
+
+        .add-btn {
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            border: 2px dashed #94a3b8;
+            background: #fff;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            color: #64748b;
+            transition: all .15s;
+        }
+
+        .add-btn:hover {
+            border-color: #3b82f6;
+            color: #3b82f6;
+            background: #eff6ff;
+        }
+
+        /* â”€â”€ Branching â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+        .branch-container {
+            display: flex;
+            gap: 80px;
+            position: relative;
+        }
+
+        .branch-container::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: calc(100% - 40px);
+            height: 2px;
+            background: #cbd5e1;
+        }
+
+        .branch-column {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-width: 140px;
+        }
+
+        .branch-label {
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 2px 12px;
+            border-radius: 99px;
+            margin-bottom: 8px;
+        }
+
+        .branch-label.yes {
+            background: #dcfce7;
+            color: #16a34a;
+        }
+
+        .branch-label.no {
+            background: #fee2e2;
+            color: #ef4444;
+        }
+
+        /* â”€â”€ Add Step Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+        .step-picker {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, .3);
+            z-index: 100;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .step-picker.hidden {
+            display: none;
+        }
+
+        .step-picker-card {
+            background: #fff;
+            border-radius: 14px;
+            padding: 24px;
+            width: 520px;
+            max-height: 75vh;
+            overflow-y: auto;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, .15);
+        }
+
+        .step-picker-card h5 {
+            font-weight: 700;
+            margin-bottom: 16px;
+        }
+
+        .step-type {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            padding: 12px 14px;
+            border-radius: 10px;
+            cursor: pointer;
+            transition: background .1s;
+            border: 1px solid transparent;
+        }
+
+        .step-type:hover {
+            background: #f1f5f9;
+            border-color: #e2e8f0;
+        }
+
+        .step-type .st-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+        }
+
+        .step-type .st-name {
+            font-weight: 600;
+            font-size: 0.9rem;
+            color: #1e293b;
+        }
+
+        .step-type .st-desc {
+            font-size: 0.75rem;
+            color: #94a3b8;
+        }
+
+        .picker-tabs {
+            display: flex;
+            gap: 4px;
+            margin-bottom: 16px;
+        }
+
+        .picker-tabs .ptab {
+            padding: 6px 14px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: .8rem;
+            font-weight: 500;
+            color: #64748b;
+            background: #f1f5f9;
+        }
+
+        .picker-tabs .ptab.active {
+            background: #1e293b;
+            color: #fff;
+        }
+
+        /* â”€â”€ Editor Panel Styles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+        .ep-title {
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: #1e293b;
+            margin-bottom: 4px;
+        }
+
+        .ep-subtitle {
+            font-size: 0.8rem;
+            color: #94a3b8;
+            margin-bottom: 20px;
+        }
+
+        .ep-label {
+            font-size: 0.78rem;
+            font-weight: 600;
+            color: #64748b;
+            margin-bottom: 6px;
+        }
+
+        .ep-input {
+            width: 100%;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 0.9rem;
+            transition: border-color .15s;
+        }
+
+        .ep-input:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+
+        .ep-textarea {
+            width: 100%;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 0.9rem;
+            min-height: 180px;
+            resize: vertical;
+            line-height: 1.6;
+        }
+
+        .ep-textarea:focus {
+            outline: none;
+            border-color: #3b82f6;
+        }
+
+        .merge-tag {
+            display: inline-block;
+            padding: 3px 10px;
+            background: #eff6ff;
+            color: #2563eb;
+            border-radius: 6px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            font-weight: 500;
+            transition: background .1s;
+            border: 1px solid #bfdbfe;
+        }
+
+        .merge-tag:hover {
+            background: #dbeafe;
+        }
+
+        .ai-btn {
+            background: linear-gradient(135deg, #8b5cf6, #6366f1);
+            color: #fff;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: opacity .15s;
+        }
+
+        .ai-btn:hover {
+            opacity: .9;
+        }
+
+        .sender-card {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px 14px;
+            background: #f8fafc;
+            border: 1.5px solid #e2e8f0;
+            border-radius: 10px;
+        }
+
+        .sender-card .sc-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: #e0e7ff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: #4f46e5;
+            font-size: 0.85rem;
+        }
+
+        .delay-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 4px 12px;
+            background: #fef3c7;
+            color: #92400e;
+            border-radius: 99px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+
+        .template-strip {
+            width: min(980px, calc(100% - 40px));
+            background: rgba(255, 255, 255, 0.82);
+            border: 1px solid #dbe4ef;
+            border-radius: 14px;
+            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+            padding: 14px;
+            margin-bottom: 24px;
+        }
+
+        .template-strip-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 8px;
+            margin-bottom: 10px;
+        }
+
+        .template-strip-title {
+            font-size: 0.88rem;
+            font-weight: 700;
+            color: #1e293b;
+        }
+
+        .template-strip-subtitle {
+            font-size: 0.75rem;
+            color: #64748b;
+        }
+
+        .template-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
+
+        .template-card {
+            border: 1px solid #dbe4ef;
+            background: #fff;
+            border-radius: 10px;
+            padding: 10px;
+        }
+
+        .template-title {
+            font-weight: 700;
+            font-size: 0.82rem;
+            color: #1e293b;
+            margin-bottom: 2px;
+        }
+
+        .template-desc {
+            font-size: 0.73rem;
+            color: #64748b;
+            margin-bottom: 8px;
+            line-height: 1.4;
+            min-height: 30px;
+        }
+
+        .template-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 8px;
+        }
+
+        .template-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 2px 8px;
+            border-radius: 99px;
+            background: #eef2ff;
+            color: #4338ca;
+            font-size: 0.68rem;
+            font-weight: 700;
+        }
+
+        @media (max-width: 1240px) {
+            .editor-panel {
+                width: 420px;
+            }
+        }
+
+        @media (max-width: 992px) {
+            body {
+                overflow: auto;
+            }
+
+            .main-layout {
+                flex-direction: column;
+                height: auto;
+            }
+
+            .canvas-area {
+                min-height: 58vh;
+                padding-top: 22px;
+            }
+
+            .editor-panel {
+                width: 100%;
+                border-left: none;
+                border-top: 1px solid #e2e8f0;
+            }
+
+            .template-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- â”€â”€â”€ Top Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+    <div class="top-bar">
+        <div class="d-flex align-items-center gap-3">
+            <a href="/campaigns.html" style="color:#64748b; text-decoration:none; font-size:1.2rem;"><i
+                    class="bi bi-x-lg"></i></a>
+            <i class="bi bi-diagram-3" style="color:#94a3b8;"></i>
+            <input type="text" class="campaign-name" id="campaign-name" value="New Campaign">
+            <button class="status-toggle off" id="status-toggle" title="Toggle Active/Inactive"></button>
+            <i class="bi bi-gear" style="color:#94a3b8; cursor:pointer;" id="settings-icon"></i>
+        </div>
+        <div class="d-flex align-items-center gap-3">
+            <div class="tab-pills">
+                <div class="tab active" data-tab="sequence"><i class="bi bi-diagram-3 me-1"></i> Sequence</div>
+                <div class="tab" data-tab="leads"><i class="bi bi-people me-1"></i> Lead list</div>
+                <div class="tab" data-tab="launch"><i class="bi bi-rocket me-1"></i> Launch</div>
+            </div>
+            <button class="btn btn-primary btn-sm px-3 fw-semibold" id="next-step-btn">
+                Next step <i class="bi bi-chevron-right ms-1"></i>
+            </button>
+        </div>
+    </div>
+
+    <!-- â”€â”€â”€ Main Layout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+    <div class="main-layout">
+        <!-- Canvas -->
+        <div class="canvas-area" id="canvas">
+            <!-- Rendered dynamically -->
+        </div>
+
+        <!-- Editor Panel (right side) -->
+        <div class="editor-panel" id="editor-panel">
+            <div id="editor-content">
+                <div class="text-center text-muted py-5">
+                    <i class="bi bi-cursor" style="font-size: 2rem;"></i>
+                    <p class="mt-2 small">Click a step to edit its content</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- â”€â”€â”€ Add Step Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+    <div class="step-picker hidden" id="step-picker">
+        <div class="step-picker-card">
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5 class="mb-0">Add a step</h5>
+                <button class="btn btn-sm" id="close-picker" style="font-size:1.2rem;color:#94a3b8;"><i
+                        class="bi bi-x-lg"></i></button>
+            </div>
+            <div class="picker-tabs">
+                <div class="ptab active" data-picker="actions">Actions</div>
+                <div class="ptab" data-picker="conditions">Conditions</div>
+            </div>
+            <div id="picker-actions">
+                <div class="step-type" data-type="EMAIL">
+                    <div class="st-icon" style="background:#dbeafe;color:#2563eb;"><i class="bi bi-envelope-fill"></i>
+                    </div>
+                    <div>
+                        <div class="st-name">Email</div>
+                        <div class="st-desc">Send an automated email via Gmail</div>
+                    </div>
+                </div>
+                <div class="step-type" data-type="WAIT">
+                    <div class="st-icon" style="background:#fef3c7;color:#d97706;"><i class="bi bi-clock-fill"></i>
+                    </div>
+                    <div>
+                        <div class="st-name">Delay</div>
+                        <div class="st-desc">Wait a specific amount of time</div>
+                    </div>
+                </div>
+                <div class="step-type" data-type="LINKEDIN">
+                    <div class="st-icon" style="background:#e0e7ff;color:#4f46e5;"><i class="bi bi-linkedin"></i></div>
+                    <div>
+                        <div class="st-name">LinkedIn</div>
+                        <div class="st-desc">Send connection request or message</div>
+                    </div>
+                </div>
+                <div class="step-type" data-type="MANUAL">
+                    <div class="st-icon" style="background:#d1fae5;color:#059669;"><i class="bi bi-hand-index-fill"></i>
+                    </div>
+                    <div>
+                        <div class="st-name">Manual Task</div>
+                        <div class="st-desc">Add a manual action item to your workflow</div>
+                    </div>
+                </div>
+            </div>
+            <div id="picker-conditions" style="display:none;">
+                <div class="step-type" data-type="CONDITION_OPEN">
+                    <div class="st-icon" style="background:#fce7f3;color:#db2777;"><i
+                            class="bi bi-envelope-open-fill"></i></div>
+                    <div>
+                        <div class="st-name">Opened email</div>
+                        <div class="st-desc">Branch based on whether the lead opened an email</div>
+                    </div>
+                </div>
+                <div class="step-type" data-type="CONDITION_REPLY">
+                    <div class="st-icon" style="background:#fce7f3;color:#db2777;"><i class="bi bi-reply-fill"></i>
+                    </div>
+                    <div>
+                        <div class="st-name">Replied to email</div>
+                        <div class="st-desc">Branch based on whether the lead replied</div>
+                    </div>
+                </div>
+                <div class="step-type" data-type="CONDITION_CLICK">
+                    <div class="st-icon" style="background:#fce7f3;color:#db2777;"><i class="bi bi-cursor-fill"></i>
+                    </div>
+                    <div>
+                        <div class="st-name">Clicked link</div>
+                        <div class="st-desc">Branch based on whether the lead clicked a link</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="/main.js"></script>
+    <script type="module">
+        import { fetchWithAuth } from '/api.js';
+
+        // â”€â”€â”€ STATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        let campaignId = null;
+        let selectedNodeIndex = null;
+        let addInsertIndex = null; // where the "+" was clicked
+        let addBranchTarget = null; // optional { parentIndex, branch }
+        let connectedAccounts = [];
+        let selectedConnectedAccountId = null;
+        let activeTab = 'sequence';
+        let availableLeads = [];
+        let selectedLeadIds = new Set();
+
+        // Steps are stored as an array of objects
+        let steps = [
+            // { type: 'EMAIL', subject: '', body: '', delay_minutes: 0, delay_unit: 'minutes' }
+            // { type: 'WAIT', delay_value: 1, delay_unit: 'days' }
+            // { type: 'CONDITION_OPEN', condition_time: '1 day', yes: [], no: [] }
+        ];
+
+        const params = new URLSearchParams(window.location.search);
+        const editId = params.get('id');
+
+        // â”€â”€â”€ ICONS MAP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        const ICONS = {
+            EMAIL: { icon: 'bi-envelope-fill', cls: 'email', label: 'Email', meta: 'Send automatic email' },
+            WAIT: { icon: 'bi-clock-fill', cls: 'wait', label: 'Delay', meta: 'Wait before next step' },
+            LINKEDIN: { icon: 'bi-linkedin', cls: 'linkedin', label: 'LinkedIn', meta: 'LinkedIn action' },
+            MANUAL: { icon: 'bi-hand-index-fill', cls: 'manual', label: 'Manual Task', meta: 'Manual action' },
+            CONDITION_OPEN: { icon: 'bi-envelope-open-fill', cls: 'condition', label: 'Opened email', meta: '' },
+            CONDITION_REPLY: { icon: 'bi-reply-fill', cls: 'condition', label: 'Replied', meta: '' },
+            CONDITION_CLICK: { icon: 'bi-cursor-fill', cls: 'condition', label: 'Clicked link', meta: '' },
+        };
+
+        function createEmailStep(subject, body) {
+            return { type: 'EMAIL', subject, body, delay_minutes: 0 };
+        }
+
+        function createWaitStep(delayValue = 1, delayUnit = 'days') {
+            return { type: 'WAIT', delay_value: delayValue, delay_unit: delayUnit };
+        }
+
+        function createLinkedInStep(action = 'CONNECT', description = '') {
+            return { type: 'LINKEDIN', action, description };
+        }
+
+        function createManualStep(description = '') {
+            return { type: 'MANUAL', description };
+        }
+
+        function cloneStepList(source) {
+            return source.map(step => ({ ...step }));
+        }
+
+        function summarizeText(text, limit = 56) {
+            if (!text) return '';
+            const value = String(text).trim();
+            if (value.length <= limit) return value;
+            return `${value.slice(0, limit)}...`;
+        }
+
+        const SEQUENCE_TEMPLATES = [
+            {
+                key: 'quick-touch',
+                name: 'Quick Touch',
+                description: 'Fast 3-step intro sequence for warm leads.',
+                eta: '3 days',
+                steps: [
+                    createEmailStep('Quick intro for {{company}}', 'Hi {{firstName}},\n\nSaw your work at {{company}}. Worth a short intro to show how we can help your team save time?\n\nBest,\nYour Name'),
+                    createWaitStep(2, 'days'),
+                    createEmailStep('Following up on the note above', 'Hi {{firstName}},\n\nChecking back in on my previous email. Open to a 10-minute chat this week?\n\nThanks,\nYour Name'),
+                ],
+            },
+            {
+                key: 'classic-outbound',
+                name: 'Classic Outbound',
+                description: '5-step cadence with spaced follow-ups.',
+                eta: '12 days',
+                steps: [
+                    createEmailStep('Idea for {{company}}', 'Hi {{firstName}},\n\nI have a quick idea to improve outreach performance for {{company}}. Should I send details?\n\nBest,\nYour Name'),
+                    createWaitStep(2, 'days'),
+                    createEmailStep('Sharing more context', 'Hi {{firstName}},\n\nFollowing up with more context on the idea. We helped similar teams increase reply rates.\n\nOpen to a quick call?\n\nBest,\nYour Name'),
+                    createWaitStep(4, 'days'),
+                    createEmailStep('Last follow-up', 'Hi {{firstName}},\n\nI will close the loop after this note. If helpful, I can share a short one-page plan for {{company}}.\n\nBest,\nYour Name'),
+                ],
+            },
+            {
+                key: 'email-linkedin',
+                name: 'Email + LinkedIn',
+                description: 'Multi-channel sequence with social touchpoint.',
+                eta: '9 days',
+                steps: [
+                    createEmailStep('Connecting about {{company}}', 'Hi {{firstName}},\n\nWould love to share a practical workflow that could help your team at {{company}}.\n\nBest,\nYour Name'),
+                    createWaitStep(1, 'days'),
+                    createLinkedInStep('CONNECT', 'Send a personalized LinkedIn connect request mentioning the recent email.'),
+                    createWaitStep(2, 'days'),
+                    createEmailStep('Wanted to make this easy', 'Hi {{firstName}},\n\nSent a quick LinkedIn note too. Happy to send a concise overview if useful.\n\nBest,\nYour Name'),
+                    createManualStep('If no response, review profile updates and add a final personalized follow-up.'),
+                ],
+            },
+            {
+                key: 'nurture-loop',
+                name: 'Nurture Loop',
+                description: 'Longer 7-step sequence for colder prospects.',
+                eta: '21 days',
+                steps: [
+                    createEmailStep('Quick question about {{company}}', 'Hi {{firstName}},\n\nCould I share one suggestion that might improve outbound performance at {{company}}?\n\nBest,\nYour Name'),
+                    createWaitStep(3, 'days'),
+                    createEmailStep('Resource for your team', 'Hi {{firstName}},\n\nI put together a short resource that might be relevant for {{company}}. Want me to send it?\n\nBest,\nYour Name'),
+                    createWaitStep(5, 'days'),
+                    createLinkedInStep('MESSAGE', 'Send a short LinkedIn message referencing the shared resource.'),
+                    createWaitStep(7, 'days'),
+                    createManualStep('Mark as nurture complete and hand off to a lighter monthly touch sequence.'),
+                ],
+            },
+        ];
+
+        function setNextButtonLabel() {
+            const btn = document.getElementById('next-step-btn');
+            if (activeTab === 'sequence') {
+                btn.innerHTML = 'Next step <i class="bi bi-chevron-right ms-1"></i>';
+            } else if (activeTab === 'leads') {
+                btn.innerHTML = 'Save leads <i class="bi bi-chevron-right ms-1"></i>';
+            } else {
+                btn.innerHTML = '<i class="bi bi-rocket me-1"></i> Launch campaign';
+            }
+        }
+
+        function applySequenceTemplate(templateKey, mode = 'replace') {
+            const template = SEQUENCE_TEMPLATES.find(item => item.key === templateKey);
+            if (!template) return;
+
+            const generatedSteps = cloneStepList(template.steps);
+            if (mode === 'replace') {
+                const shouldReplace = steps.length === 0 || confirm(`Replace current steps with "${template.name}" template?`);
+                if (!shouldReplace) return;
+                steps = generatedSteps;
+                selectedNodeIndex = steps.length > 0 ? 0 : null;
+            } else {
+                const insertAt = steps.length;
+                steps = [...steps, ...generatedSteps];
+                selectedNodeIndex = insertAt;
+            }
+
+            renderCanvas();
+            renderEditor();
+        }
+
+        function switchTab(tabName) {
+            activeTab = tabName;
+            document.querySelectorAll('.tab-pills .tab').forEach(t => t.classList.remove('active'));
+            const tabNode = document.querySelector(`.tab-pills .tab[data-tab="${tabName}"]`);
+            if (tabNode) tabNode.classList.add('active');
+
+            if (tabName === 'sequence') {
+                document.getElementById('editor-panel').classList.remove('hidden');
+                renderCanvas();
+                renderEditor();
+            } else if (tabName === 'leads') {
+                document.getElementById('editor-panel').classList.remove('hidden');
+                renderLeadsTab();
+            } else {
+                document.getElementById('editor-panel').classList.add('hidden');
+                renderLaunchTab();
+            }
+
+            setNextButtonLabel();
+        }
+
+        async function loadLeads() {
+            const res = await fetchWithAuth('/leads/');
+            if (!res.ok) throw new Error('Failed to load leads');
+            availableLeads = await res.json();
+        }
+
+        function renderLeadsTab() {
+            const canvas = document.getElementById('canvas');
+            const rows = availableLeads.map(lead => {
+                const checked = selectedLeadIds.has(lead.id) ? 'checked' : '';
+                return `
+                    <tr>
+                        <td><input class="form-check-input lead-select" type="checkbox" value="${lead.id}" ${checked}></td>
+                        <td>${lead.first_name || ''} ${lead.last_name || ''}</td>
+                        <td>${lead.email}</td>
+                        <td>${lead.company || '-'}</td>
+                    </tr>
+                `;
+            }).join('');
+
+            canvas.innerHTML = `
+                <div class="flow-node w-100" style="max-width: 960px;">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="mb-0">Select leads for this campaign</h5>
+                        <span id="selected-leads-count" class="text-muted small">${selectedLeadIds.size} selected</span>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th style="width: 40px;">
+                                        <input id="select-all-leads" class="form-check-input" type="checkbox">
+                                    </th>
+                                    <th>Name</th>
+                                    <th>Email</th>
+                                    <th>Company</th>
+                                </tr>
+                            </thead>
+                            <tbody>${rows || '<tr><td colspan="4" class="text-muted py-4 text-center">No leads found. Import leads first.</td></tr>'}</tbody>
+                        </table>
+                    </div>
+                </div>
+            `;
+
+            const selectAll = document.getElementById('select-all-leads');
+            if (selectAll) {
+                selectAll.checked = availableLeads.length > 0 && selectedLeadIds.size === availableLeads.length;
+                selectAll.addEventListener('change', (e) => {
+                    selectedLeadIds = new Set();
+                    if (e.target.checked) availableLeads.forEach(lead => selectedLeadIds.add(lead.id));
+                    renderLeadsTab();
+                });
+            }
+
+            canvas.querySelectorAll('.lead-select').forEach(input => {
+                input.addEventListener('change', (e) => {
+                    if (e.target.checked) selectedLeadIds.add(e.target.value);
+                    else selectedLeadIds.delete(e.target.value);
+                    document.getElementById('selected-leads-count').textContent = `${selectedLeadIds.size} selected`;
+                });
+            });
+
+            document.getElementById('editor-content').innerHTML = `
+                <div class="p-3">
+                    <h6 class="fw-bold mb-2">Lead targeting</h6>
+                    <p class="text-muted small mb-3">Choose leads to enroll before launching.</p>
+                    <div class="small text-muted">
+                        Total leads: <b>${availableLeads.length}</b><br>
+                        Selected leads: <b>${selectedLeadIds.size}</b>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderLaunchTab() {
+            const canvas = document.getElementById('canvas');
+            const statusText = document.getElementById('status-toggle').classList.contains('on') ? 'ACTIVE' : 'DRAFT';
+            canvas.innerHTML = `
+                <div class="flow-node w-100" style="max-width: 900px;">
+                    <h4 class="mb-3">Launch campaign</h4>
+                    <p class="text-muted mb-4">Review and launch this campaign now.</p>
+                    <div class="row g-3">
+                        <div class="col-md-4">
+                            <div class="p-3 rounded-3 bg-light border">
+                                <div class="text-muted small">Campaign name</div>
+                                <div class="fw-semibold">${document.getElementById('campaign-name').value || 'Untitled campaign'}</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3 rounded-3 bg-light border">
+                                <div class="text-muted small">Steps configured</div>
+                                <div class="fw-semibold">${steps.length}</div>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="p-3 rounded-3 bg-light border">
+                                <div class="text-muted small">Selected leads</div>
+                                <div class="fw-semibold">${selectedLeadIds.size}</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="alert alert-info mt-4 mb-0">
+                        Current status toggle: <b>${statusText}</b>. Launch will activate the campaign and trigger processing.
+                    </div>
+                </div>
+            `;
+        }
+
+        async function saveCampaign() {
+            const name = document.getElementById('campaign-name').value;
+            const settings = { steps: steps.map((s, i) => ({ ...s, step_order: i + 1 })) };
+            const isActive = document.getElementById('status-toggle').classList.contains('on');
+            const payload = {
+                name,
+                status: isActive ? 'ACTIVE' : 'DRAFT',
+                settings,
+                steps: settings.steps,
+                connected_account_id: selectedConnectedAccountId || null,
+            };
+
+            let res;
+            if (campaignId) {
+                res = await fetchWithAuth(`/campaigns/${campaignId}/`, {
+                    method: 'PATCH',
+                    body: JSON.stringify(payload)
+                });
+            } else {
+                res = await fetchWithAuth('/campaigns/', {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                });
+            }
+
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.detail || 'Failed to save campaign.');
+            }
+
+            const data = await res.json();
+            campaignId = data.id;
+            return data;
+        }
+
+        async function enrollLeads() {
+            if (!campaignId) throw new Error('Save campaign before enrolling leads.');
+            const res = await fetchWithAuth(`/campaigns/${campaignId}/enroll/`, {
+                method: 'POST',
+                body: JSON.stringify({ lead_ids: Array.from(selectedLeadIds) })
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || err.detail || 'Failed to enroll selected leads.');
+            }
+            return res.json();
+        }
+
+        async function launchCampaign() {
+            if (!campaignId) throw new Error('Save campaign before launching.');
+            const res = await fetchWithAuth(`/campaigns/${campaignId}/launch/`, {
+                method: 'POST',
+                body: JSON.stringify({})
+            });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                throw new Error(err.error || err.detail || 'Failed to launch campaign.');
+            }
+            return res.json();
+        }
+
+        // â”€â”€â”€ RENDER CANVAS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        function renderCanvas() {
+            const canvas = document.getElementById('canvas');
+            let html = '';
+
+            const templateCards = SEQUENCE_TEMPLATES.map(template => `
+                <div class="template-card">
+                    <div class="template-title">${template.name}</div>
+                    <div class="template-desc">${template.description}</div>
+                    <div class="template-meta">
+                        <span class="template-chip"><i class="bi bi-diagram-3"></i> ${template.steps.length} steps</span>
+                        <span class="template-chip"><i class="bi bi-clock-history"></i> ${template.eta}</span>
+                    </div>
+                    <div class="d-flex gap-2">
+                        <button class="btn btn-sm btn-primary flex-grow-1" data-template-apply="${template.key}">
+                            Use
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" data-template-append="${template.key}">
+                            Append
+                        </button>
+                    </div>
+                </div>
+            `).join('');
+
+            html += `<div class="template-strip">
+                <div class="template-strip-head">
+                    <div>
+                        <div class="template-strip-title">Quick-start sequence templates</div>
+                        <div class="template-strip-subtitle">Use a ready flow, or append one to expand your campaign.</div>
+                    </div>
+                    <span class="badge text-bg-light border">Current: ${steps.length} steps</span>
+                </div>
+                <div class="template-grid">${templateCards}</div>
+            </div>`;
+
+            // Sequence start node
+            html += `<div class="flow-node start-node" style="text-align:center;">
+                <div class="d-flex align-items-center gap-2 justify-content-center">
+                    <i class="bi bi-flag-fill" style="color:#94a3b8;"></i>
+                    <span class="node-label">Sequence start</span>
+                </div>
+            </div>`;
+
+            steps.forEach((step, i) => {
+                // Connector + add button
+                html += `<div class="connector">
+                    <div class="connector-line"></div>
+                    <button class="add-btn" data-insert="${i}" title="Add step here">
+                        <i class="bi bi-plus"></i>
+                    </button>
+                    <div class="connector-line"></div>
+                </div>`;
+
+                if (step.type.startsWith('CONDITION_')) {
+                    // Condition node with branching
+                    const info = ICONS[step.type];
+                    const condLabel = step.type === 'CONDITION_OPEN' ? 'Opened email' :
+                        step.type === 'CONDITION_REPLY' ? 'Replied to email' : 'Clicked link';
+                    const timeLabel = step.condition_time || '1 day';
+
+                    html += `<div class="flow-node ${selectedNodeIndex === i ? 'selected' : ''}" data-index="${i}">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="node-icon ${info.cls}"><i class="bi ${info.icon}"></i></div>
+                            <div>
+                                <div class="node-label">${condLabel} within ${timeLabel}</div>
+                            </div>
+                        </div>
+                    </div>`;
+
+                    // Yes/No branches
+                    html += `<div class="connector"><div class="connector-line"></div></div>`;
+                    html += `<div class="branch-container">
+                        <div class="branch-column">
+                            <div class="branch-label yes">Yes</div>
+                            <button class="add-btn" data-branch-parent="${i}" data-branch="yes"><i class="bi bi-plus"></i></button>
+                        </div>
+                        <div class="branch-column">
+                            <div class="branch-label no">No</div>
+                            <button class="add-btn" data-branch-parent="${i}" data-branch="no"><i class="bi bi-plus"></i></button>
+                        </div>
+                    </div>`;
+                } else {
+                    // Regular node
+                    const info = ICONS[step.type] || ICONS.EMAIL;
+                    let delayText = '';
+                    if (step.type === 'WAIT') {
+                        delayText = `Wait ${step.delay_value || 1} ${step.delay_unit || 'day(s)'}`;
+                    }
+                    let meta = step.type === 'EMAIL'
+                        ? (step.subject ? step.subject.substring(0, 40) : '<span class="node-error">Content required</span>')
+                        : (step.type === 'WAIT' ? delayText : info.meta);
+
+                    if (step.type === 'LINKEDIN') {
+                        const action = step.action || 'CONNECT';
+                        const detail = summarizeText(step.description || '', 36);
+                        meta = detail ? `${action}: ${detail}` : `LinkedIn ${action.toLowerCase()} action`;
+                    }
+
+                    if (step.type === 'MANUAL') {
+                        meta = step.description ? summarizeText(step.description, 42) : 'Manual follow-up task';
+                    }
+
+                    const branchMeta = step.condition_branch === 'yes'
+                        ? '<span class="badge rounded-pill text-bg-success me-1">Yes path</span>'
+                        : (step.condition_branch === 'no'
+                            ? '<span class="badge rounded-pill text-bg-danger me-1">No path</span>'
+                            : '');
+
+                    html += `<div class="flow-node ${selectedNodeIndex === i ? 'selected' : ''}" data-index="${i}">
+                        <div class="d-flex align-items-center gap-3">
+                            <div class="node-icon ${info.cls}"><i class="bi ${info.icon}"></i></div>
+                            <div class="flex-grow-1">
+                                <div class="node-label">${info.label}</div>
+                                <div class="node-meta">${branchMeta}${meta}</div>
+                            </div>
+                            <button class="btn btn-sm" style="color:#94a3b8;" data-delete="${i}" title="Delete step"><i class="bi bi-three-dots"></i></button>
+                        </div>
+                    </div>`;
+                }
+            });
+
+            // Final add button
+            html += `<div class="connector">
+                <div class="connector-line"></div>
+                <button class="add-btn" data-insert="${steps.length}" title="Add step">
+                    <i class="bi bi-plus"></i>
+                </button>
+                <div class="connector-line"></div>
+            </div>`;
+
+            canvas.innerHTML = html;
+
+            canvas.querySelectorAll('[data-template-apply]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    applySequenceTemplate(btn.dataset.templateApply, 'replace');
+                });
+            });
+
+            canvas.querySelectorAll('[data-template-append]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    applySequenceTemplate(btn.dataset.templateAppend, 'append');
+                });
+            });
+
+            // Attach click listeners
+            canvas.querySelectorAll('.flow-node[data-index]').forEach(node => {
+                node.addEventListener('click', (e) => {
+                    if (e.target.closest('[data-delete]')) return;
+                    selectedNodeIndex = parseInt(node.dataset.index);
+                    renderCanvas();
+                    renderEditor();
+                });
+            });
+
+            canvas.querySelectorAll('.add-btn[data-insert]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    addInsertIndex = parseInt(btn.dataset.insert);
+                    addBranchTarget = null;
+                    document.querySelectorAll('.picker-tabs .ptab').forEach(t => t.classList.remove('active'));
+                    document.querySelector('.picker-tabs .ptab[data-picker="actions"]').classList.add('active');
+                    document.getElementById('picker-actions').style.display = '';
+                    document.getElementById('picker-conditions').style.display = 'none';
+                    document.getElementById('step-picker').classList.remove('hidden');
+                });
+            });
+
+            canvas.querySelectorAll('.add-btn[data-branch-parent]').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    const parentIndex = parseInt(btn.dataset.branchParent);
+                    const branch = btn.dataset.branch;
+                    addInsertIndex = parentIndex + 1;
+                    addBranchTarget = { parentIndex, branch };
+                    document.querySelectorAll('.picker-tabs .ptab').forEach(t => t.classList.remove('active'));
+                    document.querySelector('.picker-tabs .ptab[data-picker="actions"]').classList.add('active');
+                    document.getElementById('picker-actions').style.display = '';
+                    document.getElementById('picker-conditions').style.display = 'none';
+                    document.getElementById('step-picker').classList.remove('hidden');
+                });
+            });
+
+            canvas.querySelectorAll('[data-delete]').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const idx = parseInt(btn.dataset.delete);
+                    if (confirm('Delete this step?')) {
+                        steps.splice(idx, 1);
+                        if (selectedNodeIndex === idx) selectedNodeIndex = null;
+                        else if (selectedNodeIndex > idx) selectedNodeIndex--;
+                        renderCanvas();
+                        renderEditor();
+                    }
+                });
+            });
+        }
+
+        // â”€â”€â”€ RENDER EDITOR PANEL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        function renderEditor() {
+            const panel = document.getElementById('editor-content');
+
+            if (selectedNodeIndex === null || !steps[selectedNodeIndex]) {
+                panel.innerHTML = `<div class="text-center text-muted py-5">
+                    <i class="bi bi-cursor" style="font-size: 2rem;"></i>
+                    <p class="mt-2 small">Click a step to edit its content</p>
+                </div>`;
+                return;
+            }
+
+            const step = steps[selectedNodeIndex];
+
+            if (step.type === 'EMAIL') {
+                renderEmailEditor(panel, step);
+            } else if (step.type === 'WAIT') {
+                renderWaitEditor(panel, step);
+            } else if (step.type === 'LINKEDIN') {
+                renderLinkedInEditor(panel, step);
+            } else if (step.type.startsWith('CONDITION_')) {
+                renderConditionEditor(panel, step);
+            } else {
+                renderManualEditor(panel, step);
+            }
+        }
+
+        function renderEmailEditor(panel, step) {
+            // Build sender dropdown
+            let senderHtml = '';
+            if (connectedAccounts.length > 0) {
+                if (!selectedConnectedAccountId) {
+                    selectedConnectedAccountId = connectedAccounts[0].id;
+                }
+                const options = connectedAccounts.map(account => `
+                    <option value="${account.id}" ${selectedConnectedAccountId === account.id ? 'selected' : ''}>
+                        ${account.email} (${account.provider})
+                    </option>
+                `).join('');
+                senderHtml = `
+                    <div class="mb-3">
+                        <div class="ep-label">Sender for email steps</div>
+                        <select id="sender-account-select" class="ep-input">${options}</select>
+                    </div>`;
+            } else {
+                senderHtml = `
+                    <div class="mb-3">
+                        <div class="ep-label">Sender for email steps</div>
+                        <a href="/settings.html" class="btn btn-outline-secondary btn-sm">
+                            <i class="bi bi-google me-1"></i> Connect a Google account first
+                        </a>
+                    </div>`;
+            }
+
+            panel.innerHTML = `
+                <div class="d-flex align-items-center justify-content-between mb-1">
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="node-icon email"><i class="bi bi-envelope-fill"></i></div>
+                        <div>
+                            <div class="ep-title">Email</div>
+                            <div class="ep-subtitle">Send automatic email</div>
+                        </div>
+                    </div>
+                </div>
+                ${senderHtml}
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <div class="ep-label">Content</div>
+                        <button class="ai-btn" id="ai-generate-btn">
+                            <i class="bi bi-stars"></i> Ask AI
+                        </button>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="ep-label">Subject <span class="text-muted fw-normal">&middot; Add Cc</span></div>
+                    <input type="text" class="ep-input" id="ep-subject" placeholder="Subject" value="${step.subject || ''}">
+                </div>
+                <div class="mb-3">
+                    <div class="ep-label">Body</div>
+                    <textarea class="ep-textarea" id="ep-body" placeholder="Write your email content...">${step.body || ''}</textarea>
+                </div>
+                <div class="mb-3">
+                    <div class="ep-label">Merge Tags</div>
+                    <div class="d-flex flex-wrap gap-2">
+                        <span class="merge-tag" data-tag="{{firstName}}">{{firstName}}</span>
+                        <span class="merge-tag" data-tag="{{lastName}}">{{lastName}}</span>
+                        <span class="merge-tag" data-tag="{{email}}">{{email}}</span>
+                        <span class="merge-tag" data-tag="{{company}}">{{company}}</span>
+                        <span class="merge-tag" data-tag="{{icebreaker}}"><i class="bi bi-stars me-1"></i>{{icebreaker}}</span>
+                    </div>
+                </div>
+
+                <!-- AI Generation Result -->
+                <div id="ai-result" class="d-none mb-3">
+                    <div class="ep-label">AI Suggestion</div>
+                    <div class="p-3 rounded-3" style="background:#f5f3ff; border: 1px solid #ddd6fe;">
+                        <p id="ai-result-text" class="mb-2 small" style="white-space:pre-wrap;"></p>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-primary" id="ai-use-btn">Use this</button>
+                            <button class="btn btn-sm btn-outline-secondary" id="ai-regenerate-btn">Regenerate</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            // Bind inputs
+            document.getElementById('ep-subject').addEventListener('input', (e) => { step.subject = e.target.value; });
+            document.getElementById('ep-body').addEventListener('input', (e) => { step.body = e.target.value; });
+            const senderSelect = document.getElementById('sender-account-select');
+            if (senderSelect) {
+                senderSelect.addEventListener('change', (e) => {
+                    selectedConnectedAccountId = e.target.value;
+                });
+            }
+
+            // Merge tags
+            panel.querySelectorAll('.merge-tag').forEach(tag => {
+                tag.addEventListener('click', () => {
+                    const textarea = document.getElementById('ep-body');
+                    const pos = textarea.selectionStart;
+                    const text = textarea.value;
+                    const tagText = tag.dataset.tag;
+                    textarea.value = text.substring(0, pos) + tagText + text.substring(pos);
+                    step.body = textarea.value;
+                    textarea.focus();
+                    textarea.selectionStart = textarea.selectionEnd = pos + tagText.length;
+                });
+            });
+
+            // AI Generate button
+            document.getElementById('ai-generate-btn').addEventListener('click', () => generateAIContent(step));
+        }
+
+        function renderWaitEditor(panel, step) {
+            panel.innerHTML = `
+                <div class="d-flex align-items-center gap-2 mb-3">
+                    <div class="node-icon wait"><i class="bi bi-clock-fill"></i></div>
+                    <div>
+                        <div class="ep-title">Delay</div>
+                        <div class="ep-subtitle">Wait before the next step</div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="ep-label">Wait duration</div>
+                    <div class="d-flex gap-2">
+                        <input type="number" class="ep-input" id="ep-delay-val" value="${step.delay_value || 1}" min="1" style="width:100px;">
+                        <select class="ep-input" id="ep-delay-unit" style="width:150px;">
+                            <option value="minutes" ${step.delay_unit === 'minutes' ? 'selected' : ''}>Minutes</option>
+                            <option value="hours" ${step.delay_unit === 'hours' ? 'selected' : ''}>Hours</option>
+                            <option value="days" ${(step.delay_unit === 'days' || !step.delay_unit) ? 'selected' : ''}>Days</option>
+                        </select>
+                    </div>
+                </div>
+            `;
+            document.getElementById('ep-delay-val').addEventListener('input', e => { step.delay_value = parseInt(e.target.value) || 1; renderCanvas(); });
+            document.getElementById('ep-delay-unit').addEventListener('change', e => { step.delay_unit = e.target.value; renderCanvas(); });
+        }
+
+        function renderConditionEditor(panel, step) {
+            const condName = step.type === 'CONDITION_OPEN' ? 'Opened email' :
+                step.type === 'CONDITION_REPLY' ? 'Replied to email' : 'Clicked link';
+            panel.innerHTML = `
+                <div class="d-flex align-items-center gap-2 mb-3">
+                    <div class="node-icon condition"><i class="bi bi-signpost-split-fill"></i></div>
+                    <div>
+                        <div class="ep-title">${condName}</div>
+                        <div class="ep-subtitle">Branches based on lead behavior</div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="ep-label">Check within</div>
+                    <select class="ep-input" id="ep-cond-time">
+                        <option value="1 day" ${step.condition_time === '1 day' ? 'selected' : ''}>1 Day</option>
+                        <option value="2 days" ${step.condition_time === '2 days' ? 'selected' : ''}>2 Days</option>
+                        <option value="3 days" ${step.condition_time === '3 days' ? 'selected' : ''}>3 Days</option>
+                        <option value="1 week" ${step.condition_time === '1 week' ? 'selected' : ''}>1 Week</option>
+                    </select>
+                </div>
+                <div class="alert alert-info small"><i class="bi bi-info-circle me-1"></i> If the condition is met, the lead follows the <b>Yes</b> branch. Otherwise, they follow the <b>No</b> branch.</div>
+            `;
+            document.getElementById('ep-cond-time').addEventListener('change', e => { step.condition_time = e.target.value; renderCanvas(); });
+        }
+
+        function renderLinkedInEditor(panel, step) {
+            panel.innerHTML = `
+                <div class="d-flex align-items-center gap-2 mb-3">
+                    <div class="node-icon linkedin"><i class="bi bi-linkedin"></i></div>
+                    <div>
+                        <div class="ep-title">LinkedIn Action</div>
+                        <div class="ep-subtitle">Add social touches into your outreach sequence</div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="ep-label">Action type</div>
+                    <select class="ep-input" id="ep-linkedin-action">
+                        <option value="CONNECT" ${(step.action === 'CONNECT' || !step.action) ? 'selected' : ''}>Send connection request</option>
+                        <option value="MESSAGE" ${step.action === 'MESSAGE' ? 'selected' : ''}>Send LinkedIn message</option>
+                        <option value="PROFILE_VIEW" ${step.action === 'PROFILE_VIEW' ? 'selected' : ''}>View profile manually</option>
+                    </select>
+                </div>
+                <div class="mb-3">
+                    <div class="ep-label">Action notes</div>
+                    <textarea class="ep-textarea" id="ep-linkedin-desc" placeholder="e.g. Mention your previous email and ask if they are the right contact..." style="min-height:120px;">${step.description || ''}</textarea>
+                </div>
+                <div class="alert alert-light border small mb-0">
+                    This step currently logs workflow progression. Use notes to guide your action style.
+                </div>
+            `;
+            document.getElementById('ep-linkedin-action').addEventListener('change', e => {
+                step.action = e.target.value;
+                renderCanvas();
+            });
+            document.getElementById('ep-linkedin-desc').addEventListener('input', e => {
+                step.description = e.target.value;
+                renderCanvas();
+            });
+        }
+
+        function renderManualEditor(panel, step) {
+            panel.innerHTML = `
+                <div class="d-flex align-items-center gap-2 mb-3">
+                    <div class="node-icon manual"><i class="bi bi-hand-index-fill"></i></div>
+                    <div>
+                        <div class="ep-title">Manual Task</div>
+                        <div class="ep-subtitle">A reminder for you to perform a specific action</div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="ep-label">Task description</div>
+                    <textarea class="ep-textarea" id="ep-manual-desc" placeholder="e.g. Research the lead's company on LinkedIn..." style="min-height:100px;">${step.description || ''}</textarea>
+                </div>
+            `;
+            document.getElementById('ep-manual-desc').addEventListener('input', e => {
+                step.description = e.target.value;
+                renderCanvas();
+            });
+        }
+
+        // â”€â”€â”€ AI CONTENT GENERATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        async function generateAIContent(step, source = 'generate') {
+            const askBtn = document.getElementById('ai-generate-btn');
+            const regenBtn = document.getElementById('ai-regenerate-btn');
+
+            const restoreAskLabel = () => {
+                if (askBtn) {
+                    askBtn.innerHTML = '<i class="bi bi-stars"></i> Ask AI';
+                    askBtn.disabled = false;
+                }
+            };
+            const restoreRegenLabel = () => {
+                if (regenBtn) {
+                    regenBtn.textContent = 'Regenerate';
+                    regenBtn.disabled = false;
+                }
+            };
+
+            if (source === 'regenerate' && regenBtn) {
+                regenBtn.textContent = 'Regenerating...';
+                regenBtn.disabled = true;
+            } else if (askBtn) {
+                askBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Generating...';
+                askBtn.disabled = true;
+            }
+
+            try {
+                const variationSeed = Date.now();
+                const res = await fetchWithAuth('/campaigns/ai-generate/', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        subject: step.subject || '',
+                        body: step.body || '',
+                        prompt: `Generate a professional cold outreach email for a B2B SaaS product. 
+                            Use merge tags like {{firstName}} and {{company}} for personalization. 
+                            Keep it concise (3-4 sentences), friendly, and focused on generating a reply.
+                            ${step.subject ? 'Current subject: ' + step.subject : ''}
+                            Generate a fresh variation. variation_seed=${variationSeed}
+                            Return the result in this format:
+                            SUBJECT: ...
+                            BODY: ...`
+                    })
+                });
+
+                if (res.ok) {
+                    const data = await res.json();
+                    const resultDiv = document.getElementById('ai-result');
+                    const resultText = document.getElementById('ai-result-text');
+                    resultText.textContent = data.generated || data.result || 'AI generated content will appear here.';
+                    resultDiv.classList.remove('d-none');
+
+                    document.getElementById('ai-use-btn').onclick = () => {
+                        const text = resultText.textContent;
+                        // Parse SUBJECT: and BODY: from AI response
+                        const subjectMatch = text.match(/SUBJECT:\s*(.*?)(?:\n|BODY:)/s);
+                        const bodyMatch = text.match(/BODY:\s*([\s\S]*)/);
+                        if (subjectMatch) {
+                            step.subject = subjectMatch[1].trim();
+                            document.getElementById('ep-subject').value = step.subject;
+                        }
+                        if (bodyMatch) {
+                            step.body = bodyMatch[1].trim();
+                            document.getElementById('ep-body').value = step.body;
+                        }
+                        resultDiv.classList.add('d-none');
+                        renderCanvas();
+                    };
+
+                    document.getElementById('ai-regenerate-btn').onclick = () => generateAIContent(step, 'regenerate');
+                } else {
+                    alert('AI generation failed. Check your Gemini API key in Settings.');
+                }
+            } catch (e) {
+                console.error(e);
+                alert('Could not reach AI endpoint. Make sure the backend is running.');
+            } finally {
+                restoreAskLabel();
+                restoreRegenLabel();
+            }
+        }
+
+        // â”€â”€â”€ STEP PICKER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        document.querySelectorAll('.step-type').forEach(el => {
+            el.addEventListener('click', () => {
+                const type = el.dataset.type;
+                const newStep = { type };
+
+                if (type === 'EMAIL') { newStep.subject = ''; newStep.body = ''; newStep.delay_minutes = 0; }
+                else if (type === 'WAIT') { newStep.delay_value = 1; newStep.delay_unit = 'days'; }
+                else if (type === 'LINKEDIN') { newStep.action = 'CONNECT'; newStep.description = ''; }
+                else if (type.startsWith('CONDITION_')) { newStep.condition_time = '1 day'; newStep.yes = []; newStep.no = []; }
+                else { newStep.description = ''; }
+
+                if (addBranchTarget) {
+                    newStep.condition_branch = addBranchTarget.branch;
+                    newStep.condition_parent_index = addBranchTarget.parentIndex;
+                }
+
+                steps.splice(addInsertIndex, 0, newStep);
+                selectedNodeIndex = addInsertIndex;
+                addBranchTarget = null;
+                document.getElementById('step-picker').classList.add('hidden');
+                renderCanvas();
+                renderEditor();
+            });
+        });
+
+        document.getElementById('close-picker').addEventListener('click', () => {
+            addBranchTarget = null;
+            document.getElementById('step-picker').classList.add('hidden');
+        });
+
+        // Picker tabs
+        document.querySelectorAll('.picker-tabs .ptab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                document.querySelectorAll('.picker-tabs .ptab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                document.getElementById('picker-actions').style.display = tab.dataset.picker === 'actions' ? '' : 'none';
+                document.getElementById('picker-conditions').style.display = tab.dataset.picker === 'conditions' ? '' : 'none';
+            });
+        });
+
+        // â”€â”€â”€ TOP BAR TABS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        document.querySelectorAll('.tab-pills .tab').forEach(tab => {
+            tab.addEventListener('click', async () => {
+                try {
+                    if ((tab.dataset.tab === 'leads' || tab.dataset.tab === 'launch') && !campaignId) {
+                        await saveCampaign();
+                    }
+                    if (tab.dataset.tab === 'leads' && availableLeads.length === 0) {
+                        await loadLeads();
+                    }
+                    switchTab(tab.dataset.tab);
+                } catch (e) {
+                    alert(e.message || 'Unable to switch tab right now.');
+                }
+            });
+        });
+
+        // Status toggle
+        document.getElementById('status-toggle').addEventListener('click', function () {
+            this.classList.toggle('on');
+            this.classList.toggle('off');
+            if (activeTab === 'launch') renderLaunchTab();
+        });
+
+        // â”€â”€â”€ SAVE / NEXT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        document.getElementById('next-step-btn').addEventListener('click', async () => {
+            const btn = document.getElementById('next-step-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Saving...';
+
+            try {
+                if (activeTab === 'sequence') {
+                    await saveCampaign();
+                    await loadLeads();
+                    switchTab('leads');
+                } else if (activeTab === 'leads') {
+                    await saveCampaign();
+                    await enrollLeads();
+                    switchTab('launch');
+                } else {
+                    await saveCampaign();
+                    await enrollLeads();
+                    await launchCampaign();
+                    alert('Campaign launched and processing triggered.');
+                    window.location.href = '/campaigns.html';
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                setNextButtonLabel();
+            }
+        });
+
+        // â”€â”€â”€ INIT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Load connected accounts
+            try {
+                const res = await fetchWithAuth('/connected-accounts/');
+                if (res.ok) {
+                    connectedAccounts = await res.json();
+                    if (connectedAccounts.length > 0) {
+                        selectedConnectedAccountId = connectedAccounts[0].id;
+                    }
+                }
+            } catch (e) { console.warn('No connected accounts'); }
+
+            // Load existing campaign
+            if (editId) {
+                try {
+                    const res = await fetchWithAuth(`/campaigns/${editId}/`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        campaignId = data.id;
+                        document.getElementById('campaign-name').value = data.name;
+                        if (data.status === 'ACTIVE') {
+                            document.getElementById('status-toggle').classList.add('on');
+                            document.getElementById('status-toggle').classList.remove('off');
+                        }
+                        if (data.connected_account && data.connected_account.id) {
+                            selectedConnectedAccountId = data.connected_account.id;
+                        }
+                        if (Array.isArray(data.enrolled_lead_ids)) {
+                            selectedLeadIds = new Set(data.enrolled_lead_ids);
+                        }
+                        // Restore steps from settings
+                        if (data.settings && data.settings.steps) {
+                            steps = data.settings.steps;
+                        }
+                    }
+                } catch (e) { console.error(e); }
+            }
+
+            switchTab('sequence');
+        });
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>
+
