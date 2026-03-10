@@ -1,4 +1,6 @@
-# Lime (Lemlist-style Outreach MVP)
+# LeadOrbit
+
+## Lime (Lemlist-style Outreach MVP)
 
 This repo contains:
 
