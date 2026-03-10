@@ -1,0 +1,34 @@
+[DevScheduler] started (15s processing loop, 1m reply polling)
+Watching for file changes with StatReloader
+C:\Users\kano\Desktop\Lime\backend\campaigns\ai.py:1: FutureWarning: 
+
+All support for the `google.generativeai` package has ended. It will no longer be receiving 
+updates or bug fixes. Please switch to the `google.genai` package as soon as possible.
+See README for more details:
+
+https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
+
+  import google.generativeai as genai
+Unauthorized: /api/v1/
+[10/Mar/2026 21:44:13] "GET /api/v1/ HTTP/1.1" 401 58
+[10/Mar/2026 21:44:13,578] - Broken pipe from ('127.0.0.1', 54033)
+[10/Mar/2026 21:49:27] "OPTIONS /api/v1/token/ HTTP/1.1" 200 0
+Unauthorized: /api/v1/token/
+[10/Mar/2026 21:49:27] "POST /api/v1/token/ HTTP/1.1" 401 63
+C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\jwt\api_jwt.py:153: InsecureKeyLengthWarning: The HMAC key is 30 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  return self._jws.encode(
+[10/Mar/2026 21:50:00] "POST /api/v1/token/ HTTP/1.1" 200 582
+[10/Mar/2026 21:50:00] "OPTIONS /api/v1/auth/me/ HTTP/1.1" 200 0
+[10/Mar/2026 21:50:00] "OPTIONS /api/v1/analytics/dashboard/ HTTP/1.1" 200 0
+C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\jwt\api_jwt.py:371: InsecureKeyLengthWarning: The HMAC key is 30 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
+  decoded = self.decode_complete(
+[10/Mar/2026 21:50:00] "GET /api/v1/auth/me/ HTTP/1.1" 200 261
+[10/Mar/2026 21:50:00] "GET /api/v1/analytics/dashboard/ HTTP/1.1" 200 186
+[10/Mar/2026 21:50:07] "OPTIONS /api/v1/leads/ HTTP/1.1" 200 0
+[10/Mar/2026 21:50:07] "GET /api/v1/auth/me/ HTTP/1.1" 200 261
+[10/Mar/2026 21:50:07] "GET /api/v1/leads/ HTTP/1.1" 200 1716
+[10/Mar/2026 21:50:11] "OPTIONS /api/v1/campaigns/ HTTP/1.1" 200 0
+[10/Mar/2026 21:50:11] "GET /api/v1/auth/me/ HTTP/1.1" 200 261
+[10/Mar/2026 21:50:11] "GET /api/v1/campaigns/ HTTP/1.1" 200 7858
+[10/Mar/2026 21:50:18] "GET /api/v1/auth/me/ HTTP/1.1" 200 261
+[10/Mar/2026 21:50:18] "GET /api/v1/analytics/dashboard/ HTTP/1.1" 200 186
