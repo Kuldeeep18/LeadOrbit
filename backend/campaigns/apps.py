@@ -41,9 +41,18 @@ class CampaignsConfig(AppConfig):
                 return
             _dev_scheduler_started = True
 
+        try:
+            # Import task callables on the main thread so the scheduler thread
+            # does not race Django startup imports.
+            from .tasks import poll_gmail_for_replies, process_active_leads_once
+        except Exception as exc:
+            logger.exception(f"[DevScheduler] failed to initialize: {exc}")
+            with _dev_scheduler_lock:
+                _dev_scheduler_started = False
+            return
+
         def _runner():
             from django.db import close_old_connections
-            from .tasks import poll_gmail_for_replies, process_active_leads_once
 
             tick = 0
             while True:

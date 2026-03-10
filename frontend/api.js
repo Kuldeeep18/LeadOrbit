@@ -27,10 +27,25 @@ export const fetchWithAuth = async (endpoint, options = {}) => {
         delete headers['Content-Type'];
     }
 
-    const response = await fetch(`${API_BASE}${endpoint}`, {
-        ...options,
-        headers
-    });
+    const timeoutMs = Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : 10000;
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+    let response;
+    try {
+        response = await fetch(`${API_BASE}${endpoint}`, {
+            ...options,
+            headers,
+            signal: options.signal || controller.signal,
+        });
+    } catch (error) {
+        if (error.name === 'AbortError') {
+            throw new Error('Request timed out. Check if the backend is running on port 8000.');
+        }
+        throw error;
+    } finally {
+        clearTimeout(timeoutId);
+    }
 
     if (response.status === 401) {
         // Handle token refresh logic here in production

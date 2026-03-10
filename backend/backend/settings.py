@@ -138,6 +138,12 @@ CORS_ALLOW_ALL_ORIGINS = True
 # Gemini API Key
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
 
+# Reply detection toggle (used by Gmail polling task)
+ENABLE_AUTO_REPLY_DETECTION = os.getenv(
+    'ENABLE_AUTO_REPLY_DETECTION',
+    'false',
+).lower() in ('true', '1', 'yes')
+
 # Email backend (console for dev)
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 

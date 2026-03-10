@@ -190,6 +190,8 @@ class CampaignWorkflowTests(APITestCase):
             current_step=sms_step,
             status='ACTIVE',
             next_execution_time=timezone.now() - timedelta(minutes=1),
+            last_opened_at=timezone.now(),
+            last_clicked_at=timezone.now(),
         )
 
         now = timezone.now()
@@ -756,6 +758,66 @@ class CampaignWorkflowTests(APITestCase):
         self.assertEqual(campaign_lead.last_sent_message_id, 'no-path-msg')
         self.assertEqual(mocked_send.call_count, 1)
         self.assertEqual(mocked_send.call_args[0][2], 'No path')
+
+    def test_condition_reply_finishes_when_no_reply_and_no_no_branch(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Condition reply no-no-branch',
+            status='ACTIVE',
+            settings={
+                'steps': [
+                    {'type': 'CONDITION_REPLY', 'condition_time': '1 day'},
+                    {'type': 'EMAIL', 'subject': 'Yes path', 'body': 'yes', 'condition_branch': 'yes', 'condition_parent_index': 0},
+                ]
+            },
+        )
+        account = ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=self.user,
+            email_address='sender-condition-nobranch@acme.test',
+            provider='GOOGLE',
+            access_token='token',
+            refresh_token='refresh',
+        )
+        campaign.connected_account = account
+        campaign.save(update_fields=['connected_account'])
+
+        condition_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='CONDITION_REPLY',
+            delay_minutes=0,
+        )
+        SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=2,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Yes path',
+            template_body='yes',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='condition-nobranch@acme.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=condition_step,
+            status='ACTIVE',
+            next_execution_time=timezone.now() - timedelta(minutes=1),
+            last_sent_message_id='nobranch-mid-123',
+        )
+
+        with patch('campaigns.tasks.check_for_replies', return_value={}):
+            process_active_leads_once(now=timezone.now())
+
+        campaign_lead.refresh_from_db()
+        self.assertEqual(campaign_lead.status, 'FINISHED')
+        self.assertIsNone(campaign_lead.current_step_id)
 
     @override_settings(ENABLE_AUTO_REPLY_DETECTION=True)
     def test_poll_replies_defers_terminal_status_when_reply_yes_branch_exists(self):

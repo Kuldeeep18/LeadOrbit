@@ -1,5 +1,117 @@
 [DevScheduler] started (15s processing loop, 1m reply polling)
 Watching for file changes with StatReloader
+Exception in thread campaign-dev-scheduler:
+Exception in thread django-main-thread:
+Traceback (most recent call last):
+Traceback (most recent call last):
+  File "C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\django\template\utils.py", line 69, in __getitem__
+    return self._engines[alias]
+           ~~~~~~~~~~~~~^^^^^^^
+KeyError: 'django'
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\django\template\backends\django.py", line 174, in get_package_libraries
+    module = import_module(entry[1])
+  File "C:\Users\kano\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1082, in _bootstrap_inner
+    self._context.run(self.run)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\kano\AppData\Local\Programs\Python\Python314\Lib\importlib\__init__.py", line 88, in import_module
+    return _bootstrap._gcd_import(name[level:], package, level)
+           ~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\kano\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1024, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap>", line 1398, in _gcd_import
+  File "C:\Users\kano\Desktop\Lime\backend\campaigns\apps.py", line 46, in _runner
+    from .tasks import poll_gmail_for_replies, process_active_leads_once
+  File "<frozen importlib._bootstrap>", line 1371, in _find_and_load
+  File "C:\Users\kano\Desktop\Lime\backend\campaigns\tasks.py", line 8, in <module>
+    from .ai import personalize_email
+  File "<frozen importlib._bootstrap>", line 1342, in _find_and_load_unlocked
+  File "C:\Users\kano\Desktop\Lime\backend\campaigns\ai.py", line 1, in <module>
+    import google.generativeai as genai
+  File "<frozen importlib._bootstrap>", line 938, in _load_unlocked
+  File "C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\google\generativeai\__init__.py", line 47, in <module>
+    from google.generativeai import caching
+  File "C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\google\generativeai\caching.py", line 21, in <module>
+    from google.generativeai import protos
+  File "<frozen importlib._bootstrap_external>", line 759, in exec_module
+  File "C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\google\generativeai\protos.py", line 74, in <module>
+    from google.ai.generativelanguage_v1beta.types import *
+  File "<frozen importlib._bootstrap>", line 491, in _call_with_frames_removed
+  File "C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\google\ai\generativelanguage_v1beta\__init__.py", line 21, in <module>
+    from .services.cache_service import CacheServiceAsyncClient, CacheServiceClient
+  File "C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\rest_framework\templatetags\rest_framework.py", line 10, in <module>
+    from rest_framework.compat import apply_markdown, pygments_highlight
+  File "C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\google\ai\generativelanguage_v1beta\services\cache_service\__init__.py", line 16, in <module>
+    from .async_client import CacheServiceAsyncClient
+ImportError: cannot import name 'apply_markdown' from 'rest_framework.compat' (C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\rest_framework\compat.py)
+  File "C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\google\ai\generativelanguage_v1beta\services\cache_service\async_client.py", line 33, in <module>
+    from google.api_core import gapic_v1
+
+The above exception was the direct cause of the following exception:
+
+  File "C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\google\api_core\gapic_v1\__init__.py", line 16, in <module>
+    from google.api_core.gapic_v1 import config
+  File "C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\google\api_core\gapic_v1\config.py", line 26, in <module>
+    from google.api_core import retry
+Traceback (most recent call last):
+  File "C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\google\api_core\retry\__init__.py", line 17, in <module>
+    from .retry_base import exponential_sleep_generator
+  File "C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\google\api_core\retry\retry_base.py", line 30, in <module>
+    import requests.exceptions
+  File "C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\requests\exceptions.py", line 9, in <module>
+    from .compat import JSONDecodeError as CompatJSONDecodeError
+  File "C:\Users\kano\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1082, in _bootstrap_inner
+    self._context.run(self.run)
+    ~~~~~~~~~~~~~~~~~^^^^^^^^^^
+  File "C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\requests\__init__.py", line 45, in <module>
+    from .exceptions import RequestsDependencyWarning
+  File "C:\Users\kano\AppData\Local\Programs\Python\Python314\Lib\threading.py", line 1024, in run
+    self._target(*self._args, **self._kwargs)
+    ~~~~~~~~~~~~^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\django\utils\autoreload.py", line 64, in wrapper
+    fn(*args, **kwargs)
+    ~~^^^^^^^^^^^^^^^^^
+ImportError: cannot import name 'RequestsDependencyWarning' from partially initialized module 'requests.exceptions' (most likely due to a circular import) (C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\requests\exceptions.py)
+  File "C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\django\core\management\commands\runserver.py", line 134, in inner_run
+    self.check(**check_kwargs)
+    ~~~~~~~~~~^^^^^^^^^^^^^^^^
+  File "C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\django\core\management\base.py", line 496, in check
+    all_issues = checks.run_checks(
+        app_configs=app_configs,
+    ...<2 lines>...
+        databases=databases,
+    )
+  File "C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\django\core\checks\registry.py", line 89, in run_checks
+    new_errors = check(app_configs=app_configs, databases=databases)
+  File "C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\django\contrib\admin\checks.py", line 79, in check_dependencies
+    for engine in engines.all():
+                  ~~~~~~~~~~~^^
+  File "C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\django\template\utils.py", line 94, in all
+    return [self[alias] for alias in self]
+            ~~~~^^^^^^^
+  File "C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\django\template\utils.py", line 85, in __getitem__
+    engine = engine_cls(params)
+  File "C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\django\template\backends\django.py", line 26, in __init__
+    options["libraries"] = self.get_templatetag_libraries(libraries)
+                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^^^^^^^^^^^
+  File "C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\django\template\backends\django.py", line 88, in get_templatetag_libraries
+    libraries = get_installed_libraries()
+  File "C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\django\template\backends\django.py", line 163, in get_installed_libraries
+    module_name: full_name for module_name, full_name in get_template_tag_modules()
+                                                         ~~~~~~~~~~~~~~~~~~~~~~~~^^
+  File "C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\django\template\backends\django.py", line 151, in get_template_tag_modules
+    for name in get_package_libraries(pkg):
+                ~~~~~~~~~~~~~~~~~~~~~^^^^^
+  File "C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\django\template\backends\django.py", line 176, in get_package_libraries
+    raise InvalidTemplateLibrary(
+    ...<2 lines>...
+    ) from e
+django.template.library.InvalidTemplateLibrary: Invalid template library specified. ImportError raised when trying to load 'rest_framework.templatetags.rest_framework': cannot import name 'apply_markdown' from 'rest_framework.compat' (C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\rest_framework\compat.py)
+C:\Users\kano\Desktop\Lime\backend\campaigns\apps.py changed, reloading.
 C:\Users\kano\Desktop\Lime\backend\campaigns\ai.py:1: FutureWarning: 
 
 All support for the `google.generativeai` package has ended. It will no longer be receiving 
@@ -9,26 +121,11 @@ See README for more details:
 https://github.com/google-gemini/deprecated-generative-ai-python/blob/main/README.md
 
   import google.generativeai as genai
-Unauthorized: /api/v1/
-[10/Mar/2026 21:44:13] "GET /api/v1/ HTTP/1.1" 401 58
-[10/Mar/2026 21:44:13,578] - Broken pipe from ('127.0.0.1', 54033)
-[10/Mar/2026 21:49:27] "OPTIONS /api/v1/token/ HTTP/1.1" 200 0
-Unauthorized: /api/v1/token/
-[10/Mar/2026 21:49:27] "POST /api/v1/token/ HTTP/1.1" 401 63
-C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\jwt\api_jwt.py:153: InsecureKeyLengthWarning: The HMAC key is 30 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
-  return self._jws.encode(
-[10/Mar/2026 21:50:00] "POST /api/v1/token/ HTTP/1.1" 200 582
-[10/Mar/2026 21:50:00] "OPTIONS /api/v1/auth/me/ HTTP/1.1" 200 0
-[10/Mar/2026 21:50:00] "OPTIONS /api/v1/analytics/dashboard/ HTTP/1.1" 200 0
-C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\jwt\api_jwt.py:371: InsecureKeyLengthWarning: The HMAC key is 30 bytes long, which is below the minimum recommended length of 32 bytes for SHA256. See RFC 7518 Section 3.2.
-  decoded = self.decode_complete(
-[10/Mar/2026 21:50:00] "GET /api/v1/auth/me/ HTTP/1.1" 200 261
-[10/Mar/2026 21:50:00] "GET /api/v1/analytics/dashboard/ HTTP/1.1" 200 186
-[10/Mar/2026 21:50:07] "OPTIONS /api/v1/leads/ HTTP/1.1" 200 0
-[10/Mar/2026 21:50:07] "GET /api/v1/auth/me/ HTTP/1.1" 200 261
-[10/Mar/2026 21:50:07] "GET /api/v1/leads/ HTTP/1.1" 200 1716
-[10/Mar/2026 21:50:11] "OPTIONS /api/v1/campaigns/ HTTP/1.1" 200 0
-[10/Mar/2026 21:50:11] "GET /api/v1/auth/me/ HTTP/1.1" 200 261
-[10/Mar/2026 21:50:11] "GET /api/v1/campaigns/ HTTP/1.1" 200 7858
-[10/Mar/2026 21:50:18] "GET /api/v1/auth/me/ HTTP/1.1" 200 261
-[10/Mar/2026 21:50:18] "GET /api/v1/analytics/dashboard/ HTTP/1.1" 200 186
+[DevScheduler] started (15s processing loop, 1m reply polling)
+Watching for file changes with StatReloader
+Gemini Personalization Error: 404 models/gemini-1.5-flash is not found for API version v1beta, or is not supported for generateContent. Call ListModels to see the list of available models and their supported methods.
+C:\Users\kano\Desktop\Lime\backend\campaigns\ai.py changed, reloading.
+[DevScheduler] started (15s processing loop, 1m reply polling)
+Watching for file changes with StatReloader
+C:\Users\kano\Desktop\Lime\backend\venv\Lib\site-packages\django\db\backends\utils.py:98: RuntimeWarning: Accessing the database during app initialization is discouraged. To fix this warning, avoid executing queries in AppConfig.ready() or when your app modules are imported.
+  warnings.warn(self.APPS_NOT_READY_WARNING_MSG, category=RuntimeWarning)

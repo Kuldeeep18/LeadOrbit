@@ -142,6 +142,7 @@ class SequenceStepViewSet(viewsets.ModelViewSet):
         serializer.save(campaign=campaign, organization=self.request.user.organization)
 
 from rest_framework.views import APIView
+from django.utils import timezone
 
 class WebhookView(APIView):
     """
@@ -151,21 +152,56 @@ class WebhookView(APIView):
     permission_classes = [AllowAny] # Webhooks need to be publicly accessible
     
     def post(self, request, *args, **kwargs):
-        event_type = request.data.get('event')
+        event_type = (request.data.get('event') or '').strip().lower()
         lead_email = request.data.get('email')
+        message_id = request.data.get('message_id') or request.data.get('messageId')
         
         # Simple MVP tracking
         if event_type and lead_email:
             try:
                 # Find active campaign lead matching this email
-                cleads = CampaignLead.objects.filter(lead__email=lead_email, status__in=['ACTIVE', 'ENROLLED'])
+                base_qs = CampaignLead.objects.filter(
+                    lead__email=lead_email,
+                    status__in=['ACTIVE', 'ENROLLED'],
+                )
+                if message_id:
+                    base_qs = base_qs.filter(last_sent_message_id=message_id)
+                cleads = list(base_qs)
+
+                now = timezone.now()
+                from campaigns.tasks import (
+                    _campaign_has_condition_reply_yes_branch,
+                    _execute_condition_click_step,
+                    _execute_condition_open_step,
+                    _execute_condition_reply_step,
+                )
+
                 for cl in cleads:
                     if event_type == 'bounce':
                         cl.status = 'BOUNCED'
-                        cl.save()
+                        cl.save(update_fields=['status'])
                     elif event_type == 'reply':
-                        cl.status = 'REPLIED'
-                        cl.save()
+                        cl.last_replied_at = now
+                        # Only hard-stop if there is no reply-yes branch configured.
+                        if not _campaign_has_condition_reply_yes_branch(cl.campaign):
+                            cl.status = 'REPLIED'
+                            cl.current_step = None
+                            cl.next_execution_time = None
+                            cl.save(update_fields=['status', 'current_step', 'next_execution_time', 'last_replied_at'])
+                        else:
+                            cl.save(update_fields=['last_replied_at'])
+                            if cl.current_step and cl.current_step.channel_type == 'CONDITION_REPLY':
+                                _execute_condition_reply_step(cl, cl.current_step, now=now)
+                    elif event_type == 'open':
+                        cl.last_opened_at = now
+                        cl.save(update_fields=['last_opened_at'])
+                        if cl.current_step and cl.current_step.channel_type == 'CONDITION_OPEN':
+                            _execute_condition_open_step(cl, cl.current_step, now=now)
+                    elif event_type == 'click':
+                        cl.last_clicked_at = now
+                        cl.save(update_fields=['last_clicked_at'])
+                        if cl.current_step and cl.current_step.channel_type == 'CONDITION_CLICK':
+                            _execute_condition_click_step(cl, cl.current_step, now=now)
             except Exception as e:
                 pass
                 
@@ -249,4 +285,3 @@ class AIGenerateView(APIView):
             "Your Name"
         )
         return f"SUBJECT: {subject}\nBODY: {body}"
-

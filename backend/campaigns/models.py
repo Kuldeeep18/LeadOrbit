@@ -84,6 +84,9 @@ class CampaignLead(TenantModel):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ENROLLED')
     next_execution_time = models.DateTimeField(null=True, blank=True)
     last_sent_message_id = models.CharField(max_length=255, null=True, blank=True)
+    last_opened_at = models.DateTimeField(null=True, blank=True)
+    last_clicked_at = models.DateTimeField(null=True, blank=True)
+    last_replied_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         unique_together = ('campaign', 'lead')
