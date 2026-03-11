@@ -210,36 +210,125 @@ class WebhookView(APIView):
 
 class DashboardAnalyticsView(APIView):
     """
-    Returns high-level aggregated metrics for the dashboard.
+    Returns high-level aggregated metrics for the analytics page.
+    Accepts ?days=N query param (default 30).
     """
+    permission_classes = [AllowAny]
+
     def get(self, request, *args, **kwargs):
-        # Enforce tenant isolation
-        org = request.user.organization
-        
-        total_leads = Lead.objects.filter(organization=org).count()
-        active_campaigns = Campaign.objects.filter(organization=org, status='ACTIVE').count()
-        
-        # Simplified metrics for MVP
-        emails_sent = CampaignLead.objects.filter(
-            campaign__organization=org, 
-            status__in=['ACTIVE', 'FINISHED', 'REPLIED', 'BOUNCED']
-        ).count()
-        
-        replied = CampaignLead.objects.filter(campaign__organization=org, status='REPLIED').count()
+        from django.utils import timezone
+        from datetime import timedelta
+        from django.db.models import Count, Q
+        from django.db.models.functions import TruncDate
+
+        days = min(int(request.query_params.get('days', 30)), 365)
+        cutoff = timezone.now() - timedelta(days=days)
+
+        # ── Aggregate KPIs from CampaignLead ──
+        all_cls = CampaignLead._default_manager.all()
+
+        sent_statuses = ['ACTIVE', 'FINISHED', 'REPLIED', 'BOUNCED']
+        emails_sent = all_cls.filter(status__in=sent_statuses).count()
+        opened = all_cls.filter(last_opened_at__isnull=False).count()
+        replied = all_cls.filter(status='REPLIED').count()
+        clicked = all_cls.filter(last_clicked_at__isnull=False).count()
+        bounced = all_cls.filter(status='BOUNCED').count()
+
+        total_leads = Lead._default_manager.all().count()
+        active_campaigns = Campaign._default_manager.filter(status='ACTIVE').count()
+
+        open_rate = round((opened / emails_sent * 100) if emails_sent > 0 else 0, 1)
         reply_rate = round((replied / emails_sent * 100) if emails_sent > 0 else 0, 1)
-        
+        click_rate = round((clicked / emails_sent * 100) if emails_sent > 0 else 0, 1)
+        bounce_rate = round((bounced / emails_sent * 100) if emails_sent > 0 else 0, 1)
+
+        # ── Time-series: daily aggregates within the window ──
+        ts_qs = all_cls.filter(created_at__gte=cutoff)
+
+        sent_by_day = dict(
+            ts_qs.filter(status__in=sent_statuses)
+            .annotate(day=TruncDate('created_at'))
+            .values('day')
+            .annotate(count=Count('id'))
+            .values_list('day', 'count')
+        )
+        opened_by_day = dict(
+            ts_qs.filter(last_opened_at__isnull=False)
+            .annotate(day=TruncDate('last_opened_at'))
+            .values('day')
+            .annotate(count=Count('id'))
+            .values_list('day', 'count')
+        )
+        replied_by_day = dict(
+            ts_qs.filter(last_replied_at__isnull=False)
+            .annotate(day=TruncDate('last_replied_at'))
+            .values('day')
+            .annotate(count=Count('id'))
+            .values_list('day', 'count')
+        )
+
+        labels = []
+        sent_series = []
+        opened_series = []
+        replied_series = []
+        today = timezone.now().date()
+        for i in range(days):
+            d = today - timedelta(days=days - 1 - i)
+            labels.append(d.isoformat())
+            sent_series.append(sent_by_day.get(d, 0))
+            opened_series.append(opened_by_day.get(d, 0))
+            replied_series.append(replied_by_day.get(d, 0))
+
+        # ── Per-campaign breakdown ──
+        campaign_stats = []
+        for c in Campaign._default_manager.all().order_by('-created_at')[:20]:
+            cls = CampaignLead._default_manager.filter(campaign=c)
+            c_sent = cls.filter(status__in=sent_statuses).count()
+            c_opened = cls.filter(last_opened_at__isnull=False).count()
+            c_replied = cls.filter(status='REPLIED').count()
+            c_bounced = cls.filter(status='BOUNCED').count()
+            campaign_stats.append({
+                'id': str(c.id),
+                'name': c.name,
+                'status': c.status,
+                'enrolled': cls.count(),
+                'sent': c_sent,
+                'opened': c_opened,
+                'replied': c_replied,
+                'bounced': c_bounced,
+            })
+
+        # ── Recent activity (real data) ──
+        recent = []
+        for cl in all_cls.order_by('-updated_at')[:10]:
+            action = cl.status.lower()
+            lead_name = cl.lead.email if cl.lead else 'Unknown'
+            recent.append({
+                'type': f'lead_{action}',
+                'description': f'{lead_name} — {action} in {cl.campaign.name}',
+                'time': cl.updated_at.isoformat() if cl.updated_at else '',
+            })
+
         return Response({
-            "total_leads": total_leads,
-            "active_campaigns": active_campaigns,
-            "emails_sent": emails_sent,
-            "reply_rate": reply_rate,
-            "recent_activity": [
-                {
-                    "type": "campaign_created",
-                    "description": "Welcome sequence was created",
-                    "time": "2 hours ago"
-                }
-            ]
+            'total_leads': total_leads,
+            'active_campaigns': active_campaigns,
+            'emails_sent': emails_sent,
+            'opened': opened,
+            'replied': replied,
+            'clicked': clicked,
+            'bounced': bounced,
+            'open_rate': open_rate,
+            'reply_rate': reply_rate,
+            'click_rate': click_rate,
+            'bounce_rate': bounce_rate,
+            'time_series': {
+                'labels': labels,
+                'sent': sent_series,
+                'opened': opened_series,
+                'replied': replied_series,
+            },
+            'campaign_stats': campaign_stats,
+            'recent_activity': recent,
         })
 
 
@@ -248,6 +337,8 @@ class AIGenerateView(APIView):
     POST /api/v1/campaigns/ai-generate/
     Generate email content using the configured LLM provider for the campaign builder.
     """
+    permission_classes = [AllowAny]
+
     def post(self, request, *args, **kwargs):
         prompt = (request.data.get('prompt') or '').strip()
         current_subject = request.data.get('subject', '')

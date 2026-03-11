@@ -87,17 +87,17 @@
                     <div class="kpi-card">
                         <div class="kpi-label">Opened</div>
                         <div class="kpi-value" id="kpi-opened">0</div>
-                        <div class="kpi-sub">Estimated opens</div>
+                        <div class="kpi-sub" id="kpi-open-rate">Open rate</div>
                     </div>
                     <div class="kpi-card">
                         <div class="kpi-label">Replied</div>
                         <div class="kpi-value" id="kpi-replied">0</div>
-                        <div class="kpi-sub">Detected responses</div>
+                        <div class="kpi-sub" id="kpi-reply-rate">Reply rate</div>
                     </div>
                     <div class="kpi-card">
                         <div class="kpi-label">Bounced</div>
                         <div class="kpi-value" id="kpi-bounced">0</div>
-                        <div class="kpi-sub">Delivery failures</div>
+                        <div class="kpi-sub" id="kpi-bounce-rate">Delivery failures</div>
                     </div>
                 </div>
 
@@ -184,51 +184,52 @@
             let campaignStepChart;
             let campaigns = [];
 
-            let data = { total_leads: 0, active_campaigns: 0, emails_sent: 0, reply_rate: 0 };
-            try {
-                const res = await fetchWithAuth('/analytics/dashboard/');
-                if (res.ok) data = await res.json();
-            } catch (e) {
-                console.error(e);
-            }
-
-            document.getElementById('kpi-sent').textContent = data.emails_sent || 0;
-            const openRate = 0.42;
-            const bounceRate = 0.02;
-            document.getElementById('kpi-opened').textContent = Math.round((data.emails_sent || 0) * openRate);
-            document.getElementById('kpi-replied').textContent = Math.round((data.emails_sent || 0) * (data.reply_rate || 0) / 100);
-            document.getElementById('kpi-bounced').textContent = Math.round((data.emails_sent || 0) * bounceRate);
-
-            const buildLabels = (days) => Array.from({ length: days }, (_, i) => {
-                const d = new Date();
-                d.setDate(d.getDate() - (days - 1 - i));
-                return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-            });
-
-            const generateSeries = (sent, days) => {
-                const labels = buildLabels(days);
-                const base = days > 0 ? Math.max(1, Math.round(sent / days)) : 0;
-                const sentData = labels.map((_, i) => {
-                    const wave = 0.7 + 0.3 * Math.sin((i / Math.max(1, days)) * Math.PI * 2);
-                    return Math.max(0, Math.round(base * wave));
-                });
-                const openedData = sentData.map(v => Math.round(v * openRate));
-                const repliedData = sentData.map(v => Math.round(v * (data.reply_rate || 0) / 100));
-                return { labels, sentData, openedData, repliedData };
+            // ── Load analytics data from backend ──
+            const loadAnalytics = async (days) => {
+                const defaults = {
+                    total_leads: 0, active_campaigns: 0,
+                    emails_sent: 0, opened: 0, replied: 0, clicked: 0, bounced: 0,
+                    open_rate: 0, reply_rate: 0, click_rate: 0, bounce_rate: 0,
+                    time_series: { labels: [], sent: [], opened: [], replied: [] },
+                    campaign_stats: [], recent_activity: [],
+                };
+                try {
+                    const res = await fetchWithAuth(`/analytics/dashboard/?days=${days}`);
+                    if (res.ok) return { ...defaults, ...(await res.json()) };
+                } catch (e) { console.error(e); }
+                return defaults;
             };
 
-            const renderActivityChart = (days) => {
-                const sent = data.emails_sent || 0;
-                const { labels, sentData, openedData, repliedData } = generateSeries(sent, days);
+            let data = await loadAnalytics(Number(timeRangeSelect.value || 30));
+
+            // ── KPI cards (real data) ──
+            const updateKPIs = () => {
+                document.getElementById('kpi-sent').textContent = data.emails_sent || 0;
+                document.getElementById('kpi-opened').textContent = data.opened || 0;
+                document.getElementById('kpi-replied').textContent = data.replied || 0;
+                document.getElementById('kpi-bounced').textContent = data.bounced || 0;
+                document.getElementById('kpi-open-rate').textContent = `${data.open_rate || 0}% open rate`;
+                document.getElementById('kpi-reply-rate').textContent = `${data.reply_rate || 0}% reply rate`;
+                document.getElementById('kpi-bounce-rate').textContent = `${data.bounce_rate || 0}% bounce rate`;
+            };
+            updateKPIs();
+
+            // ── Activity chart from real time-series ──
+            const renderActivityChart = () => {
+                const ts = data.time_series || {};
+                const labels = (ts.labels || []).map(iso => {
+                    const d = new Date(iso + 'T00:00:00');
+                    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                });
                 if (activityChart) activityChart.destroy();
                 activityChart = new Chart(document.getElementById('activityChart'), {
                     type: 'line',
                     data: {
                         labels,
                         datasets: [
-                            { label: 'Sent', data: sentData, borderColor: '#0d6efd', backgroundColor: 'rgba(13,110,253,0.1)', fill: true, tension: 0.4 },
-                            { label: 'Opened (est.)', data: openedData, borderColor: '#198754', backgroundColor: 'rgba(25,135,84,0.1)', fill: true, tension: 0.4 },
-                            { label: 'Replied', data: repliedData, borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)', fill: true, tension: 0.4 },
+                            { label: 'Sent', data: ts.sent || [], borderColor: '#0d6efd', backgroundColor: 'rgba(13,110,253,0.1)', fill: true, tension: 0.4 },
+                            { label: 'Opened', data: ts.opened || [], borderColor: '#198754', backgroundColor: 'rgba(25,135,84,0.1)', fill: true, tension: 0.4 },
+                            { label: 'Replied', data: ts.replied || [], borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)', fill: true, tension: 0.4 },
                         ],
                     },
                     options: {
@@ -238,6 +239,7 @@
                     },
                 });
             };
+            renderActivityChart();
 
             const loadCampaigns = async () => {
                 try {
@@ -278,31 +280,27 @@
                 });
             };
 
-            const renderCampaignPerformanceChart = (campaignList) => {
-                const topCampaigns = [...campaignList]
-                    .sort((a, b) => (b.enrolled_count || 0) - (a.enrolled_count || 0))
-                    .slice(0, 5);
-                const labels = topCampaigns.length
-                    ? topCampaigns.map(c => c.name)
-                    : ['No campaigns yet'];
-                const values = topCampaigns.length
-                    ? topCampaigns.map(c => c.enrolled_count || 0)
-                    : [0];
+            const renderCampaignPerformanceChart = () => {
+                const stats = (data.campaign_stats || []).slice(0, 6);
+                const labels = stats.length ? stats.map(c => c.name) : ['No campaigns yet'];
+                const sentVals = stats.length ? stats.map(c => c.sent || 0) : [0];
+                const openedVals = stats.length ? stats.map(c => c.opened || 0) : [0];
+                const repliedVals = stats.length ? stats.map(c => c.replied || 0) : [0];
 
                 if (campaignChart) campaignChart.destroy();
                 campaignChart = new Chart(document.getElementById('campaignChart'), {
                     type: 'bar',
                     data: {
                         labels,
-                        datasets: [{
-                            label: 'Enrolled Leads',
-                            data: values,
-                            backgroundColor: ['#0d6efd', '#10b981', '#f59e0b', '#ef4444', '#8b5cf6'],
-                        }],
+                        datasets: [
+                            { label: 'Sent', data: sentVals, backgroundColor: '#0d6efd' },
+                            { label: 'Opened', data: openedVals, backgroundColor: '#10b981' },
+                            { label: 'Replied', data: repliedVals, backgroundColor: '#f59e0b' },
+                        ],
                     },
                     options: {
                         responsive: true,
-                        plugins: { legend: { display: false } },
+                        plugins: { legend: { position: 'bottom' } },
                         scales: { y: { beginAtZero: true } },
                     },
                 });
@@ -436,16 +434,16 @@
 
             campaigns = await loadCampaigns();
             renderStatusChart(campaigns);
-            renderCampaignPerformanceChart(campaigns);
+            renderCampaignPerformanceChart();
             renderChannelChart(campaigns);
             renderCampaignSelector(campaigns);
 
-            const initialDays = Number(timeRangeSelect.value || 30);
-            renderActivityChart(initialDays);
-
-            timeRangeSelect.addEventListener('change', () => {
+            timeRangeSelect.addEventListener('change', async () => {
                 const days = Number(timeRangeSelect.value || 30);
-                renderActivityChart(days);
+                data = await loadAnalytics(days);
+                updateKPIs();
+                renderActivityChart();
+                renderCampaignPerformanceChart();
             });
 
             analyzeBtn.addEventListener('click', async () => {

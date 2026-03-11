@@ -98,15 +98,21 @@ def generate_email_chat_completion(prompt, current_subject='', current_body='', 
 
     system_prompt = (
         'You are Lime AI, an expert outbound email assistant for B2B sales teams. '
-        'Help the user write campaign emails such as cold outreach, follow-ups, introductions, '
-        're-engagement emails, and reply nudges. '
+        'The user will describe what kind of email they want. '
+        'Pay close attention to every detail in the user\'s prompt — company names, '
+        'product descriptions, value propositions, tone requests, and any specific '
+        'information they mention. Incorporate ALL of those details directly into '
+        'the email subject and body. Do NOT write generic sales copy. '
+        'The email must feel custom-written for the exact scenario the user described. '
+        'You may use merge tags like {{firstName}} for the recipient\'s first name '
+        'only where it makes sense (e.g. the greeting), but always use the real '
+        'company/product/service names the user provides — never replace them with {{company}}. '
         'Respond ONLY with valid JSON using exactly these keys: '
         'assistant_message, subject, body. '
-        'assistant_message should be a brief explanation of what you wrote and why. '
-        'subject should be concise. '
+        'assistant_message should be a brief explanation of what you wrote. '
+        'subject should be concise and specific to the user\'s request. '
         'body should be plain text email copy with natural line breaks. '
-        'Use merge tags like {{firstName}} and {{company}} when personalization helps. '
-        'Do not include markdown fences.'
+        'Do not include markdown fences or code blocks.'
     )
 
     conversation = [
@@ -130,6 +136,7 @@ def generate_email_chat_completion(prompt, current_subject='', current_body='', 
         conversation.append({'role': 'user', 'content': prompt})
 
     openrouter_api_key = _get_openrouter_api_key()
+    logger.info('OpenRouter key present: %s, model: %s', bool(openrouter_api_key), _get_openrouter_model())
     if openrouter_api_key:
         try:
             response = requests.post(
@@ -143,7 +150,7 @@ def generate_email_chat_completion(prompt, current_subject='', current_body='', 
                 json={
                     'model': _get_openrouter_model(),
                     'messages': conversation,
-                    'temperature': 0.8,
+                    'temperature': 0.7,
                 },
                 timeout=60,
             )
