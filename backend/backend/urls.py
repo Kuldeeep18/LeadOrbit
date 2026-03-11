@@ -1,4 +1,5 @@
 from django.contrib import admin
+from django.http import JsonResponse
 from django.urls import path, include
 from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
@@ -13,6 +14,14 @@ from leads.views import LeadViewSet, TagViewSet
 from campaigns.views import CampaignViewSet, SequenceStepViewSet, WebhookView, DashboardAnalyticsView, AIGenerateView
 from campaigns.google_auth_views import GoogleOAuthLoginView, GoogleOAuthCallbackView, ConnectedAccountsListView
 
+
+def api_root(_request):
+    return JsonResponse({
+        'status': 'ok',
+        'service': 'Lime backend API',
+        'base_path': '/api/v1/',
+    })
+
 router = DefaultRouter()
 router.register(r'auth', AuthViewSet, basename='auth')
 router.register(r'leads', LeadViewSet, basename='leads')
@@ -20,6 +29,7 @@ router.register(r'tags', TagViewSet, basename='tags')
 router.register(r'campaigns', CampaignViewSet, basename='campaigns')
 
 urlpatterns = [
+    path('', api_root, name='api_root'),
     path('admin/', admin.site.urls),
     path('api/v1/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/v1/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),

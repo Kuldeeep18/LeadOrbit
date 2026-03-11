@@ -1,4 +1,4 @@
-const API_BASE = 'http://localhost:8000/api/v1';
+const API_BASE = localStorage.getItem('api_base_url') || 'http://127.0.0.1:8000/api/v1';
 
 export const setTokens = (access, refresh) => {
     localStorage.setItem('access_token', access);
@@ -27,7 +27,7 @@ export const fetchWithAuth = async (endpoint, options = {}) => {
         delete headers['Content-Type'];
     }
 
-    const timeoutMs = Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : 10000;
+    const timeoutMs = Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : 20000;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
@@ -41,6 +41,9 @@ export const fetchWithAuth = async (endpoint, options = {}) => {
     } catch (error) {
         if (error.name === 'AbortError') {
             throw new Error('Request timed out. Check if the backend is running on port 8000.');
+        }
+        if (error instanceof TypeError) {
+            throw new Error(`Cannot reach backend API at ${API_BASE}. Check that the backend server is running.`);
         }
         throw error;
     } finally {

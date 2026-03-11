@@ -9,6 +9,22 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Prefer local project .env values for local development runs.
 load_dotenv(BASE_DIR / '.env', override=True)
 
+
+def _read_local_env_value(name: str, default: str = '') -> str:
+    env_path = BASE_DIR / '.env'
+    try:
+        if env_path.exists():
+            for raw_line in env_path.read_text(encoding='utf-8', errors='ignore').splitlines():
+                line = raw_line.strip()
+                if not line or line.startswith('#') or '=' not in line:
+                    continue
+                key, value = line.split('=', 1)
+                if key.strip() == name:
+                    return value.strip().strip('"').strip("'")
+    except Exception:
+        pass
+    return default
+
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-fallback-key-change-me')
 DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes')
 ALLOWED_HOSTS = ['*']
@@ -136,13 +152,20 @@ SIMPLE_JWT = {
 CORS_ALLOW_ALL_ORIGINS = True
 
 # Gemini API Key
-GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', '')
+GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', _read_local_env_value('GEMINI_API_KEY', ''))
+OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', _read_local_env_value('OPENROUTER_API_KEY', ''))
+OPENROUTER_MODEL = os.getenv('OPENROUTER_MODEL', _read_local_env_value('OPENROUTER_MODEL', 'mistralai/mistral-nemo'))
+OPENROUTER_APP_URL = os.getenv('OPENROUTER_APP_URL', _read_local_env_value('OPENROUTER_APP_URL', 'http://localhost:8080'))
+OPENROUTER_APP_NAME = os.getenv('OPENROUTER_APP_NAME', _read_local_env_value('OPENROUTER_APP_NAME', 'Lime Campaign Builder'))
 
 # Reply detection toggle (used by Gmail polling task)
 ENABLE_AUTO_REPLY_DETECTION = os.getenv(
     'ENABLE_AUTO_REPLY_DETECTION',
     'false',
 ).lower() in ('true', '1', 'yes')
+
+# Limit synchronous processing inside launch API calls to keep requests responsive.
+LAUNCH_IMMEDIATE_PASSES = int(os.getenv('LAUNCH_IMMEDIATE_PASSES', '1' if DEBUG else '0'))
 
 # Email backend (console for dev)
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'

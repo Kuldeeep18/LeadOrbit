@@ -550,6 +550,219 @@
             padding: 10px;
         }
 
+        .ai-composer {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.46);
+            backdrop-filter: blur(8px);
+            z-index: 120;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+        }
+
+        .ai-composer.hidden {
+            display: none;
+        }
+
+        .ai-composer-card {
+            width: min(960px, 100%);
+            height: min(82vh, 760px);
+            background: linear-gradient(180deg, #f8fbff 0%, #eef4fb 100%);
+            border: 1px solid rgba(148, 163, 184, 0.28);
+            border-radius: 24px;
+            box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28);
+            display: flex;
+            overflow: hidden;
+        }
+
+        .ai-composer-sidebar {
+            width: 260px;
+            background: linear-gradient(180deg, #0f172a 0%, #172554 100%);
+            color: #e2e8f0;
+            padding: 24px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+
+        .ai-composer-sidebar h4 {
+            font-size: 1.1rem;
+            font-weight: 700;
+            margin: 0;
+        }
+
+        .ai-composer-sidebar p {
+            margin: 0;
+            font-size: 0.82rem;
+            line-height: 1.55;
+            color: #cbd5e1;
+        }
+
+        .ai-composer-chip-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .ai-composer-chip {
+            border: 1px solid rgba(191, 219, 254, 0.22);
+            border-radius: 999px;
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.08);
+            color: #eff6ff;
+            font-size: 0.76rem;
+            cursor: pointer;
+        }
+
+        .ai-composer-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+        }
+
+        .ai-composer-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            padding: 20px 22px;
+            border-bottom: 1px solid #dbe4ef;
+            background: rgba(255, 255, 255, 0.72);
+        }
+
+        .ai-composer-headline {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .ai-composer-headline strong {
+            font-size: 0.96rem;
+            color: #0f172a;
+        }
+
+        .ai-composer-headline span {
+            font-size: 0.78rem;
+            color: #64748b;
+        }
+
+        .ai-chat-log {
+            flex: 1;
+            overflow-y: auto;
+            padding: 22px;
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+
+        .ai-chat-message {
+            max-width: 82%;
+            border-radius: 18px;
+            padding: 14px 16px;
+            box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
+            white-space: pre-wrap;
+            line-height: 1.55;
+        }
+
+        .ai-chat-message.user {
+            align-self: flex-end;
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            color: #eff6ff;
+        }
+
+        .ai-chat-message.assistant {
+            align-self: flex-start;
+            background: #ffffff;
+            color: #0f172a;
+            border: 1px solid #dbe4ef;
+        }
+
+        .ai-chat-draft {
+            margin-top: 10px;
+            padding-top: 10px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        .ai-chat-draft-label {
+            font-size: 0.7rem;
+            font-weight: 700;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: #64748b;
+            margin-bottom: 6px;
+        }
+
+        .ai-chat-subject {
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 6px;
+        }
+
+        .ai-composer-footer {
+            border-top: 1px solid #dbe4ef;
+            padding: 18px 22px 22px;
+            background: rgba(255, 255, 255, 0.88);
+        }
+
+        .ai-composer-prompt {
+            width: 100%;
+            border: 1.5px solid #cbd5e1;
+            border-radius: 18px;
+            min-height: 110px;
+            padding: 14px 16px;
+            resize: none;
+            font-size: 0.93rem;
+            line-height: 1.55;
+            background: #fff;
+        }
+
+        .ai-composer-prompt:focus {
+            outline: none;
+            border-color: #2563eb;
+            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+        }
+
+        .ai-composer-actions {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            margin-top: 14px;
+        }
+
+        .ai-composer-status {
+            font-size: 0.78rem;
+            color: #64748b;
+        }
+
+        .ai-draft-toolbar {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        @media (max-width: 992px) {
+            .ai-composer {
+                padding: 12px;
+            }
+
+            .ai-composer-card {
+                flex-direction: column;
+                height: min(90vh, 880px);
+            }
+
+            .ai-composer-sidebar {
+                width: 100%;
+            }
+
+            .ai-chat-message {
+                max-width: 100%;
+            }
+        }
+
         .template-title {
             font-weight: 700;
             font-size: 0.82rem;
@@ -733,9 +946,49 @@
         </div>
     </div>
 
+    <div class="ai-composer hidden" id="ai-composer">
+        <div class="ai-composer-card">
+            <div class="ai-composer-sidebar">
+                <div>
+                    <h4>AI Email Studio</h4>
+                    <p>Describe the email you want in plain language. Ask for tone, goal, audience, offer, CTA, or follow-up angle.</p>
+                </div>
+                <div>
+                    <div class="ep-label text-white mb-2">Prompt ideas</div>
+                    <div class="ai-composer-chip-list" id="ai-prompt-chips">
+                        <button class="ai-composer-chip" data-prompt="Write a concise cold outreach email for a SaaS founder introducing our product to {{company}} and asking for a short call.">Cold outreach</button>
+                        <button class="ai-composer-chip" data-prompt="Create a polite follow-up email referencing a previous message and asking if {{firstName}} is the right person to speak with.">Follow-up</button>
+                        <button class="ai-composer-chip" data-prompt="Draft a warm introduction email that explains our value proposition and includes one specific reason this might matter for {{company}}.">Introduction</button>
+                        <button class="ai-composer-chip" data-prompt="Write a re-engagement email for a prospect who has not replied yet. Keep it short and low-pressure.">Re-engagement</button>
+                    </div>
+                </div>
+            </div>
+            <div class="ai-composer-main">
+                <div class="ai-composer-head">
+                    <div class="ai-composer-headline">
+                        <strong>Chat with Lime AI</strong>
+                        <span>Generate a subject and body, iterate on it, then insert it into the step.</span>
+                    </div>
+                    <button class="btn btn-sm btn-outline-secondary" id="ai-composer-close">Close</button>
+                </div>
+                <div class="ai-chat-log" id="ai-chat-log"></div>
+                <div class="ai-composer-footer">
+                    <textarea class="ai-composer-prompt" id="ai-prompt-input" placeholder="Example: Write a sales outreach email for CFOs at B2B SaaS companies. Mention cost control, keep it direct, and end with a low-friction CTA."></textarea>
+                    <div class="ai-composer-actions">
+                        <div class="ai-composer-status" id="ai-composer-status">Drafts stay local until you click Insert into email.</div>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-outline-secondary" id="ai-clear-chat">Clear chat</button>
+                            <button class="btn btn-primary" id="ai-send-prompt"><i class="bi bi-stars me-1"></i> Generate draft</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script type="module" src="/main.js"></script>
     <script type="module">
-        import { fetchWithAuth } from '/api.js';
+        import { fetchWithAuth } from '/api.js?v=20260311b';
 
         // â”€â”€â”€ STATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         let campaignId = null;
@@ -747,6 +1000,9 @@
         let activeTab = 'sequence';
         let availableLeads = [];
         let selectedLeadIds = new Set();
+        let aiComposerStep = null;
+        let aiConversation = [];
+        let aiLatestDraft = null;
 
         // Steps are stored as an array of objects
         let steps = [
@@ -1028,12 +1284,14 @@
             if (campaignId) {
                 res = await fetchWithAuth(`/campaigns/${campaignId}/`, {
                     method: 'PATCH',
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify(payload),
+                    timeoutMs: 30000,
                 });
             } else {
                 res = await fetchWithAuth('/campaigns/', {
                     method: 'POST',
-                    body: JSON.stringify(payload)
+                    body: JSON.stringify(payload),
+                    timeoutMs: 30000,
                 });
             }
 
@@ -1051,7 +1309,8 @@
             if (!campaignId) throw new Error('Save campaign before enrolling leads.');
             const res = await fetchWithAuth(`/campaigns/${campaignId}/enroll/`, {
                 method: 'POST',
-                body: JSON.stringify({ lead_ids: Array.from(selectedLeadIds) })
+                body: JSON.stringify({ lead_ids: Array.from(selectedLeadIds) }),
+                timeoutMs: 60000,
             });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
@@ -1064,7 +1323,8 @@
             if (!campaignId) throw new Error('Save campaign before launching.');
             const res = await fetchWithAuth(`/campaigns/${campaignId}/launch/`, {
                 method: 'POST',
-                body: JSON.stringify({})
+                body: JSON.stringify({}),
+                timeoutMs: 120000,
             });
             if (!res.ok) {
                 const err = await res.json().catch(() => ({}));
@@ -1398,7 +1658,7 @@
             });
 
             // AI Generate button
-            document.getElementById('ai-generate-btn').addEventListener('click', () => generateAIContent(step));
+            document.getElementById('ai-generate-btn').addEventListener('click', () => openAIComposer(step));
         }
 
         function renderWaitEditor(panel, step) {
@@ -1507,83 +1767,175 @@
         }
 
         // â”€â”€â”€ AI CONTENT GENERATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-        async function generateAIContent(step, source = 'generate') {
-            const askBtn = document.getElementById('ai-generate-btn');
-            const regenBtn = document.getElementById('ai-regenerate-btn');
+        function openAIComposer(step) {
+            aiComposerStep = step;
+            aiConversation = [];
+            aiLatestDraft = step.subject || step.body ? {
+                subject: step.subject || '',
+                body: step.body || '',
+                assistant_message: 'Current draft loaded. You can ask for a rewrite, different tone, or a new email angle.',
+            } : null;
+            document.getElementById('ai-composer').classList.remove('hidden');
+            document.getElementById('ai-prompt-input').value = '';
+            setAIComposerStatus('Describe the email you want, then generate a draft.');
+            renderAIConversation();
+            document.getElementById('ai-prompt-input').focus();
+        }
 
-            const restoreAskLabel = () => {
-                if (askBtn) {
-                    askBtn.innerHTML = '<i class="bi bi-stars"></i> Ask AI';
-                    askBtn.disabled = false;
-                }
-            };
-            const restoreRegenLabel = () => {
-                if (regenBtn) {
-                    regenBtn.textContent = 'Regenerate';
-                    regenBtn.disabled = false;
-                }
-            };
+        function closeAIComposer() {
+            document.getElementById('ai-composer').classList.add('hidden');
+            aiComposerStep = null;
+            aiConversation = [];
+            aiLatestDraft = null;
+        }
 
-            if (source === 'regenerate' && regenBtn) {
-                regenBtn.textContent = 'Regenerating...';
-                regenBtn.disabled = true;
-            } else if (askBtn) {
-                askBtn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Generating...';
-                askBtn.disabled = true;
+        function setAIComposerStatus(text) {
+            const statusEl = document.getElementById('ai-composer-status');
+            if (statusEl) {
+                statusEl.textContent = text;
+            }
+        }
+
+        function escapeHtml(value) {
+            return (value || '')
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#39;');
+        }
+
+        function renderAIConversation() {
+            const log = document.getElementById('ai-chat-log');
+            if (!log) return;
+
+            const messages = [];
+            if (aiConversation.length === 0 && !aiLatestDraft) {
+                messages.push(`
+                    <div class="ai-chat-message assistant">
+                        Start with a prompt like: "Write a short sales outreach email for marketing leaders at {{company}} and use a friendly tone."
+                    </div>
+                `);
             }
 
+            aiConversation.forEach((message, index) => {
+                if (message.role === 'user') {
+                    messages.push(`<div class="ai-chat-message user">${escapeHtml(message.content)}</div>`);
+                    return;
+                }
+
+                const draftHtml = message.subject || message.body ? `
+                    <div class="ai-chat-draft">
+                        <div class="ai-chat-draft-label">Draft</div>
+                        <div class="ai-chat-subject">Subject: ${escapeHtml(message.subject || '(empty)')}</div>
+                        <div>${escapeHtml(message.body || '')}</div>
+                        <div class="ai-draft-toolbar">
+                            <button class="btn btn-sm btn-primary" data-ai-use="${index}">Insert into email</button>
+                        </div>
+                    </div>
+                ` : '';
+
+                messages.push(`
+                    <div class="ai-chat-message assistant">
+                        <div>${escapeHtml(message.content)}</div>
+                        ${draftHtml}
+                    </div>
+                `);
+            });
+
+            if (aiConversation.length === 0 && aiLatestDraft) {
+                messages.push(`
+                    <div class="ai-chat-message assistant">
+                        <div>${escapeHtml(aiLatestDraft.assistant_message || 'Current draft loaded for iteration.')}</div>
+                        <div class="ai-chat-draft">
+                            <div class="ai-chat-draft-label">Current draft</div>
+                            <div class="ai-chat-subject">Subject: ${escapeHtml(aiLatestDraft.subject || '(empty)')}</div>
+                            <div>${escapeHtml(aiLatestDraft.body || '')}</div>
+                        </div>
+                    </div>
+                `);
+            }
+
+            log.innerHTML = messages.join('');
+            log.querySelectorAll('[data-ai-use]').forEach(button => {
+                button.addEventListener('click', () => {
+                    const index = Number(button.dataset.aiUse);
+                    const message = aiConversation[index];
+                    if (!message || !aiComposerStep) return;
+                    applyAIDraftToStep(message.subject, message.body);
+                });
+            });
+            log.scrollTop = log.scrollHeight;
+        }
+
+        function applyAIDraftToStep(subject, body) {
+            if (!aiComposerStep) return;
+            aiComposerStep.subject = subject || '';
+            aiComposerStep.body = body || '';
+
+            const subjectInput = document.getElementById('ep-subject');
+            const bodyInput = document.getElementById('ep-body');
+            if (subjectInput) subjectInput.value = aiComposerStep.subject;
+            if (bodyInput) bodyInput.value = aiComposerStep.body;
+
+            renderCanvas();
+            closeAIComposer();
+        }
+
+        async function submitAIPrompt() {
+            if (!aiComposerStep) return;
+            const promptInput = document.getElementById('ai-prompt-input');
+            const sendBtn = document.getElementById('ai-send-prompt');
+            const prompt = promptInput.value.trim();
+            if (!prompt) {
+                setAIComposerStatus('Enter a prompt first.');
+                promptInput.focus();
+                return;
+            }
+
+            aiConversation.push({ role: 'user', content: prompt });
+            renderAIConversation();
+            promptInput.value = '';
+            sendBtn.disabled = true;
+            sendBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Generating...';
+            setAIComposerStatus('Generating a draft from the AI provider...');
+
             try {
-                const variationSeed = Date.now();
                 const res = await fetchWithAuth('/campaigns/ai-generate/', {
                     method: 'POST',
                     body: JSON.stringify({
-                        subject: step.subject || '',
-                        body: step.body || '',
-                        prompt: `Generate a professional cold outreach email for a B2B SaaS product. 
-                            Use merge tags like {{firstName}} and {{company}} for personalization. 
-                            Keep it concise (3-4 sentences), friendly, and focused on generating a reply.
-                            ${step.subject ? 'Current subject: ' + step.subject : ''}
-                            Generate a fresh variation. variation_seed=${variationSeed}
-                            Return the result in this format:
-                            SUBJECT: ...
-                            BODY: ...`
-                    })
+                        prompt,
+                        subject: aiComposerStep.subject || '',
+                        body: aiComposerStep.body || '',
+                        messages: aiConversation,
+                    }),
+                    timeoutMs: 120000,
                 });
 
-                if (res.ok) {
-                    const data = await res.json();
-                    const resultDiv = document.getElementById('ai-result');
-                    const resultText = document.getElementById('ai-result-text');
-                    resultText.textContent = data.generated || data.result || 'AI generated content will appear here.';
-                    resultDiv.classList.remove('d-none');
-
-                    document.getElementById('ai-use-btn').onclick = () => {
-                        const text = resultText.textContent;
-                        // Parse SUBJECT: and BODY: from AI response
-                        const subjectMatch = text.match(/SUBJECT:\s*(.*?)(?:\n|BODY:)/s);
-                        const bodyMatch = text.match(/BODY:\s*([\s\S]*)/);
-                        if (subjectMatch) {
-                            step.subject = subjectMatch[1].trim();
-                            document.getElementById('ep-subject').value = step.subject;
-                        }
-                        if (bodyMatch) {
-                            step.body = bodyMatch[1].trim();
-                            document.getElementById('ep-body').value = step.body;
-                        }
-                        resultDiv.classList.add('d-none');
-                        renderCanvas();
-                    };
-
-                    document.getElementById('ai-regenerate-btn').onclick = () => generateAIContent(step, 'regenerate');
-                } else {
-                    alert('AI generation failed. Check your Gemini API key in Settings.');
+                const data = await res.json().catch(() => ({}));
+                if (!res.ok) {
+                    throw new Error(data.error || data.detail || 'AI generation failed.');
                 }
-            } catch (e) {
-                console.error(e);
-                alert('Could not reach AI endpoint. Make sure the backend is running.');
+
+                aiLatestDraft = {
+                    assistant_message: data.assistant_message || 'I generated a draft you can insert into the email step.',
+                    subject: data.subject || '',
+                    body: data.body || '',
+                };
+                aiConversation.push({
+                    role: 'assistant',
+                    content: aiLatestDraft.assistant_message,
+                    subject: aiLatestDraft.subject,
+                    body: aiLatestDraft.body,
+                });
+                renderAIConversation();
+                setAIComposerStatus(`Draft ready from ${data.provider || 'AI provider'}${data.model ? ` using ${data.model}` : ''}.`);
+            } catch (error) {
+                console.error(error);
+                setAIComposerStatus(error.message || 'Could not reach the AI endpoint.');
             } finally {
-                restoreAskLabel();
-                restoreRegenLabel();
+                sendBtn.disabled = false;
+                sendBtn.innerHTML = '<i class="bi bi-stars me-1"></i> Generate draft';
             }
         }
 
@@ -1616,6 +1968,37 @@
         document.getElementById('close-picker').addEventListener('click', () => {
             addBranchTarget = null;
             document.getElementById('step-picker').classList.add('hidden');
+        });
+
+        document.getElementById('ai-composer-close').addEventListener('click', closeAIComposer);
+        document.getElementById('ai-clear-chat').addEventListener('click', () => {
+            aiConversation = [];
+            aiLatestDraft = aiComposerStep && (aiComposerStep.subject || aiComposerStep.body) ? {
+                subject: aiComposerStep.subject || '',
+                body: aiComposerStep.body || '',
+                assistant_message: 'Current draft loaded. You can ask for a rewrite, different tone, or a new email angle.',
+            } : null;
+            setAIComposerStatus('Chat cleared. Describe the email you want next.');
+            renderAIConversation();
+        });
+        document.getElementById('ai-send-prompt').addEventListener('click', submitAIPrompt);
+        document.getElementById('ai-prompt-input').addEventListener('keydown', (event) => {
+            if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+                event.preventDefault();
+                submitAIPrompt();
+            }
+        });
+        document.querySelectorAll('#ai-prompt-chips [data-prompt]').forEach(button => {
+            button.addEventListener('click', () => {
+                const input = document.getElementById('ai-prompt-input');
+                input.value = button.dataset.prompt || '';
+                input.focus();
+            });
+        });
+        document.getElementById('ai-composer').addEventListener('click', (event) => {
+            if (event.target.id === 'ai-composer') {
+                closeAIComposer();
+            }
         });
 
         // Picker tabs

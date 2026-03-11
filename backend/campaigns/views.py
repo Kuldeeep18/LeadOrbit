@@ -110,8 +110,9 @@ class CampaignViewSet(viewsets.ModelViewSet):
 
         immediate_processed = 0
         if django_settings.CELERY_TASK_ALWAYS_EAGER:
-            # Dev mode: run a few immediate passes so zero-delay sequences progress instantly.
-            for _ in range(10):
+            # Keep launch endpoint responsive; run only a bounded number of immediate passes.
+            immediate_passes = max(0, int(getattr(django_settings, 'LAUNCH_IMMEDIATE_PASSES', 1)))
+            for _ in range(immediate_passes):
                 processed = process_active_leads_once()
                 immediate_processed += processed
                 if processed == 0:
@@ -245,34 +246,36 @@ class DashboardAnalyticsView(APIView):
 class AIGenerateView(APIView):
     """
     POST /api/v1/campaigns/ai-generate/
-    Generate email content using Gemini API for the campaign builder.
+    Generate email content using the configured LLM provider for the campaign builder.
     """
     def post(self, request, *args, **kwargs):
-        prompt = request.data.get('prompt', '')
-        if not prompt:
+        prompt = (request.data.get('prompt') or '').strip()
+        current_subject = request.data.get('subject', '')
+        current_body = request.data.get('body', '')
+        messages = request.data.get('messages', [])
+
+        if not prompt and not messages:
             return Response({'error': 'prompt is required'}, status=status.HTTP_400_BAD_REQUEST)
 
-        from django.conf import settings as django_settings
-        import google.generativeai as genai
-
-        api_key = django_settings.GEMINI_API_KEY
-        fallback = self._build_fallback_content(request)
-        if not api_key:
-            return Response({'generated': fallback, 'fallback': True, 'reason': 'missing_api_key'})
+        from .ai import generate_email_chat_completion
 
         try:
-            genai.configure(api_key=api_key)
-            model = genai.GenerativeModel('gemini-2.0-flash')
-            response = model.generate_content(prompt)
-            return Response({'generated': response.text})
-        except Exception as e:
+            result = generate_email_chat_completion(
+                prompt=prompt,
+                current_subject=current_subject,
+                current_body=current_body,
+                messages=messages,
+            )
+            return Response(result, status=status.HTTP_200_OK)
+        except ValueError as exc:
+            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as exc:
             return Response(
                 {
-                    'generated': fallback,
-                    'fallback': True,
-                    'reason': str(e),
+                    'error': 'AI generation failed',
+                    'detail': str(exc),
                 },
-                status=status.HTTP_200_OK,
+                status=status.HTTP_502_BAD_GATEWAY,
             )
 
     def _build_fallback_content(self, request):
