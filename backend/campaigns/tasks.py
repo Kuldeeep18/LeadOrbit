@@ -7,6 +7,7 @@ from django.utils import timezone
 
 from .ai import personalize_email
 from .gmail_service import check_for_replies, send_gmail
+from .sms_service import send_sms, initiate_call
 from .models import CampaignLead, SequenceStep
 
 logger = logging.getLogger(__name__)
@@ -156,6 +157,12 @@ def _execute_non_email_step(clead, step, now=None):
     if step.channel_type == 'CONDITION_CLICK':
         _execute_condition_click_step(clead, step, now=now)
         return
+    if step.channel_type == 'SMS':
+        _execute_sms_step(clead, step, now=now)
+        return
+    if step.channel_type == 'CALL':
+        _execute_call_step(clead, step, now=now)
+        return
     logger.info(f"Auto-advancing non-email step {step.channel_type} for {clead.lead.email}")
     _advance_to_next_step(clead, step, now=now)
 
@@ -292,6 +299,76 @@ def _execute_condition_reply_step(clead, step, now=None):
     clead.save(update_fields=['current_step', 'next_execution_time', 'status'])
     _maybe_mark_campaign_completed(clead.campaign)
     return
+
+
+def _personalize_text(template, lead):
+    """Replace merge tags in SMS/call text with lead data."""
+    if not template:
+        return template
+    replacements = {
+        '{{firstName}}': lead.first_name or '',
+        '{{lastName}}': lead.last_name or '',
+        '{{email}}': lead.email or '',
+        '{{company}}': lead.company or '',
+    }
+    text = template
+    for tag, value in replacements.items():
+        text = text.replace(tag, value)
+    return text
+
+
+def _execute_sms_step(clead, step, now=None):
+    """Send an SMS to the lead's phone number via Twilio."""
+    now = now or timezone.now()
+    phone = getattr(clead.lead, 'phone', None) or ''
+    if not phone:
+        logger.warning(f"No phone number for {clead.lead.email}; skipping SMS step.")
+        _advance_to_next_step(clead, step, now=now)
+        return
+
+    body = _personalize_text(step.template_body or '', clead.lead)
+    if not body:
+        logger.warning(f"Empty SMS body for {clead.lead.email}; skipping.")
+        _advance_to_next_step(clead, step, now=now)
+        return
+
+    try:
+        sid = send_sms(phone, body)
+        logger.info(f"SMS sent to {clead.lead.email} ({phone}) | sid={sid}")
+    except Exception as err:
+        logger.error(f"SMS send failed for {clead.lead.email}: {err}")
+        # Retry later
+        clead.next_execution_time = now + timedelta(minutes=15)
+        clead.save(update_fields=['next_execution_time'])
+        return
+
+    _advance_to_next_step(clead, step, now=now)
+
+
+def _execute_call_step(clead, step, now=None):
+    """
+    Execute a phone call step. If Twilio credentials are configured,
+    initiates an automated call. Otherwise logs as a manual task.
+    """
+    now = now or timezone.now()
+    phone = getattr(clead.lead, 'phone', None) or ''
+    if not phone:
+        logger.warning(f"No phone number for {clead.lead.email}; skipping CALL step.")
+        _advance_to_next_step(clead, step, now=now)
+        return
+
+    call_script = _personalize_text(step.template_body or '', clead.lead)
+
+    try:
+        sid = initiate_call(phone, call_script or None)
+        logger.info(f"Call initiated to {clead.lead.email} ({phone}) | sid={sid}")
+    except RuntimeError:
+        # Twilio not configured — treat as manual step
+        logger.info(f"CALL step (manual) for {clead.lead.email} ({phone}): {call_script or 'No script'}")
+    except Exception as err:
+        logger.error(f"Call failed for {clead.lead.email}: {err}")
+
+    _advance_to_next_step(clead, step, now=now)
 
 
 @shared_task

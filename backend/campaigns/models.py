@@ -46,6 +46,7 @@ class SequenceStep(TenantModel):
     CHANNEL_CHOICES = (
         ('EMAIL', 'Email'),
         ('SMS', 'SMS'),
+        ('CALL', 'Phone Call'),
         ('WHATSAPP', 'WhatsApp'),
         ('LINKEDIN', 'LinkedIn'),
         ('WAIT', 'Wait'),

@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Campaign Builder - Lime</title>
+    <title>Campaign Builder - LeadOrbit</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -202,6 +202,16 @@
         .flow-node .node-icon.manual {
             background: #d1fae5;
             color: #059669;
+        }
+
+        .flow-node .node-icon.sms {
+            background: #dcfce7;
+            color: #16a34a;
+        }
+
+        .flow-node .node-icon.call {
+            background: #ffedd5;
+            color: #ea580c;
         }
 
         .flow-node .node-label {
@@ -916,6 +926,22 @@
                         <div class="st-desc">Add a manual action item to your workflow</div>
                     </div>
                 </div>
+                <div class="step-type" data-type="SMS">
+                    <div class="st-icon" style="background:#dcfce7;color:#16a34a;"><i class="bi bi-chat-dots-fill"></i>
+                    </div>
+                    <div>
+                        <div class="st-name">SMS</div>
+                        <div class="st-desc">Send a text message to the lead's phone</div>
+                    </div>
+                </div>
+                <div class="step-type" data-type="CALL">
+                    <div class="st-icon" style="background:#ffedd5;color:#ea580c;"><i class="bi bi-telephone-fill"></i>
+                    </div>
+                    <div>
+                        <div class="st-name">Phone Call</div>
+                        <div class="st-desc">Initiate a phone call to the lead</div>
+                    </div>
+                </div>
             </div>
             <div id="picker-conditions" style="display:none;">
                 <div class="step-type" data-type="CONDITION_OPEN">
@@ -966,7 +992,7 @@
             <div class="ai-composer-main">
                 <div class="ai-composer-head">
                     <div class="ai-composer-headline">
-                        <strong>Chat with Lime AI</strong>
+                        <strong>Chat with LeadOrbit AI</strong>
                         <span>Generate a subject and body, iterate on it, then insert it into the step.</span>
                     </div>
                     <button class="btn btn-sm btn-outline-secondary" id="ai-composer-close">Close</button>
@@ -1020,6 +1046,8 @@
             WAIT: { icon: 'bi-clock-fill', cls: 'wait', label: 'Delay', meta: 'Wait before next step' },
             LINKEDIN: { icon: 'bi-linkedin', cls: 'linkedin', label: 'LinkedIn', meta: 'LinkedIn action' },
             MANUAL: { icon: 'bi-hand-index-fill', cls: 'manual', label: 'Manual Task', meta: 'Manual action' },
+            SMS: { icon: 'bi-chat-dots-fill', cls: 'sms', label: 'SMS', meta: 'Send a text message' },
+            CALL: { icon: 'bi-telephone-fill', cls: 'call', label: 'Phone Call', meta: 'Call the lead' },
             CONDITION_OPEN: { icon: 'bi-envelope-open-fill', cls: 'condition', label: 'Opened email', meta: '' },
             CONDITION_REPLY: { icon: 'bi-reply-fill', cls: 'condition', label: 'Replied', meta: '' },
             CONDITION_CLICK: { icon: 'bi-cursor-fill', cls: 'condition', label: 'Clicked link', meta: '' },
@@ -1039,6 +1067,14 @@
 
         function createManualStep(description = '') {
             return { type: 'MANUAL', description };
+        }
+
+        function createSMSStep(body = '') {
+            return { type: 'SMS', body, delay_minutes: 0 };
+        }
+
+        function createCallStep(description = '') {
+            return { type: 'CALL', description, delay_minutes: 0 };
         }
 
         function cloneStepList(source) {
@@ -1175,6 +1211,7 @@
                         <td><input class="form-check-input lead-select" type="checkbox" value="${lead.id}" ${checked}></td>
                         <td>${lead.first_name || ''} ${lead.last_name || ''}</td>
                         <td>${lead.email}</td>
+                        <td>${lead.phone || '-'}</td>
                         <td>${lead.company || '-'}</td>
                     </tr>
                 `;
@@ -1195,10 +1232,11 @@
                                     </th>
                                     <th>Name</th>
                                     <th>Email</th>
+                                    <th>Phone</th>
                                     <th>Company</th>
                                 </tr>
                             </thead>
-                            <tbody>${rows || '<tr><td colspan="4" class="text-muted py-4 text-center">No leads found. Import leads first.</td></tr>'}</tbody>
+                            <tbody>${rows || '<tr><td colspan="5" class="text-muted py-4 text-center">No leads found. Import leads first.</td></tr>'}</tbody>
                         </table>
                     </div>
                 </div>
@@ -1435,6 +1473,14 @@
                         meta = step.description ? summarizeText(step.description, 42) : 'Manual follow-up task';
                     }
 
+                    if (step.type === 'SMS') {
+                        meta = step.body ? summarizeText(step.body, 42) : 'Text message to lead';
+                    }
+
+                    if (step.type === 'CALL') {
+                        meta = step.description ? summarizeText(step.description, 42) : 'Phone call to lead';
+                    }
+
                     const branchMeta = step.condition_branch === 'yes'
                         ? '<span class="badge rounded-pill text-bg-success me-1">Yes path</span>'
                         : (step.condition_branch === 'no'
@@ -1548,6 +1594,10 @@
                 renderWaitEditor(panel, step);
             } else if (step.type === 'LINKEDIN') {
                 renderLinkedInEditor(panel, step);
+            } else if (step.type === 'SMS') {
+                renderSMSEditor(panel, step);
+            } else if (step.type === 'CALL') {
+                renderCallEditor(panel, step);
             } else if (step.type.startsWith('CONDITION_')) {
                 renderConditionEditor(panel, step);
             } else {
@@ -1766,6 +1816,84 @@
             });
         }
 
+
+        function renderSMSEditor(panel, step) {
+            const charCount = (step.body || '').length;
+            const segments = Math.ceil(charCount / 160) || 1;
+            panel.innerHTML = `
+                <div class="d-flex align-items-center gap-2 mb-3">
+                    <div class="node-icon sms"><i class="bi bi-chat-dots-fill"></i></div>
+                    <div>
+                        <div class="ep-title">SMS Message</div>
+                        <div class="ep-subtitle">Send a text message to the lead's phone</div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="ep-label">Message body</div>
+                    <textarea class="ep-textarea" id="ep-sms-body" placeholder="Hi {{firstName}}, just wanted to follow up on..." style="min-height:120px;">${step.body || ''}</textarea>
+                    <div class="d-flex justify-content-between mt-1">
+                        <small class="text-muted" id="sms-char-count">${charCount} chars &middot; ${segments} segment${segments !== 1 ? 's' : ''}</small>
+                        <small class="text-muted">160 chars = 1 SMS segment</small>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="ep-label">Merge Tags</div>
+                    <div class="d-flex flex-wrap gap-2">
+                        <span class="merge-tag" data-tag="{{firstName}}">{{firstName}}</span>
+                        <span class="merge-tag" data-tag="{{lastName}}">{{lastName}}</span>
+                        <span class="merge-tag" data-tag="{{company}}">{{company}}</span>
+                    </div>
+                </div>
+                <div class="alert alert-light border small mb-0">
+                    <i class="bi bi-info-circle me-1"></i> SMS requires a phone number on the lead. Leads without a phone number will be skipped.
+                </div>
+            `;
+            const bodyEl = document.getElementById('ep-sms-body');
+            bodyEl.addEventListener('input', e => {
+                step.body = e.target.value;
+                const len = e.target.value.length;
+                const segs = Math.ceil(len / 160) || 1;
+                document.getElementById('sms-char-count').textContent = len + ' chars \u00b7 ' + segs + ' segment' + (segs !== 1 ? 's' : '');
+                renderCanvas();
+            });
+            panel.querySelectorAll('.merge-tag').forEach(tag => {
+                tag.addEventListener('click', () => {
+                    const pos = bodyEl.selectionStart;
+                    const val = bodyEl.value;
+                    bodyEl.value = val.slice(0, pos) + tag.dataset.tag + val.slice(pos);
+                    step.body = bodyEl.value;
+                    bodyEl.focus();
+                    bodyEl.selectionStart = bodyEl.selectionEnd = pos + tag.dataset.tag.length;
+                    const len = bodyEl.value.length;
+                    const segs = Math.ceil(len / 160) || 1;
+                    document.getElementById('sms-char-count').textContent = len + ' chars \u00b7 ' + segs + ' segment' + (segs !== 1 ? 's' : '');
+                    renderCanvas();
+                });
+            });
+        }
+
+        function renderCallEditor(panel, step) {
+            panel.innerHTML = `
+                <div class="d-flex align-items-center gap-2 mb-3">
+                    <div class="node-icon call"><i class="bi bi-telephone-fill"></i></div>
+                    <div>
+                        <div class="ep-title">Phone Call</div>
+                        <div class="ep-subtitle">Initiate a call to the lead</div>
+                    </div>
+                </div>
+                <div class="mb-3">
+                    <div class="ep-label">Call script / notes</div>
+                    <textarea class="ep-textarea" id="ep-call-desc" placeholder="e.g. Introduce yourself, mention the email you sent, and ask about their needs..." style="min-height:140px;">${step.description || ''}</textarea>
+                </div>
+                <div class="alert alert-light border small mb-0">
+                    <i class="bi bi-telephone-outbound me-1"></i> When Twilio is configured, this step initiates an automated call reading your script. Otherwise, it acts as a manual reminder.
+                </div>
+            `;
+            document.getElementById('ep-call-desc').addEventListener('input', e => {
+                step.description = e.target.value;
+                renderCanvas();
+            });
+        }
         // â”€â”€â”€ AI CONTENT GENERATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         function openAIComposer(step) {
             aiComposerStep = step;
@@ -1948,6 +2076,8 @@
                 if (type === 'EMAIL') { newStep.subject = ''; newStep.body = ''; newStep.delay_minutes = 0; }
                 else if (type === 'WAIT') { newStep.delay_value = 1; newStep.delay_unit = 'days'; }
                 else if (type === 'LINKEDIN') { newStep.action = 'CONNECT'; newStep.description = ''; }
+                else if (type === 'SMS') { newStep.body = ''; newStep.delay_minutes = 0; }
+                else if (type === 'CALL') { newStep.description = ''; newStep.delay_minutes = 0; }
                 else if (type.startsWith('CONDITION_')) { newStep.condition_time = '1 day'; newStep.yes = []; newStep.no = []; }
                 else { newStep.description = ''; }
 

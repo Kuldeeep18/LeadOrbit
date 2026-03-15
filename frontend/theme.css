@@ -16,6 +16,7 @@
 body {
     margin: 0;
     min-height: 100vh;
+    overflow: hidden;
     background: radial-gradient(circle at top left, #ecfeff 0%, #f8fafc 35%, #eff6ff 100%);
     color: var(--ink-900);
 }
@@ -27,6 +28,10 @@ body {
 
 .sidebar {
     width: 250px;
+    height: 100vh;
+    position: sticky;
+    top: 0;
+    overflow-y: auto;
     background: linear-gradient(190deg, #0f172a 0%, #13263f 100%);
     color: #f8fafc;
     border-right: 1px solid rgba(148, 163, 184, 0.2);
@@ -41,6 +46,7 @@ body {
     font-size: 1.45rem;
     letter-spacing: -0.03em;
     background: linear-gradient(135deg, #22d3ee, #2dd4bf);
+    background-clip: text;
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
 }
@@ -72,6 +78,8 @@ body {
 .main-area {
     flex: 1;
     min-width: 0;
+    height: 100vh;
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
 }

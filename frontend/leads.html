@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Leads - Lime</title>
+    <title>Leads - LeadOrbit</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700&display=swap" rel="stylesheet">
@@ -15,7 +15,7 @@
     <div class="app-shell">
         <aside class="sidebar">
             <div class="d-flex align-items-center mb-4 mt-2">
-                <div class="brand">Lime</div>
+                <div class="brand">LeadOrbit</div>
             </div>
             <ul class="nav nav-pills flex-column mb-auto">
                 <li class="nav-item mb-2">
@@ -102,6 +102,7 @@
                                 <tr>
                                     <th>Name</th>
                                     <th>Email</th>
+                                    <th>Phone</th>
                                     <th>Company</th>
                                     <th>Score</th>
                                     <th>Status</th>
@@ -109,7 +110,7 @@
                             </thead>
                             <tbody id="leads-table-body">
                                 <tr>
-                                    <td colspan="5" class="text-center py-4 text-muted">
+                                    <td colspan="6" class="text-center py-4 text-muted">
                                         <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
                                         Loading leads...
                                     </td>
@@ -161,7 +162,7 @@
         function renderLeadRows(leads) {
             const tbody = document.getElementById('leads-table-body');
             if (leads.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="5" class="text-center py-5 text-muted">
+                tbody.innerHTML = `<tr><td colspan="6" class="text-center py-5 text-muted">
                     <i class="bi bi-people" style="font-size: 2rem;"></i>
                     <p class="mt-2 mb-0">No leads found in this account.</p>
                 </td></tr>`;
@@ -172,6 +173,7 @@
                 <tr>
                     <td class="fw-semibold">${lead.first_name || ''} ${lead.last_name || ''}</td>
                     <td>${lead.email}</td>
+                    <td>${lead.phone || '<span class="text-muted">-</span>'}</td>
                     <td>${lead.company || '<span class="text-muted">-</span>'}</td>
                     <td><span class="chip" style="background:#e0f2fe;color:#0369a1;">${lead.score}</span></td>
                     <td>${lead.global_unsubscribe

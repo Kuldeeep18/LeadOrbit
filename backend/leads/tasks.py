@@ -61,6 +61,16 @@ def import_leads_from_csv(file_contents, organization_id):
         linkedin_url = _get_field(normalized_row, 'linkedinUrl', 'linkedin_url', 'linkedin', 'linkedin_profile')
         phone = _get_field(normalized_row, 'phone', 'phoneNumber', 'phone_number', 'mobile', 'phone number')
 
+        # Normalize phone to E.164 format (add +91 for 10-digit Indian numbers)
+        if phone and not phone.startswith('+'):
+            phone = re.sub(r'[^0-9]', '', phone)  # strip non-digits
+            if len(phone) == 10:
+                phone = '+91' + phone
+            elif len(phone) == 12 and phone.startswith('91'):
+                phone = '+' + phone
+            else:
+                phone = '+' + phone  # best-effort prefix
+
         # Create or update Lead for this organization
         _, created = Lead.objects.update_or_create(
             organization=org,
