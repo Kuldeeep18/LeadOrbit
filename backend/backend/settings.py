@@ -171,9 +171,17 @@ LAUNCH_IMMEDIATE_PASSES = int(os.getenv('LAUNCH_IMMEDIATE_PASSES', '1' if DEBUG 
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
 # ─── Google OAuth2 / Gmail API ─────────────────────
+BACKEND_BASE_URL = os.getenv(
+    'BACKEND_BASE_URL',
+    'http://localhost:8000' if DEBUG else 'https://leadorbit.onrender.com',
+).rstrip('/')
+FRONTEND_BASE_URL = os.getenv(
+    'FRONTEND_BASE_URL',
+    'http://localhost:8080' if DEBUG else '',
+).rstrip('/')
 GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', '')
 GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET', '')
-GOOGLE_REDIRECT_URI = os.getenv('GOOGLE_REDIRECT_URI', 'http://localhost:8000/api/v1/auth/google/callback')
+GOOGLE_REDIRECT_URI = os.getenv('GOOGLE_REDIRECT_URI', f'{BACKEND_BASE_URL}/auth/google/callback')
 GOOGLE_SCOPES = [
     'https://www.googleapis.com/auth/gmail.send',
     'https://www.googleapis.com/auth/gmail.readonly',

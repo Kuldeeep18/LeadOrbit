@@ -39,6 +39,8 @@ urlpatterns = [
     # Google OAuth
     path('api/v1/auth/google/login', GoogleOAuthLoginView.as_view(), name='google_oauth_login'),
     path('api/v1/auth/google/callback', GoogleOAuthCallbackView.as_view(), name='google_oauth_callback'),
+    path('auth/google/login', GoogleOAuthLoginView.as_view(), name='google_oauth_login_fallback'),
+    path('auth/google/callback', GoogleOAuthCallbackView.as_view(), name='google_oauth_callback_fallback'),
     path('api/v1/connected-accounts/', ConnectedAccountsListView.as_view(), name='connected_accounts'),
     path('api/v1/', include(router.urls)),
 ]

@@ -29,6 +29,14 @@ from .models import ConnectedEmailAccount
 logger = logging.getLogger(__name__)
 
 
+def _frontend_settings_redirect(request, **params):
+    frontend_base = (getattr(settings, 'FRONTEND_BASE_URL', '') or '').rstrip('/')
+    if not frontend_base:
+        frontend_base = f"{request.scheme}://{request.get_host()}"
+    query_string = urlencode(params)
+    return redirect(f"{frontend_base}/settings.html?{query_string}")
+
+
 class GoogleOAuthLoginView(APIView):
     """
     GET /api/v1/auth/google/login?token=<jwt>
@@ -63,7 +71,7 @@ class GoogleOAuthLoginView(APIView):
 
         if not user:
             logger.error("[OAuth Login] No valid user found — cannot initiate OAuth")
-            return redirect('http://localhost:3000/settings.html?google_auth=error&reason=not_logged_in')
+            return _frontend_settings_redirect(request, google_auth='error', reason='not_logged_in')
 
         # Encode user identity in state so callback can link to correct user
         state_data = json.dumps({
@@ -101,14 +109,14 @@ class GoogleOAuthCallbackView(APIView):
         if oauth_error:
             # Example: error=access_denied when user is not in OAuth test users.
             logger.warning(f"[OAuth Callback] Google returned error={oauth_error}")
-            return redirect(f'http://localhost:3000/settings.html?google_auth=error&reason=google_{oauth_error}')
+            return _frontend_settings_redirect(request, google_auth='error', reason=f'google_{oauth_error}')
 
         code = request.GET.get('code')
         state_raw = request.GET.get('state')
 
         if not code:
             logger.error("[OAuth Callback] No authorization code received")
-            return redirect('http://localhost:3000/settings.html?google_auth=error&reason=no_code')
+            return _frontend_settings_redirect(request, google_auth='error', reason='no_code')
 
         # ── 1. Recover user identity from state ──────────────────────
         from users.models import User
@@ -136,7 +144,7 @@ class GoogleOAuthCallbackView(APIView):
 
         if not user or not org:
             logger.error("[OAuth Callback] No valid user/org from state — cannot link account")
-            return redirect('http://localhost:3000/settings.html?google_auth=error&reason=no_user')
+            return _frontend_settings_redirect(request, google_auth='error', reason='no_user')
 
         # ── 2. Exchange authorization code for tokens ─────────────────
         try:
@@ -149,11 +157,11 @@ class GoogleOAuthCallbackView(APIView):
             }, timeout=10)
         except requests.RequestException as e:
             logger.error(f"[OAuth Callback] Token exchange network error: {e}")
-            return redirect('http://localhost:3000/settings.html?google_auth=error&reason=network_error')
+            return _frontend_settings_redirect(request, google_auth='error', reason='network_error')
 
         if token_response.status_code != 200:
             logger.error(f"[OAuth Callback] Token exchange failed: {token_response.text}")
-            return redirect('http://localhost:3000/settings.html?google_auth=error&reason=token_exchange_failed')
+            return _frontend_settings_redirect(request, google_auth='error', reason='token_exchange_failed')
 
         tokens = token_response.json()
         access_token = tokens.get('access_token')
@@ -171,11 +179,11 @@ class GoogleOAuthCallbackView(APIView):
             google_email = userinfo_response.json().get('email')
         except requests.RequestException as e:
             logger.error(f"[OAuth Callback] Userinfo request failed: {e}")
-            return redirect('http://localhost:3000/settings.html?google_auth=error&reason=userinfo_failed')
+            return _frontend_settings_redirect(request, google_auth='error', reason='userinfo_failed')
 
         if not google_email:
             logger.error("[OAuth Callback] Could not retrieve email from Google userinfo")
-            return redirect('http://localhost:3000/settings.html?google_auth=error&reason=no_email')
+            return _frontend_settings_redirect(request, google_auth='error', reason='no_email')
 
         logger.info(f"[OAuth Callback] Google email resolved: {google_email}")
 
@@ -241,10 +249,10 @@ class GoogleOAuthCallbackView(APIView):
 
         except Exception as e:
             logger.exception(f"[OAuth Callback] Failed to save ConnectedEmailAccount: {e}")
-            return redirect(f'http://localhost:3000/settings.html?google_auth=error&reason=db_error')
+            return _frontend_settings_redirect(request, google_auth='error', reason='db_error')
 
         # ── 6. Redirect back to frontend ──────────────────────────────
-        return redirect(f'http://localhost:3000/settings.html?google_auth={action}&email={google_email}')
+        return _frontend_settings_redirect(request, google_auth=action, email=google_email)
 
 
 class ConnectedAccountsListView(APIView):
