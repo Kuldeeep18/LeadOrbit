@@ -266,7 +266,11 @@
                         window.location.href = '/login.html';
                         return;
                     }
-                    window.location.href = oauthHost + '/auth/google/login?token=' + encodeURIComponent(token);
+                    const frontendOrigin = window.location.origin;
+                    window.location.href =
+                        oauthHost +
+                        '/auth/google/login?token=' + encodeURIComponent(token) +
+                        '&frontend_origin=' + encodeURIComponent(frontendOrigin);
                 });
             }
 

@@ -11,7 +11,7 @@ Architecture notes:
 import json
 import logging
 import requests
-from urllib.parse import urlencode
+from urllib.parse import urlencode, urlparse
 
 from django.conf import settings
 from django.shortcuts import redirect
@@ -29,8 +29,36 @@ from .models import ConnectedEmailAccount
 logger = logging.getLogger(__name__)
 
 
-def _frontend_settings_redirect(request, **params):
-    frontend_base = (getattr(settings, 'FRONTEND_BASE_URL', '') or '').rstrip('/')
+def _is_local_host(hostname: str) -> bool:
+    return (hostname or '').lower() in {'localhost', '127.0.0.1'}
+
+
+def _sanitize_frontend_base(request, candidate: str) -> str:
+    """Return a safe absolute frontend origin or empty string."""
+    raw = (candidate or '').strip().rstrip('/')
+    if not raw:
+        return ''
+
+    try:
+        parsed = urlparse(raw)
+    except Exception:
+        return ''
+
+    if parsed.scheme not in {'http', 'https'} or not parsed.netloc:
+        return ''
+
+    candidate_host = (parsed.hostname or '').lower()
+    request_host = (request.get_host() or '').split(':', 1)[0].lower()
+    if _is_local_host(candidate_host) and not _is_local_host(request_host):
+        return ''
+
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def _frontend_settings_redirect(request, preferred_frontend_base: str = '', **params):
+    frontend_base = _sanitize_frontend_base(request, preferred_frontend_base)
+    if not frontend_base:
+        frontend_base = _sanitize_frontend_base(request, getattr(settings, 'FRONTEND_BASE_URL', ''))
     if not frontend_base:
         frontend_base = f"{request.scheme}://{request.get_host()}"
     query_string = urlencode(params)
@@ -74,9 +102,11 @@ class GoogleOAuthLoginView(APIView):
             return _frontend_settings_redirect(request, google_auth='error', reason='not_logged_in')
 
         # Encode user identity in state so callback can link to correct user
+        frontend_origin = _sanitize_frontend_base(request, request.GET.get('frontend_origin', ''))
         state_data = json.dumps({
             'user_id': str(user.id),
             'org_id': str(user.organization_id),
+            'frontend_origin': frontend_origin,
         })
 
         params = {
@@ -105,18 +135,36 @@ class GoogleOAuthCallbackView(APIView):
     permission_classes = [AllowAny]
 
     def get(self, request):
+        state_raw = request.GET.get('state')
+        frontend_origin = ''
+        if state_raw:
+            try:
+                state_data = json.loads(state_raw)
+                frontend_origin = _sanitize_frontend_base(request, state_data.get('frontend_origin', ''))
+            except (json.JSONDecodeError, TypeError):
+                frontend_origin = ''
+
         oauth_error = request.GET.get('error')
         if oauth_error:
             # Example: error=access_denied when user is not in OAuth test users.
             logger.warning(f"[OAuth Callback] Google returned error={oauth_error}")
-            return _frontend_settings_redirect(request, google_auth='error', reason=f'google_{oauth_error}')
+            return _frontend_settings_redirect(
+                request,
+                preferred_frontend_base=frontend_origin,
+                google_auth='error',
+                reason=f'google_{oauth_error}',
+            )
 
         code = request.GET.get('code')
-        state_raw = request.GET.get('state')
 
         if not code:
             logger.error("[OAuth Callback] No authorization code received")
-            return _frontend_settings_redirect(request, google_auth='error', reason='no_code')
+            return _frontend_settings_redirect(
+                request,
+                preferred_frontend_base=frontend_origin,
+                google_auth='error',
+                reason='no_code',
+            )
 
         # ── 1. Recover user identity from state ──────────────────────
         from users.models import User
@@ -130,6 +178,7 @@ class GoogleOAuthCallbackView(APIView):
                 state_data = json.loads(state_raw)
                 user_id = state_data.get('user_id')
                 org_id = state_data.get('org_id')
+                frontend_origin = _sanitize_frontend_base(request, state_data.get('frontend_origin', ''))
                 logger.info(f"[OAuth Callback] State decoded: user_id={user_id}, org_id={org_id}")
 
                 # Use .objects.all() on base manager to bypass tenant scoping
@@ -144,7 +193,12 @@ class GoogleOAuthCallbackView(APIView):
 
         if not user or not org:
             logger.error("[OAuth Callback] No valid user/org from state — cannot link account")
-            return _frontend_settings_redirect(request, google_auth='error', reason='no_user')
+            return _frontend_settings_redirect(
+                request,
+                preferred_frontend_base=frontend_origin,
+                google_auth='error',
+                reason='no_user',
+            )
 
         # ── 2. Exchange authorization code for tokens ─────────────────
         try:
@@ -157,11 +211,21 @@ class GoogleOAuthCallbackView(APIView):
             }, timeout=10)
         except requests.RequestException as e:
             logger.error(f"[OAuth Callback] Token exchange network error: {e}")
-            return _frontend_settings_redirect(request, google_auth='error', reason='network_error')
+            return _frontend_settings_redirect(
+                request,
+                preferred_frontend_base=frontend_origin,
+                google_auth='error',
+                reason='network_error',
+            )
 
         if token_response.status_code != 200:
             logger.error(f"[OAuth Callback] Token exchange failed: {token_response.text}")
-            return _frontend_settings_redirect(request, google_auth='error', reason='token_exchange_failed')
+            return _frontend_settings_redirect(
+                request,
+                preferred_frontend_base=frontend_origin,
+                google_auth='error',
+                reason='token_exchange_failed',
+            )
 
         tokens = token_response.json()
         access_token = tokens.get('access_token')
@@ -179,11 +243,21 @@ class GoogleOAuthCallbackView(APIView):
             google_email = userinfo_response.json().get('email')
         except requests.RequestException as e:
             logger.error(f"[OAuth Callback] Userinfo request failed: {e}")
-            return _frontend_settings_redirect(request, google_auth='error', reason='userinfo_failed')
+            return _frontend_settings_redirect(
+                request,
+                preferred_frontend_base=frontend_origin,
+                google_auth='error',
+                reason='userinfo_failed',
+            )
 
         if not google_email:
             logger.error("[OAuth Callback] Could not retrieve email from Google userinfo")
-            return _frontend_settings_redirect(request, google_auth='error', reason='no_email')
+            return _frontend_settings_redirect(
+                request,
+                preferred_frontend_base=frontend_origin,
+                google_auth='error',
+                reason='no_email',
+            )
 
         logger.info(f"[OAuth Callback] Google email resolved: {google_email}")
 
@@ -249,10 +323,20 @@ class GoogleOAuthCallbackView(APIView):
 
         except Exception as e:
             logger.exception(f"[OAuth Callback] Failed to save ConnectedEmailAccount: {e}")
-            return _frontend_settings_redirect(request, google_auth='error', reason='db_error')
+            return _frontend_settings_redirect(
+                request,
+                preferred_frontend_base=frontend_origin,
+                google_auth='error',
+                reason='db_error',
+            )
 
         # ── 6. Redirect back to frontend ──────────────────────────────
-        return _frontend_settings_redirect(request, google_auth=action, email=google_email)
+        return _frontend_settings_redirect(
+            request,
+            preferred_frontend_base=frontend_origin,
+            google_auth=action,
+            email=google_email,
+        )
 
 
 class ConnectedAccountsListView(APIView):
