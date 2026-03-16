@@ -118,6 +118,9 @@ class CampaignViewSet(viewsets.ModelViewSet):
                 if processed == 0:
                     break
         else:
+            # Run one in-process pass so due steps (including SMS) can execute
+            # even when a worker queue is delayed or misconfigured.
+            immediate_processed = process_active_leads_once()
             process_active_leads.delay()
 
         return Response(
