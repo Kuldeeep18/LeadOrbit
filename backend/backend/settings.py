@@ -7,7 +7,8 @@ from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 # Prefer local project .env values for local development runs.
-load_dotenv(BASE_DIR / '.env', override=True)
+# Never override existing environment variables (important in deployment).
+load_dotenv(BASE_DIR / '.env', override=False)
 
 
 def _read_local_env_value(name: str, default: str = '') -> str:
@@ -181,7 +182,10 @@ FRONTEND_BASE_URL = os.getenv(
 ).rstrip('/')
 GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', '')
 GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET', '')
-GOOGLE_REDIRECT_URI = os.getenv('GOOGLE_REDIRECT_URI', f'{BACKEND_BASE_URL}/auth/google/callback')
+GOOGLE_REDIRECT_URI = os.getenv('GOOGLE_REDIRECT_URI', f'{BACKEND_BASE_URL}/api/v1/auth/google/callback')
+# In production, never allow localhost callback URLs. This avoids local .env leakage.
+if not DEBUG and 'localhost' in GOOGLE_REDIRECT_URI.lower():
+    GOOGLE_REDIRECT_URI = f'{BACKEND_BASE_URL}/api/v1/auth/google/callback'
 GOOGLE_SCOPES = [
     'https://www.googleapis.com/auth/gmail.send',
     'https://www.googleapis.com/auth/gmail.readonly',
