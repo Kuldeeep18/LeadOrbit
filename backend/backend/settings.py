@@ -3,6 +3,7 @@ Django settings for backend project.
 """
 from pathlib import Path
 import os
+import re
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -25,6 +26,27 @@ def _read_local_env_value(name: str, default: str = '') -> str:
     except Exception:
         pass
     return default
+
+
+def _normalize_google_redirect_uri(raw_uri: str, backend_base_url: str) -> str:
+    default_uri = f'{backend_base_url}/api/v1/auth/google/callback'
+    candidate = (raw_uri or '').strip()
+    if not candidate:
+        return default_uri
+
+    # Heal common typo: missing slash between host and path.
+    candidate = re.sub(r'^(https?://[^/]+)(api/)', r'\1/\2', candidate, flags=re.IGNORECASE)
+
+    if not (candidate.startswith('http://') or candidate.startswith('https://')):
+        return default_uri
+
+    scheme, rest = candidate.split('://', 1)
+    host = rest.split('/', 1)[0].strip()
+    if not host:
+        return default_uri
+
+    # Canonicalize callback path so Google/login/token-exchange always match.
+    return f'{scheme}://{host}/api/v1/auth/google/callback'
 
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-fallback-key-change-me')
 DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes')
@@ -182,7 +204,10 @@ FRONTEND_BASE_URL = os.getenv(
 ).rstrip('/')
 GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', '')
 GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET', '')
-GOOGLE_REDIRECT_URI = os.getenv('GOOGLE_REDIRECT_URI', f'{BACKEND_BASE_URL}/api/v1/auth/google/callback')
+GOOGLE_REDIRECT_URI = _normalize_google_redirect_uri(
+    os.getenv('GOOGLE_REDIRECT_URI', ''),
+    BACKEND_BASE_URL,
+)
 # In production, never allow localhost callback URLs. This avoids local .env leakage.
 if not DEBUG and 'localhost' in GOOGLE_REDIRECT_URI.lower():
     GOOGLE_REDIRECT_URI = f'{BACKEND_BASE_URL}/api/v1/auth/google/callback'
