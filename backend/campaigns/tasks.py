@@ -263,6 +263,18 @@ def _execute_condition_reply_step(clead, step, now=None):
                 )
                 return
 
+            # Sequence settings indicate a Yes branch, but SequenceStep rows may
+            # still be out of sync after a campaign edit. Keep the lead active
+            # and retry instead of terminating as REPLIED.
+            clead.status = 'ACTIVE'
+            clead.next_execution_time = now + timedelta(minutes=5)
+            clead.save(update_fields=['status', 'next_execution_time'])
+            logger.warning(
+                f"Reply condition matched for {clead.lead.email} but step order "
+                f"{yes_branch_step_order} was not found; retrying soon."
+            )
+            return
+
         clead.status = "REPLIED"
         clead.current_step = None
         clead.next_execution_time = None

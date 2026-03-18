@@ -147,6 +147,7 @@ class SequenceStepViewSet(viewsets.ModelViewSet):
 
 from rest_framework.views import APIView
 from django.utils import timezone
+from django.conf import settings as django_settings
 
 class WebhookView(APIView):
     """
@@ -351,6 +352,29 @@ class AIGenerateView(APIView):
         if not prompt and not messages:
             return Response({'error': 'prompt is required'}, status=status.HTTP_400_BAD_REQUEST)
 
+        # Backward-compatible fallback: when Gemini key is missing, return a
+        # deterministic local draft regardless of external provider env state.
+        if not (getattr(django_settings, 'GEMINI_API_KEY', '') or '').strip():
+            generated = self._build_fallback_content(request)
+            return Response(
+                {
+                    'assistant_message': 'Using fallback draft because AI API key is not configured.',
+                    'subject': current_subject or 'Quick idea for {{company}}',
+                    'body': current_body or (
+                        "Hi {{firstName}},\n\n"
+                        "I noticed your work at {{company}} and wanted to share a short idea that might help.\n"
+                        "Would you be open to a quick 10-minute chat this week?\n\n"
+                        "Best,\n"
+                        "Your Name"
+                    ),
+                    'generated': generated,
+                    'provider': 'fallback',
+                    'model': 'template',
+                    'fallback': True,
+                },
+                status=status.HTTP_200_OK,
+            )
+
         from .ai import generate_email_chat_completion
 
         try:
@@ -360,6 +384,9 @@ class AIGenerateView(APIView):
                 current_body=current_body,
                 messages=messages,
             )
+            generated = f"SUBJECT: {result.get('subject', '')}\nBODY: {result.get('body', '')}"
+            result.setdefault('generated', generated)
+            result.setdefault('fallback', False)
             return Response(result, status=status.HTTP_200_OK)
         except ValueError as exc:
             return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
