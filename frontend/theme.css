@@ -584,6 +584,33 @@ body.auth-page {
     color: var(--link-color) !important;
 }
 
+.password-toggle-wrapper {
+    position: relative;
+}
+
+.password-toggle-wrapper .form-control {
+    padding-right: 2.8rem;
+}
+
+.password-toggle-btn {
+    position: absolute;
+    top: 50%;
+    right: 0.75rem;
+    transform: translateY(-50%);
+    border: none;
+    background: transparent;
+    color: currentColor;
+    padding: 0;
+    margin: 0;
+    line-height: 1;
+    cursor: pointer;
+    font-size: 1.05rem;
+    width: 1.75rem;
+    height: 1.75rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+}
 
 .password-toggle-btn:focus-visible {
     outline: 2px solid rgba(13, 110, 253, 0.35);
