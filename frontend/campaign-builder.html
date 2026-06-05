@@ -4,8 +4,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="/theme-boot.js"></script>
     <title>Campaign Builder - LeadOrbit</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="/theme.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -72,43 +74,6 @@
 
         .tab-pills .tab:hover:not(.active) {
             color: #1e293b;
-        }
-
-        .status-toggle {
-            width: 42px;
-            height: 22px;
-            border-radius: 999px;
-            border: none;
-            cursor: pointer;
-            position: relative;
-            transition: background .2s;
-        }
-
-        .status-toggle.off {
-            background: #cbd5e1;
-        }
-
-        .status-toggle.on {
-            background: #22c55e;
-        }
-
-        .status-toggle::after {
-            content: '';
-            width: 18px;
-            height: 18px;
-            background: #fff;
-            border-radius: 50%;
-            position: absolute;
-            top: 2px;
-            transition: left .2s;
-        }
-
-        .status-toggle.off::after {
-            left: 2px;
-        }
-
-        .status-toggle.on::after {
-            left: 22px;
         }
 
         /* â”€â”€ Main Layout: Canvas + Editor Panel â”€â”€ */
@@ -841,7 +806,7 @@
     </style>
 </head>
 
-<body>
+<body class="builder-page">
     <!-- â”€â”€â”€ Top Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
     <div class="top-bar">
         <div class="d-flex align-items-center gap-3">
@@ -849,8 +814,6 @@
                     class="bi bi-x-lg"></i></a>
             <i class="bi bi-diagram-3" style="color:#94a3b8;"></i>
             <input type="text" class="campaign-name" id="campaign-name" value="New Campaign">
-            <button class="status-toggle off" id="status-toggle" title="Toggle Active/Inactive"></button>
-            <i class="bi bi-gear" style="color:#94a3b8; cursor:pointer;" id="settings-icon"></i>
         </div>
         <div class="d-flex align-items-center gap-3">
             <div class="tab-pills">
@@ -1018,6 +981,7 @@
 
         // â”€â”€â”€ STATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         let campaignId = null;
+        let campaignIsActive = false;
         let selectedNodeIndex = null;
         let addInsertIndex = null; // where the "+" was clicked
         let addBranchTarget = null; // optional { parentIndex, branch }
@@ -1274,33 +1238,33 @@
 
         function renderLaunchTab() {
             const canvas = document.getElementById('canvas');
-            const statusText = document.getElementById('status-toggle').classList.contains('on') ? 'ACTIVE' : 'DRAFT';
+            const statusText = campaignIsActive ? 'ACTIVE' : 'DRAFT';
             canvas.innerHTML = `
                 <div class="flow-node w-100" style="max-width: 900px;">
                     <h4 class="mb-3">Launch campaign</h4>
                     <p class="text-muted mb-4">Review and launch this campaign now.</p>
                     <div class="row g-3">
                         <div class="col-md-4">
-                            <div class="p-3 rounded-3 bg-light border">
+                            <div class="p-3 rounded-3 panel-muted-box">
                                 <div class="text-muted small">Campaign name</div>
                                 <div class="fw-semibold">${document.getElementById('campaign-name').value || 'Untitled campaign'}</div>
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div class="p-3 rounded-3 bg-light border">
+                            <div class="p-3 rounded-3 panel-muted-box">
                                 <div class="text-muted small">Steps configured</div>
                                 <div class="fw-semibold">${steps.length}</div>
                             </div>
                         </div>
                         <div class="col-md-4">
-                            <div class="p-3 rounded-3 bg-light border">
+                            <div class="p-3 rounded-3 panel-muted-box">
                                 <div class="text-muted small">Selected leads</div>
                                 <div class="fw-semibold">${selectedLeadIds.size}</div>
                             </div>
                         </div>
                     </div>
                     <div class="alert alert-info mt-4 mb-0">
-                        Current status toggle: <b>${statusText}</b>. Launch will activate the campaign and trigger processing.
+                        Current status: <b>${statusText}</b>. Launch will activate the campaign and trigger processing.
                     </div>
                 </div>
             `;
@@ -1309,10 +1273,9 @@
         async function saveCampaign() {
             const name = document.getElementById('campaign-name').value;
             const settings = { steps: steps.map((s, i) => ({ ...s, step_order: i + 1 })) };
-            const isActive = document.getElementById('status-toggle').classList.contains('on');
             const payload = {
                 name,
-                status: isActive ? 'ACTIVE' : 'DRAFT',
+                status: campaignIsActive ? 'ACTIVE' : 'DRAFT',
                 settings,
                 steps: settings.steps,
                 connected_account_id: selectedConnectedAccountId || null,
@@ -1673,7 +1636,7 @@
                 <!-- AI Generation Result -->
                 <div id="ai-result" class="d-none mb-3">
                     <div class="ep-label">AI Suggestion</div>
-                    <div class="p-3 rounded-3" style="background:#f5f3ff; border: 1px solid #ddd6fe;">
+                    <div class="p-3 rounded-3 ai-result-box">
                         <p id="ai-result-text" class="mb-2 small" style="white-space:pre-wrap;"></p>
                         <div class="d-flex gap-2">
                             <button class="btn btn-sm btn-primary" id="ai-use-btn">Use this</button>
@@ -2158,13 +2121,6 @@
             });
         });
 
-        // Status toggle
-        document.getElementById('status-toggle').addEventListener('click', function () {
-            this.classList.toggle('on');
-            this.classList.toggle('off');
-            if (activeTab === 'launch') renderLaunchTab();
-        });
-
         // â”€â”€â”€ SAVE / NEXT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
         document.getElementById('next-step-btn').addEventListener('click', async () => {
             const btn = document.getElementById('next-step-btn');
@@ -2216,10 +2172,7 @@
                         const data = await res.json();
                         campaignId = data.id;
                         document.getElementById('campaign-name').value = data.name;
-                        if (data.status === 'ACTIVE') {
-                            document.getElementById('status-toggle').classList.add('on');
-                            document.getElementById('status-toggle').classList.remove('off');
-                        }
+                        campaignIsActive = data.status === 'ACTIVE';
                         if (data.connected_account && data.connected_account.id) {
                             selectedConnectedAccountId = data.connected_account.id;
                         }
