@@ -7,6 +7,8 @@ class Organization(models.Model):
     name = models.CharField(max_length=255)
     billing_plan = models.CharField(max_length=50, default='FREE')
     created_at = models.DateTimeField(auto_now_add=True)
+    gemini_api_key = models.CharField(max_length=255, blank=True, null=True)
+    enable_ai_personalization = models.BooleanField(default=True)
 
     def __str__(self):
         return self.name

@@ -226,9 +226,22 @@ Requirements:
 
     try:
         import google.generativeai as genai
+        # 1. Check if organization has personal tracking tokens and personalization toggled on
+        active_key = None
+        if hasattr(lead, 'organization') and lead.organization:
+            # If the user explicitly disabled personalization, trigger an early exit exception to drop back to standard templates
+            if not getattr(lead.organization, 'enable_ai_personalization', True):
+                raise Exception("AI Personalization is explicitly disabled for this organization workspace.")
+            
+            active_key = getattr(lead.organization, 'gemini_api_key', None)
 
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        # 2. Fall back to the default system environment variable token if no tenant-level key exists
+        final_api_key = active_key if active_key else api_key
+
+        genai.configure(api_key=final_api_key)
+        
+        # 3. Upgrade the deprecated engine version string to the current 2.0 version
+        model = genai.GenerativeModel('gemini-2.0-flash')
         response = model.generate_content(prompt)
         # Parse basic JSON from response...
         # For MVP we will just do simple replacement if JSON parsing fails

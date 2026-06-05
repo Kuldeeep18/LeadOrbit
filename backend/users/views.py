@@ -29,6 +29,8 @@ class AuthViewSet(viewsets.GenericViewSet):
             new_password = payload.get('new_password')
             organization_name = payload.get('organization_name')
             updates_made = False
+            gemini_api_key = payload.get('gemini_api_key')
+            enable_ai_personalization = payload.get('enable_ai_personalization')
 
             if organization_name is not None:
                 clean_name = str(organization_name).strip()
@@ -39,6 +41,15 @@ class AuthViewSet(viewsets.GenericViewSet):
                     )
                 request.user.organization.name = clean_name
                 request.user.organization.save(update_fields=['name'])
+                updates_made = True
+            if gemini_api_key is not None:
+                request.user.organization.gemini_api_key = str(gemini_api_key).strip() or None
+                request.user.organization.save(update_fields=['gemini_api_key'])
+                updates_made = True
+
+            if enable_ai_personalization is not None:
+                request.user.organization.enable_ai_personalization = bool(enable_ai_personalization)
+                request.user.organization.save(update_fields=['enable_ai_personalization'])
                 updates_made = True
 
             if new_password:
