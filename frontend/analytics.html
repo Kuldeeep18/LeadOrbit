@@ -56,7 +56,13 @@
                 </li>
             </ul>
             <div class="sidebar-footer small">
-                <span class="text-white opacity-75 user-display-name">Loading...</span>
+                <div class="sidebar-user-profile d-flex align-items-center gap-2">
+                    <div class="sidebar-avatar"></div>
+                    <div>
+                        <div class="user-display-name">Loading...</div>
+                        <div class="user-email text-white-50 small"></div>
+                    </div>
+                </div>
             </div>
         </aside>
 
@@ -68,6 +74,7 @@
                         <div class="title-meta">Monitor sends, opens, replies, and campaign quality trends.</div>
                     </div>
                     <div class="d-flex align-items-center gap-2">
+                        <div class="header-avatar"></div>
                         <select class="form-select form-select-sm" id="time-range" style="width:auto;">
                             <option value="7">Last 7 days</option>
                             <option value="30" selected>Last 30 days</option>

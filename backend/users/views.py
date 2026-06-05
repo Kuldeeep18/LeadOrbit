@@ -52,17 +52,39 @@ class AuthViewSet(viewsets.GenericViewSet):
                 request.user.organization.save(update_fields=['enable_ai_personalization'])
                 updates_made = True
 
+            user_update_fields = []
+            first_name = payload.get('first_name')
+            if first_name is not None:
+                request.user.first_name = str(first_name).strip() or None
+                user_update_fields.append('first_name')
+                updates_made = True
+
+            last_name = payload.get('last_name')
+            if last_name is not None:
+                request.user.last_name = str(last_name).strip() or None
+                user_update_fields.append('last_name')
+                updates_made = True
+
+            avatar_url = payload.get('avatar_url')
+            if avatar_url is not None:
+                request.user.avatar_url = str(avatar_url).strip() or None
+                user_update_fields.append('avatar_url')
+                updates_made = True
+
             if new_password:
                 try:
                     validate_password(new_password, request.user)
                 except DjangoValidationError as exc:
                     return Response({'new_password': list(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
                 request.user.set_password(new_password)
-                request.user.save(update_fields=['password'])
+                user_update_fields.append('password')
                 updates_made = True
 
             if not updates_made:
                 return Response({'detail': 'No changes submitted.'}, status=status.HTTP_400_BAD_REQUEST)
+
+            if user_update_fields:
+                request.user.save(update_fields=user_update_fields)
 
         serializer = UserSerializer(request.user)
         return Response(serializer.data)
