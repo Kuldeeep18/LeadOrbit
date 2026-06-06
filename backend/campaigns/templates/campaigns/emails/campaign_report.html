@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html>
+<head>
+<style>
+    body { font-family: Arial, sans-serif; background-color: #f4f4f5; margin: 0; padding: 20px; }
+    .container { max-width: 600px; margin: 0 auto; background: #ffffff; border-radius: 8px; padding: 24px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05); }
+    h2 { color: #111827; margin-top: 0; }
+    .metrics { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 24px; }
+    .metric-card { flex: 1 1 calc(50% - 16px); background: #f9fafb; padding: 16px; border-radius: 6px; border: 1px solid #e5e7eb; }
+    .metric-title { font-size: 14px; color: #6b7280; font-weight: bold; margin-bottom: 8px; text-transform: uppercase; }
+    .metric-value { font-size: 24px; color: #111827; font-weight: bold; }
+    .trend { font-size: 14px; font-weight: bold; margin-left: 8px; }
+    .trend.up { color: #10b981; }
+    .trend.down { color: #ef4444; }
+    .trend.neutral { color: #6b7280; }
+    .section-title { font-size: 18px; color: #374151; font-weight: bold; margin-bottom: 16px; border-bottom: 1px solid #e5e7eb; padding-bottom: 8px; }
+    .reply-item { margin-bottom: 16px; padding: 16px; background: #f3f4f6; border-left: 4px solid #3b82f6; border-radius: 4px; }
+    .reply-email { font-weight: bold; color: #1f2937; margin-bottom: 4px; }
+    .reply-preview { font-size: 14px; color: #4b5563; }
+</style>
+</head>
+<body>
+<div class="container">
+    <h2>{{ schedule_label }} Campaign Analytics Report</h2>
+    <p style="color: #6b7280; margin-bottom: 24px;">Performance overview for the last {{ period_days }} days.</p>
+    
+    <div class="section-title">📊 Key Metrics</div>
+    <div class="metrics">
+        <div class="metric-card">
+            <div class="metric-title">Emails Sent</div>
+            <div class="metric-value">{{ current_metrics.sent }} <span class="trend {% if trend.sent > 0 %}up{% elif trend.sent < 0 %}down{% else %}neutral{% endif %}">{% if trend.sent > 0 %}↑{% elif trend.sent < 0 %}↓{% else %}~{% endif %} {{ trend.sent_abs }}</span></div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-title">Opened</div>
+            <div class="metric-value">{{ current_metrics.opened }} <span class="trend {% if trend.opened > 0 %}up{% elif trend.opened < 0 %}down{% else %}neutral{% endif %}">{% if trend.opened > 0 %}↑{% elif trend.opened < 0 %}↓{% else %}~{% endif %} {{ trend.opened_abs }}</span></div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-title">Clicked</div>
+            <div class="metric-value">{{ current_metrics.clicked }} <span class="trend {% if trend.clicked > 0 %}up{% elif trend.clicked < 0 %}down{% else %}neutral{% endif %}">{% if trend.clicked > 0 %}↑{% elif trend.clicked < 0 %}↓{% else %}~{% endif %} {{ trend.clicked_abs }}</span></div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-title">Replied</div>
+            <div class="metric-value">{{ current_metrics.replied }} <span class="trend {% if trend.replied > 0 %}up{% elif trend.replied < 0 %}down{% else %}neutral{% endif %}">{% if trend.replied > 0 %}↑{% elif trend.replied < 0 %}↓{% else %}~{% endif %} {{ trend.replied_abs }}</span></div>
+        </div>
+    </div>
+
+    {% if top_campaign %}
+    <div class="section-title">🏆 Top Performing Campaign</div>
+    <div style="margin-bottom: 24px; padding: 16px; background: #ecfdf5; border: 1px solid #a7f3d0; border-radius: 6px;">
+        <strong style="color: #065f46; font-size: 16px;">{{ top_campaign.name }}</strong>
+        <div style="color: #047857; margin-top: 4px; font-size: 14px;">Open Rate: {{ top_campaign_rate|floatformat:1 }}%</div>
+    </div>
+    {% endif %}
+
+    {% if replies %}
+    <div class="section-title">💬 Recent Replies</div>
+    {% for reply in replies %}
+    <div class="reply-item">
+        <div class="reply-email">{{ reply.lead.email }} ({{ reply.campaign.name }})</div>
+        <div class="reply-preview">Replied on {{ reply.last_replied_at|date:"M d, Y" }}</div>
+    </div>
+    {% endfor %}
+    {% else %}
+    <p style="color: #6b7280; font-size: 14px;">No replies received in this period.</p>
+    {% endif %}
+    
+    <div style="margin-top: 32px; font-size: 12px; color: #9ca3af; text-align: center;">
+        Sent by LeadOrbit for {{ organization_name }}
+    </div>
+</div>
+</body>
+</html>
