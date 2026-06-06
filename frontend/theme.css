@@ -831,16 +831,12 @@ body.auth-page {
     background: transparent !important;
     padding: 0 !important;
 }
-/* .empty-state {
+
+.empty-state {
     background: var(--panel);
     border: 1px dashed var(--line);
     border-radius: 14px;
     padding: 2rem;
-} */
- .dashboard-empty-state {
-    border: none;
-    background: transparent;
-    padding: 0;
 }
 
 /* ── Campaign builder dark mode ── */
