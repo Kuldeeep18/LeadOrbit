@@ -1,19 +1,21 @@
-import logging from datetime 
-import timedelta from celery 
-import shared_task from django.conf 
-import settings as django_settings from django.utils 
-import timezone from .ai 
-import _apply_merge_tags, personalize_email from .gmail_service
-import build_unsubscribe_url, check_for_replies, send_gmail from .sms_service 
-import send_sms, initiate_call from .models 
-import CampaignLead, SequenceStep from leads.models 
-import BlockedDomain, normalize_domain
-
-
+import logging
+from datetime import timedelta
+from celery import shared_task
+from django.conf import settings as django_settings
+from django.utils import timezone
 import urllib.parse
 from bs4 import BeautifulSoup
 from django.core.signing import Signer
 
+from .ai import _apply_merge_tags, personalize_email
+from .gmail_service import build_unsubscribe_url, check_for_replies, send_gmail
+from .sms_service import send_sms, initiate_call
+from .models import CampaignLead, SequenceStep, ConnectedEmailAccount, Campaign
+from leads.models import BlockedDomain, normalize_domain
+from tenants.models import Organization
+from django.template.loader import render_to_string
+from django.core.mail import EmailMultiAlternatives
+from django.db.models import Count, Q
 
 logger = logging.getLogger(__name__)
 
@@ -693,3 +695,113 @@ def poll_gmail_for_replies():
                 _maybe_mark_campaign_completed(clead.campaign)
 
     return f"Detected {total_replies} new replies."
+
+@shared_task
+def send_campaign_reports():
+    """
+    Sends daily or weekly campaign analytics report to organization admins.
+    """
+    now = timezone.now()
+    orgs = Organization.objects.filter(report_schedule__in=['DAILY', 'WEEKLY']).exclude(report_emails='')
+
+    for org in orgs:
+        if org.report_schedule == 'WEEKLY' and now.weekday() != 0:
+            continue
+            
+        period_days = 1 if org.report_schedule == 'DAILY' else 7
+        start_time = now - timedelta(days=period_days)
+        prev_start_time = start_time - timedelta(days=period_days)
+        
+        current_leads = CampaignLead.objects.filter(campaign__organization=org)
+        
+        current_metrics = {
+            'sent': current_leads.filter(last_sent_message_id__isnull=False, updated_at__gte=start_time).count(),
+            'opened': current_leads.filter(last_opened_at__gte=start_time).count(),
+            'clicked': current_leads.filter(last_clicked_at__gte=start_time).count(),
+            'replied': current_leads.filter(last_replied_at__gte=start_time).count(),
+            'bounced': current_leads.filter(status='BOUNCED', updated_at__gte=start_time).count(),
+        }
+
+        prev_metrics = {
+            'sent': current_leads.filter(last_sent_message_id__isnull=False, updated_at__gte=prev_start_time, updated_at__lt=start_time).count(),
+            'opened': current_leads.filter(last_opened_at__gte=prev_start_time, last_opened_at__lt=start_time).count(),
+            'clicked': current_leads.filter(last_clicked_at__gte=prev_start_time, last_clicked_at__lt=start_time).count(),
+            'replied': current_leads.filter(last_replied_at__gte=prev_start_time, last_replied_at__lt=start_time).count(),
+        }
+
+        trend = {
+            k: current_metrics[k] - prev_metrics.get(k, 0)
+            for k in current_metrics if k != 'bounced'
+        }
+        
+        # Check if there is any activity
+        if all(v == 0 for v in current_metrics.values()) and all(v == 0 for v in prev_metrics.values()):
+            continue
+
+        campaigns = Campaign.objects.filter(organization=org)
+        top_campaign = None
+        top_open_rate = -1.0
+        
+        for c in campaigns:
+            total_sent = c.enrolled_leads.filter(last_sent_message_id__isnull=False).count()
+            total_opened = c.enrolled_leads.filter(last_opened_at__isnull=False).count()
+            if total_sent > 0:
+                open_rate = (total_opened / total_sent) * 100
+                if open_rate > top_open_rate:
+                    top_open_rate = open_rate
+                    top_campaign = c
+
+        replies = current_leads.filter(last_replied_at__gte=start_time).select_related('lead', 'campaign').order_by('-last_replied_at')[:5]
+
+        context = {
+            'organization_name': org.name,
+            'schedule_label': org.get_report_schedule_display(),
+            'period_days': period_days,
+            'current_metrics': current_metrics,
+            'trend': trend,
+            'trend_sent_abs': abs(trend['sent']),
+            'trend_opened_abs': abs(trend['opened']),
+            'trend_clicked_abs': abs(trend['clicked']),
+            'trend_replied_abs': abs(trend['replied']),
+            'top_campaign': top_campaign,
+            'top_campaign_rate': top_open_rate if top_open_rate >= 0 else 0,
+            'replies': replies,
+        }
+
+        html_content = render_to_string('campaigns/emails/campaign_report.html', context)
+        subject = f"LeadOrbit {org.get_report_schedule_display()} Report - {org.name}"
+        
+        emails = [e.strip() for e in org.report_emails.split(',') if e.strip()]
+        if not emails:
+            continue
+
+        # Try to use organization's connected account, fallback to default
+        account = ConnectedEmailAccount.objects.filter(organization=org).first()
+        
+        if account:
+            try:
+                for email in emails:
+                    send_gmail(
+                        account,
+                        email,
+                        subject,
+                        html_content, # Gmail service treats body as HTML currently if no explicit text is provided
+                    )
+                logger.info(f"Sent campaign report to {emails} for {org.name} via Gmail API")
+            except Exception as e:
+                logger.error(f"Failed to send campaign report via Gmail for {org.name}: {e}")
+        else:
+            try:
+                msg = EmailMultiAlternatives(
+                    subject,
+                    "Please view this email in an HTML compatible client.",
+                    django_settings.DEFAULT_FROM_EMAIL if hasattr(django_settings, 'DEFAULT_FROM_EMAIL') else 'noreply@leadorbit.com',
+                    emails
+                )
+                msg.attach_alternative(html_content, "text/html")
+                msg.send()
+                logger.info(f"Sent campaign report to {emails} for {org.name} via Django Mail")
+            except Exception as e:
+                logger.error(f"Failed to send campaign report via Django Mail for {org.name}: {e}")
+
+>>>>>>> eebca63 (feat: Add campaign analytics report celery task and template)
