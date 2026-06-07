@@ -29,6 +29,7 @@
 </head>
 
 <body>
+    <div id="sidebar-overlay"></div>
     <div class="app-shell">
         <aside class="sidebar p-3 d-flex flex-column">
             <div class="d-flex align-items-center mb-4 mt-2">
@@ -46,7 +47,7 @@
                     </a>
                 </li>
                 <li class="nav-item mb-2">
-                    <a href="/campaigns.html" class="nav-link active d-flex align-items-center">
+                    <a href="/campaigns.html" class="nav-link d-flex align-items-center">
                         <i class="bi bi-megaphone me-2"></i> Campaigns
                     </a>
                 </li>
@@ -69,6 +70,9 @@
         <main class="main-area">
             <header class="top-header p-3">
                 <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                    <button id="hamburger-btn" class="btn d-lg-none p-1" aria-label="Toggle menu">
+                        <i class="bi bi-list fs-4"></i>
+                    </button>
                     <div>
                         <div class="page-title">Campaign Command Center</div>
                         <div class="title-meta">Build, monitor, and launch outreach sequences faster.</div>

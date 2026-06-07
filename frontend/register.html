@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+ feat/add-favicon-meta-tags
     
     <title>LeadOrbit - Register</title>
     
@@ -22,6 +23,57 @@
     
     <link rel="icon" type="image/x-icon" href="/favicon.ico">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+
+    <script src="/theme-boot.js"></script>
+    <!-- Clean Page Title -->
+    <title>Register - LeadOrbit</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Loaded Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <!-- Loaded Google Fonts (Manrope + Sora) -->
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
+    <link href="/theme.css" rel="stylesheet">
+
+    <!-- Shared theme overrides for complete UI consistency -->
+    <style>
+        body.auth-page {
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important;
+            font-family: 'Manrope', sans-serif;
+        }
+        .custom-glass-card {
+            background: rgba(30, 41, 59, 0.7) !important;
+            backdrop-filter: blur(16px) !important;
+            -webkit-backdrop-filter: blur(16px) !important;
+            border: 1px solid rgba(255, 255, 255, 0.08) !important;
+            border-radius: 20px;
+        }
+        .brand-gradient {
+            background: linear-gradient(45deg, #00b4db, #00ffca) !important;
+            -webkit-background-clip: text !important;
+            background-clip: text !important;
+            -webkit-text-fill-color: transparent !important;
+            color: transparent !important;
+            display: inline-block;
+        }
+        .custom-input {
+            background-color: rgba(15, 23, 42, 0.5) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            color: #ffffff !important;
+        }
+        .custom-input:focus {
+            background-color: rgba(15, 23, 42, 0.8) !important;
+            border-color: #00b4db !important;
+            box-shadow: 0 0 0 0.25rem rgba(0, 180, 219, 0.25) !important;
+            color: #ffffff !important;
+        }
+        .input-group-text-custom {
+            background-color: rgba(15, 23, 42, 0.5) !important;
+            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            border-right: none !important;
+            color: rgba(255, 255, 255, 0.5) !important;
+        }
+    </style>
+ main
 </head>
     <!-- SEO Meta Tags -->
     <meta name="description" content="LeadOrbit - AI-powered outreach platform. Register to start managing your leads and campaigns.">
@@ -39,54 +91,73 @@
     <meta name="twitter:title" content="LeadOrbit - Register">
     <meta name="twitter:description" content="Sign up for LeadOrbit - AI-powered outreach and lead management platform.">
 
+ feat/add-favicon-meta-tags
 <body class="bg-light d-flex align-items-center" style="min-height: 100vh;">
 
-    <div class="container">
+<body class="auth-page d-flex align-items-center min-vh-100">
+ main
+
+    <div class="container py-5">
         <div class="row justify-content-center">
+ feat/add-favicon-meta-tags
             <div class="col-md-6 col-lg-5 py-5">
                 <div class="card border-0 shadow-sm p-4">
+
+            <div class="col-md-6 col-lg-5">
+                <!-- Applied our custom glass style container -->
+                <div class="custom-glass-card p-4 shadow-lg">
+ main
                     <div class="card-body">
                         <div class="text-center mb-4">
-                            <h2 class="text-primary fw-bold mb-0">LeadOrbit</h2>
-                            <p class="text-muted">Create your account to get started.</p>
+                            <h2 class="brand-gradient mb-1" style="font-family: 'Sora', sans-serif; font-weight: 800; font-size: 2.5rem;">LeadOrbit</h2>
+                            <p class="text-white-50 small">Create your account to get started.</p>
                         </div>
 
                         <form>
                             <div class="row mb-3">
                                 <div class="col-6">
-                                    <label for="firstName" class="form-label text-muted small fw-semibold">First
-                                        Name</label>
-                                    <input type="text" class="form-control form-control-lg fs-6" id="firstName"
-                                        placeholder="Jane" required>
+                                    <label for="firstName" class="form-label text-white-50 small fw-semibold">First Name</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text  input-group-text-custom"><i class="bi bi-person"></i></span>
+                                        <input type="text" class="form-control form-control-lg fs-6 custom-input" id="firstName"
+                                            placeholder="Jane" required style="border-left: none !important;">
+                                    </div>
                                 </div>
                                 <div class="col-6">
-                                    <label for="lastName" class="form-label text-muted small fw-semibold">Last
-                                        Name</label>
-                                    <input type="text" class="form-control form-control-lg fs-6" id="lastName"
-                                        placeholder="Doe" required>
+                                    <label for="lastName" class="form-label text-white-50 small fw-semibold">Last Name</label>
+                                    <div class="input-group">
+                                        <span class="input-group-text input-group-text-custom"><i class="bi bi-person"></i></span>
+                                        <input type="text" class="form-control form-control-lg fs-6 custom-input" id="lastName"
+                                            placeholder="Doe" required style="border-left: none !important;">
+                                    </div>
                                 </div>
                             </div>
 
                             <div class="mb-3">
-                                <label for="emailAddress" class="form-label text-muted small fw-semibold">Email
-                                    Address</label>
-                                <input type="email" class="form-control form-control-lg fs-6" id="emailAddress"
-                                    placeholder="name@example.com" required>
+                                <label for="emailAddress" class="form-label text-white-50 small fw-semibold">Email Address</label>
+                                <div class="input-group">
+                                    <span class="input-group-text input-group-text-custom"><i class="bi bi-envelope"></i></span>
+                                    <input type="email" class="form-control form-control-lg fs-6 custom-input" id="emailAddress"
+                                        placeholder="name@example.com" required style="border-left: none !important;">
+                                </div>
                             </div>
                             <div class="mb-4">
                                 <label for="password" class="form-label text-muted small fw-semibold">Password</label>
-                                <input type="password" class="form-control form-control-lg fs-6" id="password"
-                                    placeholder="Min. 8 characters" required>
+                                <div class="password-toggle-wrapper">
+                                    <input type="password" class="form-control form-control-lg fs-6" id="password"
+                                        placeholder="Min. 8 characters" required>
+                                    <button type="button" id="passwordToggle" class="password-toggle-btn" aria-label="Show password">👁</button>
+                                </div>
                             </div>
 
                             <div class="d-grid mb-3">
-                                <button class="btn btn-primary btn-lg" type="submit">Sign Up</button>
+                                <button class="btn btn-lg fw-semibold text-dark" style="background: linear-gradient(45deg, #00b4db, #00ffca); border: none;" type="submit">Sign Up</button>
                             </div>
                         </form>
 
-                        <div class="text-center">
-                            <p class="mb-0 text-muted">Already have an account? <a href="/login.html"
-                                    class="text-primary text-decoration-none fw-semibold">Sign in</a></p>
+                        <div class="text-center mt-4">
+                            <p class="mb-0 small text-white-50">Already have an account? <a href="/login.html"
+                                    class="text-decoration-none fw-semibold" style="color: #00ffca;">Sign in</a></p>
                         </div>
                     </div>
                 </div>

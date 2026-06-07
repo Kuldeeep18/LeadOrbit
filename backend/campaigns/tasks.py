@@ -6,7 +6,7 @@ from django.conf import settings as django_settings
 from django.utils import timezone
 
 from .ai import personalize_email
-from .gmail_service import check_for_replies, send_gmail
+from .gmail_service import build_unsubscribe_url, check_for_replies, send_gmail
 from .sms_service import send_sms, initiate_call
 from .models import CampaignLead, SequenceStep
 
@@ -388,9 +388,20 @@ def send_email_step(campaign_lead_id, step_id):
     """
     Dispatches an email through the connected Gmail account (or falls back to mock logging).
     """
+    
     try:
         clead = CampaignLead.objects.select_related('lead', 'campaign').get(id=campaign_lead_id)
         step = SequenceStep.objects.get(id=step_id)
+
+        if clead.lead.global_unsubscribe:
+            logger.info(
+                f"Skipping email send for unsubscribed lead {clead.lead.email}."
+            )
+            clead.status = 'FINISHED'
+            clead.current_step = None
+            clead.next_execution_time = None
+            clead.save(update_fields=['status', 'current_step', 'next_execution_time'])
+            return
 
         if step.channel_type != 'EMAIL':
             _execute_non_email_step(clead, step)
@@ -414,7 +425,13 @@ def send_email_step(campaign_lead_id, step_id):
         account = clead.campaign.connected_account
         if account:
             try:
-                message_id = send_gmail(account, clead.lead.email, subject, body)
+                message_id = send_gmail(
+                    account,
+                    clead.lead.email,
+                    subject,
+                    body,
+                    unsubscribe_url=build_unsubscribe_url(clead.lead),
+                )
                 clead.last_sent_message_id = message_id
                 clead.save(update_fields=['last_sent_message_id'])
                 logger.info(f"Gmail SENT to {clead.lead.email} | msg_id={message_id}")
@@ -457,6 +474,17 @@ def process_active_leads_once(now=None):
     processed = 0
     eager_mode = bool(getattr(django_settings, 'CELERY_TASK_ALWAYS_EAGER', False))
     for clead in ready_leads:
+        if clead.lead.global_unsubscribe:
+            logger.info(
+                f"Skipping campaign lead {clead.lead.email} because lead has globally unsubscribed."
+            )
+            clead.status = 'FINISHED'
+            clead.current_step = None
+            clead.next_execution_time = None
+            clead.save(update_fields=['status', 'current_step', 'next_execution_time'])
+            processed += 1
+            continue
+
         lead_processed = False
         for _ in range(20):
             if not clead.current_step:

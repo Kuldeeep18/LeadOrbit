@@ -148,6 +148,7 @@ class SequenceStepViewSet(viewsets.ModelViewSet):
 from rest_framework.views import APIView
 from django.utils import timezone
 from django.conf import settings as django_settings
+from pathlib import Path
 
 class WebhookView(APIView):
     """
@@ -354,7 +355,7 @@ class AIGenerateView(APIView):
     POST /api/v1/campaigns/ai-generate/
     Generate email content using the configured LLM provider for the campaign builder.
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
         prompt = (request.data.get('prompt') or '').strip()
@@ -422,3 +423,72 @@ class AIGenerateView(APIView):
             "Your Name"
         )
         return f"SUBJECT: {subject}\nBODY: {body}"
+    
+from django.http import HttpResponse
+from django.middleware.csrf import get_token
+from leads.models import Lead
+from .utils import verify_unsubscribe_token
+
+
+def _unsubscribe_page(title, message, extra_html=''):
+    return (
+        '<!DOCTYPE html>'
+        '<html lang="en">'
+        '<head>'
+        '<meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        f'<title>{title} | LeadOrbit</title>'
+        '<style>body{margin:0;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Ubuntu,sans-serif;background:#f8fafc;color:#111827;}'
+        '.container{max-width:720px;margin:72px auto;padding:32px;background:#ffffff;border:1px solid #e5e7eb;border-radius:24px;box-shadow:0 20px 80px rgba(15,23,42,.08);}'
+        'h1{margin-top:0;font-size:2rem;color:#0f172a;}p{font-size:1rem;line-height:1.7;color:#475569;}'
+        'button{margin-top:12px;border:0;border-radius:999px;background:#1d4ed8;color:#fff;font-weight:700;padding:12px 20px;cursor:pointer;}'
+        '</style>'
+        '</head>'
+        f'<body><div class="container"><h1>{title}</h1><p>{message}</p>{extra_html}</div></body>'
+        '</html>'
+    )
+
+
+def unsubscribe_view(request, lead_id, token):
+    """Public unsubscribe endpoint for GDPR/CAN-SPAM compliance."""
+    verified = verify_unsubscribe_token(token)
+
+    if not verified or str(verified) != str(lead_id):
+        return HttpResponse(
+            "Invalid unsubscribe link",
+            status=400,
+        )
+
+    try:
+        lead = Lead.objects.get(id=lead_id)
+    except Lead.DoesNotExist:
+        return HttpResponse(
+            "Lead not found",
+            status=404,
+        )
+
+    if request.method != 'POST':
+        csrf_token = get_token(request)
+        form = (
+            f'<form method="post" action="{request.path}">'
+            f'<input type="hidden" name="csrfmiddlewaretoken" value="{csrf_token}">'
+            '<button type="submit">Confirm unsubscribe</button>'
+            '</form>'
+        )
+        html = _unsubscribe_page(
+            'Confirm unsubscribe',
+            'Please confirm that you want to unsubscribe from future emails sent through LeadOrbit.',
+            form,
+        )
+        return HttpResponse(html, content_type='text/html')
+
+    lead.global_unsubscribe = True
+    lead.save(update_fields=["global_unsubscribe"])
+
+    html = _unsubscribe_page(
+        'Unsubscribed',
+        'You have been unsubscribed from all future emails sent through LeadOrbit.',
+        '<p>If you received this link by mistake, no further action is needed.</p>',
+    )
+
+    return HttpResponse(html, content_type='text/html')
