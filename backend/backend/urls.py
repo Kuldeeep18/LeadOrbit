@@ -45,6 +45,7 @@ router.register(r'blocked-domains', BlockedDomainViewSet, basename='blocked-doma
 router.register(r'campaigns', CampaignViewSet, basename='campaigns')
 router.register(r'email-templates', EmailTemplateViewSet, basename='email-templates')
 router.register(r'tasks', ManualTaskViewSet, basename='tasks')
+router.register(r'email-templates', EmailTemplateViewSet, basename='email-templates')
 
 urlpatterns = [
     path('', api_root, name='api_root'),
