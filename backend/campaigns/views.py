@@ -209,14 +209,11 @@ class WebhookView(APIView):
                         if cl.current_step and cl.current_step.channel_type == 'CONDITION_CLICK':
                             _execute_condition_click_step(cl, cl.current_step, now=now)
             except Exception as e:
-                pass
-                
-        return Response({"status": "received"}, status=status.HTTP_200_OK)
-
+                print(f"Error processing webhook: {str(e)}")
+                return Response({"error": "Internal server error"},  status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 class DashboardAnalyticsView(APIView):
     """
-    Returns high-level aggregated metrics for the analytics page.
-    Accepts ?days=N query param (default 30).
+   
     """
     permission_classes = [IsAuthenticated]
 
