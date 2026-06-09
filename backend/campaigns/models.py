@@ -97,3 +97,18 @@ class CampaignLead(TenantModel):
 
     def __str__(self):
         return f"{self.lead.email} in {self.campaign.name}"
+
+class ManualTask(TenantModel):
+    STATUS_CHOICES = (
+        ('PENDING', 'Pending'),
+        ('COMPLETED', 'Completed'),
+        ('SKIPPED', 'Skipped'),
+    )
+    campaign_lead = models.ForeignKey(CampaignLead, on_delete=models.CASCADE, related_name='manual_tasks')
+    step = models.ForeignKey(SequenceStep, on_delete=models.CASCADE)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    notes = models.TextField(blank=True, null=True)
+    due_date = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"Task for {self.campaign_lead} - {self.step.channel_type}"

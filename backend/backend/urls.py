@@ -17,7 +17,8 @@ from campaigns.views import (
     WebhookView,
     DashboardAnalyticsView,
     AIGenerateView,
-    unsubscribe_view
+    unsubscribe_view,
+    ManualTaskViewSet
 )
 from campaigns.google_auth_views import GoogleOAuthLoginView, GoogleOAuthCallbackView, ConnectedAccountsListView
 
@@ -34,6 +35,7 @@ router.register(r'auth', AuthViewSet, basename='auth')
 router.register(r'leads', LeadViewSet, basename='leads')
 router.register(r'tags', TagViewSet, basename='tags')
 router.register(r'campaigns', CampaignViewSet, basename='campaigns')
+router.register(r'tasks', ManualTaskViewSet, basename='tasks')
 
 urlpatterns = [
     path('', api_root, name='api_root'),

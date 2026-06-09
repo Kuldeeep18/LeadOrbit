@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.db.models import Q
 
-from .models import Campaign, CampaignLead, ConnectedEmailAccount, SequenceStep
+from .models import Campaign, CampaignLead, ConnectedEmailAccount, SequenceStep, ManualTask
 
 DELAY_UNIT_TO_MINUTES = {
     'minutes': 1,
@@ -229,3 +229,28 @@ class CampaignLeadSerializer(serializers.ModelSerializer):
     class Meta:
         model = CampaignLead
         fields = '__all__'
+
+class ManualTaskSerializer(serializers.ModelSerializer):
+    lead_name = serializers.SerializerMethodField()
+    lead_email = serializers.SerializerMethodField()
+    campaign_name = serializers.SerializerMethodField()
+    channel_type = serializers.CharField(source='step.channel_type', read_only=True)
+    template_body = serializers.CharField(source='step.template_body', read_only=True)
+
+    class Meta:
+        model = ManualTask
+        fields = [
+            'id', 'status', 'notes', 'due_date',
+            'lead_name', 'lead_email', 'campaign_name',
+            'channel_type', 'template_body', 'campaign_lead'
+        ]
+
+    def get_lead_name(self, obj):
+        return f"{obj.campaign_lead.lead.first_name or ''} {obj.campaign_lead.lead.last_name or ''}".strip()
+
+    def get_lead_email(self, obj):
+        return obj.campaign_lead.lead.email
+
+    def get_campaign_name(self, obj):
+        return obj.campaign_lead.campaign.name
+
