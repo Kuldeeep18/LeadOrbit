@@ -5,7 +5,12 @@ from tenants.models import Organization
 from users.models import User
 
 
+from django.core.cache import cache
+
 class RegisterViewTests(APITestCase):
+    def setUp(self):
+        cache.clear()
+
     def test_register_rejects_duplicate_email_case_insensitive(self):
         organization = Organization.objects.create(name='Existing Org')
         User.objects.create_user(
