@@ -168,7 +168,8 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script type="module" src="./main.js"></script>
     <script type="module">
-        import { register } from './api.js';
+        import { register } from '/api.js';
+        import { showToast } from '/toast.js';
 
         document.addEventListener('DOMContentLoaded', () => {
             const form = document.querySelector('form');
@@ -194,7 +195,7 @@
 
                         window.location.href = '/dashboard.html';
                     } catch (err) {
-                        alert('Registration failed. Please try again.');
+                        showToast('Registration failed. Please try again.', 'error');
                         const btn = form.querySelector('button[type="submit"]');
                         btn.disabled = false;
                         btn.textContent = 'Sign Up';
