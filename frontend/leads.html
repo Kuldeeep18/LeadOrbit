@@ -166,6 +166,7 @@
     <script type="module" src="/main.js"></script>
     <script type="module">
         import { fetchWithAuth } from '/api.js';
+        import { showToast } from '/toast.js';
 
         let allLeads = [];
 
@@ -299,12 +300,15 @@
 
                     if (res.status === 202) {
                         statusEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1"></i>File uploaded. Processing now...</span>';
+                        showToast('File uploaded. Processing now...', 'success');
                         setTimeout(() => window.location.reload(), 1800);
                     } else {
                         statusEl.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle me-1"></i>Upload failed.</span>';
+                        showToast('Upload failed.', 'error');
                     }
                 } catch (err) {
                     statusEl.innerHTML = `<span class="text-danger">Error: ${err.message}</span>`;
+                    showToast(`Error: ${err.message}`, 'error');
                 } finally {
                     btn.disabled = false;
                     btn.innerHTML = '<i class="bi bi-cloud-upload me-1"></i> Upload and Process';

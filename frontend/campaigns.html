@@ -126,6 +126,7 @@
     <script type="module" src="/main.js"></script>
     <script type="module">
         import { fetchWithAuth } from '/api.js';
+        import { showToast } from '/toast.js';
 
         const STEP_LABELS = {
             EMAIL: 'Email',
@@ -359,7 +360,7 @@
                     } catch (error) {
                         button.disabled = false;
                         button.innerHTML = originalLabel;
-                        alert(error.message || 'Could not update campaign status.');
+                        showToast(error.message || 'Could not update campaign status.', 'error');
                     }
                 });
             });
