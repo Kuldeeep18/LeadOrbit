@@ -21,7 +21,8 @@ from campaigns.views import (
     DashboardAnalyticsView,
     AIGenerateView,
     unsubscribe_view,
-    ClickTrackingView
+    ClickTrackingView,
+    ManualTaskViewSet
 )
 # ------------------------------------------------
 
@@ -43,6 +44,7 @@ router.register(r'tags', TagViewSet, basename='tags')
 router.register(r'blocked-domains', BlockedDomainViewSet, basename='blocked-domains')
 router.register(r'campaigns', CampaignViewSet, basename='campaigns')
 router.register(r'email-templates', EmailTemplateViewSet, basename='email-templates')
+router.register(r'tasks', ManualTaskViewSet, basename='tasks')
 
 urlpatterns = [
     path('', api_root, name='api_root'),
