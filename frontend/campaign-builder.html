@@ -976,6 +976,7 @@
             <input type="text" class="campaign-name" id="campaign-name" value="New Campaign" aria-label="Campaign name">
             <button class="status-toggle off" id="status-toggle" title="Toggle Active/Inactive" aria-label="Toggle campaign status" ></button>
             <i class="bi bi-gear" style="color:#94a3b8; cursor:pointer;" id="settings-icon" aria-hidden="true"></i>
+            <i class="bi bi-files" style="color:#94a3b8; cursor:pointer; display:none;" id="duplicate-icon" title="Duplicate Campaign" aria-hidden="true"></i>
         </div>
         <div class="d-flex align-items-center gap-3">
             <div class="tab-pills">
@@ -2689,7 +2690,6 @@ ${rows || `
                         if (data.settings && data.settings.steps) {
                             steps = data.settings.steps;
                         }
-
                         const settings = data.settings || {};
 
 document.getElementById('setting-stop-reply').checked =
@@ -2703,6 +2703,28 @@ document.getElementById('setting-track-clicks').checked =
 
 document.getElementById('setting-daily-limit').value =
     settings.daily_limit ?? 100;
+
+                        const dupIcon = document.getElementById('duplicate-icon');
+                        if (dupIcon) {
+                            dupIcon.style.display = 'inline-block';
+                            dupIcon.addEventListener('click', async () => {
+                                try {
+                                    dupIcon.style.opacity = '0.5';
+                                    dupIcon.style.pointerEvents = 'none';
+                                    const res = await fetchWithAuth(`/campaigns/${campaignId}/duplicate/`, { method: 'POST' });
+                                    if (!res.ok) throw new Error('Failed to duplicate campaign.');
+                                    const newCampaign = await res.json();
+                                    showToast('Campaign duplicated successfully!', 'success');
+                                    setTimeout(() => {
+                                        window.location.href = `/campaign-builder.html?id=${newCampaign.id}`;
+                                    }, 500);
+                                } catch (e) {
+                                    dupIcon.style.opacity = '1';
+                                    dupIcon.style.pointerEvents = 'auto';
+                                    showToast('Error: ' + e.message, 'error');
+                                }
+                            });
+                        }
                     }
                 } catch (e) { console.error(e); }
             }

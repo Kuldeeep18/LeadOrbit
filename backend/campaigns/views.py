@@ -245,6 +245,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK,
         )
 
+
     @action(detail=True, methods=['get'])
     def metrics(self, request, pk=None):
         """Get comprehensive campaign performance metrics."""
@@ -349,6 +350,32 @@ class CampaignViewSet(viewsets.ModelViewSet):
             },
             status=status.HTTP_200_OK,
         )
+
+    @action(detail=True, methods=['post'])
+    def duplicate(self, request, pk=None):
+        campaign = self.get_object()
+
+        new_campaign = Campaign.objects.create(
+            organization=campaign.organization,
+            name=f"{campaign.name} (Copy)",
+            status='DRAFT',
+            settings=campaign.settings,
+            connected_account=campaign.connected_account
+        )
+
+        for step in campaign.steps.all():
+            SequenceStep.objects.create(
+                organization=step.organization,
+                campaign=new_campaign,
+                step_order=step.step_order,
+                channel_type=step.channel_type,
+                delay_minutes=step.delay_minutes,
+                template_subject=step.template_subject,
+                template_body=step.template_body
+            )
+
+        serializer = self.get_serializer(new_campaign)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
 
 class SequenceStepViewSet(viewsets.ModelViewSet):
     serializer_class = SequenceStepSerializer
