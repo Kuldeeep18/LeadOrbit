@@ -1,12 +1,18 @@
 from rest_framework import viewsets, parsers, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.pagination import PageNumberPagination
 from .models import Lead, Tag
 from .serializers import LeadSerializer, TagSerializer
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 25
+    page_size_query_param = 'page_size'
 
 class LeadViewSet(viewsets.ModelViewSet):
     serializer_class = LeadSerializer
     queryset = Lead.objects.all()
+    pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
         # Do not rely only on thread-local tenant middleware for JWT requests.

@@ -2,22 +2,42 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.pagination import PageNumberPagination
 
 from leads.models import Lead
 
 from .models import Campaign, CampaignLead, SequenceStep, ManualTask
 from .serializers import CampaignSerializer, SequenceStepSerializer, ManualTaskSerializer
 
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 25
+    page_size_query_param = 'page_size'
+
 class CampaignViewSet(viewsets.ModelViewSet):
     serializer_class = CampaignSerializer
     queryset = Campaign.objects.all()
+    pagination_class = StandardResultsSetPagination
 
     def get_queryset(self):
-        return (
+        queryset = (
             Campaign.objects.filter(organization=self.request.user.organization)
             .select_related('connected_account')
             .prefetch_related('steps', 'enrolled_leads')
         )
+        
+        search = self.request.query_params.get('search')
+        status_param = self.request.query_params.get('status')
+        
+        if status_param and status_param != 'all':
+            queryset = queryset.filter(status=status_param)
+            
+        if search:
+            from django.db.models import Q
+            queryset = queryset.filter(
+                Q(name__icontains=search) | Q(status__icontains=search)
+            )
+            
+        return queryset.order_by('-created_at')
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization)

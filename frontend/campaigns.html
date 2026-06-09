@@ -119,6 +119,14 @@
                         <p class="text-muted mt-2 mb-0">Loading campaigns...</p>
                     </div>
                 </div>
+
+                <div class="d-flex justify-content-between align-items-center mt-3" id="pagination-container" style="display: none !important;">
+                    <div class="text-muted small" id="pagination-info"></div>
+                    <nav>
+                        <ul class="pagination pagination-sm mb-0" id="pagination-controls">
+                        </ul>
+                    </nav>
+                </div>
             </section>
         </main>
     </div>
@@ -150,6 +158,9 @@
         let allCampaigns = [];
         let activeFilter = 'all';
         let searchQuery = '';
+        let currentPage = 1;
+        let totalCampaignsCount = 0;
+        let debounceTimer;
 
         const escapeHtml = (value) => String(value ?? '')
             .replaceAll('&', '&amp;')
@@ -227,22 +238,7 @@
         }
 
         function getFilteredCampaigns() {
-            const query = searchQuery.trim().toLowerCase();
-
-            return allCampaigns.filter(campaign => {
-                const status = normalizeStatus(campaign.status);
-                if (activeFilter !== 'all' && status !== activeFilter) return false;
-                if (!query) return true;
-
-                const searchable = [
-                    campaign.name,
-                    status,
-                    String(campaign.enrolled_count || 0),
-                    ...getStepPreview(campaign),
-                ].join(' ').toLowerCase();
-
-                return searchable.includes(query);
-            });
+            return allCampaigns; // Backend handles filtering now
         }
 
         function buildStatusPill(status) {
@@ -368,30 +364,111 @@
 
         function renderApp() {
             setFilterChipState();
+            // Note: renderCounts and renderOverview now only show stats for the loaded page or filtered result.
+            // A dedicated stats endpoint would be needed for global stats when paginated.
             renderCounts();
             renderOverview();
             renderCampaignGrid();
         }
 
-        async function loadCampaigns() {
-            const res = await fetchWithAuth('/campaigns/');
-            if (!res.ok) throw new Error('Failed to load campaigns.');
-            allCampaigns = await res.json();
-            renderApp();
+        function renderPagination(totalCount, nextUrl, prevUrl) {
+            const container = document.getElementById('pagination-container');
+            const info = document.getElementById('pagination-info');
+            const controls = document.getElementById('pagination-controls');
+            
+            if (totalCount === 0) {
+                container.style.setProperty('display', 'none', 'important');
+                return;
+            }
+            container.style.setProperty('display', 'flex', 'important');
+            
+            const pageSize = 25;
+            const start = (currentPage - 1) * pageSize + 1;
+            const end = Math.min(currentPage * pageSize, totalCount);
+            info.textContent = `Showing ${start}-${end} of ${totalCount} campaigns`;
+            
+            const totalPages = Math.ceil(totalCount / pageSize);
+            let html = '';
+            
+            html += `<li class="page-item ${!prevUrl ? 'disabled' : ''}">
+                <a class="page-link" href="#" data-page="${currentPage - 1}">Previous</a>
+            </li>`;
+            
+            for (let i = 1; i <= totalPages; i++) {
+                if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+                    html += `<li class="page-item ${i === currentPage ? 'active' : ''}">
+                        <a class="page-link" href="#" data-page="${i}">${i}</a>
+                    </li>`;
+                } else if (i === currentPage - 2 || i === currentPage + 2) {
+                    html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+                }
+            }
+            
+            html += `<li class="page-item ${!nextUrl ? 'disabled' : ''}">
+                <a class="page-link" href="#" data-page="${currentPage + 1}">Next</a>
+            </li>`;
+            
+            controls.innerHTML = html;
+            
+            controls.querySelectorAll('.page-link').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const page = parseInt(e.target.dataset.page);
+                    if (page && page !== currentPage && page >= 1 && page <= totalPages) {
+                        loadCampaigns(page);
+                    }
+                });
+            });
+        }
+
+        async function loadCampaigns(page = 1) {
+            currentPage = page;
+            const grid = document.getElementById('campaigns-grid');
+            grid.innerHTML = '<div class="col-12 text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="text-muted mt-2 mb-0">Loading campaigns...</p></div>';
+
+            try {
+                let url = '/campaigns/';
+                const params = new URLSearchParams();
+                params.append('page', page);
+                if (searchQuery) params.append('search', searchQuery);
+                if (activeFilter && activeFilter !== 'all') params.append('status', activeFilter);
+                
+                url += '?' + params.toString();
+
+                const res = await fetchWithAuth(url);
+                if (!res.ok) throw new Error('Failed to load campaigns.');
+                
+                const data = await res.json();
+                const isPaginated = !!data.results;
+                allCampaigns = isPaginated ? data.results : data;
+                totalCampaignsCount = isPaginated ? data.count : allCampaigns.length;
+                
+                renderApp();
+                renderPagination(totalCampaignsCount, isPaginated ? data.next : null, isPaginated ? data.previous : null);
+            } catch (error) {
+                console.error(error);
+                grid.innerHTML = `
+                    <div class="col-12">
+                        <div class="alert alert-danger mb-0">Failed to load campaigns. Please refresh.</div>
+                    </div>`;
+            }
         }
 
         document.addEventListener('DOMContentLoaded', async () => {
             document.querySelectorAll('.filter-chip').forEach(button => {
                 button.addEventListener('click', () => {
                     activeFilter = button.dataset.filter;
-                    renderApp();
+                    loadCampaigns(1);
                 });
             });
 
             const searchInput = document.getElementById('campaign-search');
             searchInput.addEventListener('input', () => {
                 searchQuery = searchInput.value || '';
-                renderCampaignGrid();
+                clearTimeout(debounceTimer);
+                debounceTimer = setTimeout(() => {
+                    loadCampaigns(1);
+                }, 300);
             });
 
             try {

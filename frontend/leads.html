@@ -132,6 +132,14 @@
                         </table>
                     </div>
                 </div>
+
+                <div class="d-flex justify-content-between align-items-center mt-3" id="pagination-container" style="display: none !important;">
+                    <div class="text-muted small" id="pagination-info"></div>
+                    <nav>
+                        <ul class="pagination pagination-sm mb-0" id="pagination-controls">
+                        </ul>
+                    </nav>
+                </div>
             </section>
         </main>
     </div>
@@ -245,8 +253,8 @@
             
         }
 
-        function renderStats(leads) {
-            document.getElementById('leads-count').textContent = leads.length;
+        function renderStats(leads, totalCount) {
+            document.getElementById('leads-count').textContent = totalCount !== undefined ? totalCount : leads.length;
             const active = leads.filter(l => !l.global_unsubscribe).length;
             document.getElementById('active-leads-count').textContent = active;
             document.getElementById('unsubscribed-count').textContent = leads.length - active;
@@ -255,8 +263,10 @@
         }
 
         let debounceTimer;
+        let currentPage = 1;
         
-        async function fetchLeads() {
+        async function fetchLeads(page = 1) {
+            currentPage = page;
             const q = (document.getElementById('lead-search').value || '').trim();
             const tag = document.getElementById('tag-filter').value;
             
@@ -266,17 +276,20 @@
             try {
                 let url = '/leads/';
                 const params = new URLSearchParams();
+                params.append('page', page);
                 if (q) params.append('search', q);
                 if (tag) params.append('tag', tag);
                 
-                if (params.toString()) {
-                    url += '?' + params.toString();
-                }
+                url += '?' + params.toString();
 
                 const res = await fetchWithAuth(url);
                 if (res.ok) {
-                    allLeads = await res.json();
-                    renderStats(allLeads);
+                    const data = await res.json();
+                    const isPaginated = !!data.results;
+                    allLeads = isPaginated ? data.results : data;
+                    const totalCount = isPaginated ? data.count : allLeads.length;
+                    
+                    renderStats(allLeads, totalCount);
                     
                     if (allLeads.length === 0 && (q || tag)) {
                         // Empty state for search/filter
@@ -284,16 +297,68 @@
                     } else {
                         renderLeadRows(allLeads);
                     }
+                    
+                    renderPagination(totalCount, isPaginated ? data.next : null, isPaginated ? data.previous : null);
                 }
             } catch (e) {
                 console.error('Error fetching leads:', e);
             }
         }
 
+        function renderPagination(totalCount, nextUrl, prevUrl) {
+            const container = document.getElementById('pagination-container');
+            const info = document.getElementById('pagination-info');
+            const controls = document.getElementById('pagination-controls');
+            
+            if (totalCount === 0) {
+                container.style.setProperty('display', 'none', 'important');
+                return;
+            }
+            container.style.setProperty('display', 'flex', 'important');
+            
+            const pageSize = 25;
+            const start = (currentPage - 1) * pageSize + 1;
+            const end = Math.min(currentPage * pageSize, totalCount);
+            info.textContent = `Showing ${start}-${end} of ${totalCount} leads`;
+            
+            const totalPages = Math.ceil(totalCount / pageSize);
+            let html = '';
+            
+            html += `<li class="page-item ${!prevUrl ? 'disabled' : ''}">
+                <a class="page-link" href="#" data-page="${currentPage - 1}">Previous</a>
+            </li>`;
+            
+            for (let i = 1; i <= totalPages; i++) {
+                if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+                    html += `<li class="page-item ${i === currentPage ? 'active' : ''}">
+                        <a class="page-link" href="#" data-page="${i}">${i}</a>
+                    </li>`;
+                } else if (i === currentPage - 2 || i === currentPage + 2) {
+                    html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+                }
+            }
+            
+            html += `<li class="page-item ${!nextUrl ? 'disabled' : ''}">
+                <a class="page-link" href="#" data-page="${currentPage + 1}">Next</a>
+            </li>`;
+            
+            controls.innerHTML = html;
+            
+            controls.querySelectorAll('.page-link').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const page = parseInt(e.target.dataset.page);
+                    if (page && page !== currentPage && page >= 1 && page <= totalPages) {
+                        fetchLeads(page);
+                    }
+                });
+            });
+        }
+
         function applySearch() {
             clearTimeout(debounceTimer);
             debounceTimer = setTimeout(() => {
-                fetchLeads();
+                fetchLeads(1);
             }, 300);
         }
 
@@ -317,7 +382,7 @@
             }
 
             document.getElementById('lead-search').addEventListener('input', applySearch);
-            document.getElementById('tag-filter').addEventListener('change', fetchLeads);
+            document.getElementById('tag-filter').addEventListener('change', () => fetchLeads(1));
 
             document.getElementById('upload-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
