@@ -23,6 +23,7 @@
 </head>
 
 <body>
+    <div id="sidebar-overlay"></div>
     <div class="app-shell">
         <aside class="sidebar">
             <div class="d-flex align-items-center mb-4 mt-2">
@@ -50,7 +51,7 @@
                     </a>
                 </li>
                 <li class="nav-item mb-2">
-                    <a href="/analytics.html" class="nav-link active d-flex align-items-center">
+                    <a href="/analytics.html" class="nav-link d-flex align-items-center">
                         <i class="bi bi-bar-chart-line me-2"></i> Analytics
                     </a>
                 </li>
@@ -68,6 +69,9 @@
         <main class="main-area">
             <header class="top-header">
                 <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                    <button id="hamburger-btn" class="btn d-lg-none p-1" aria-label="Toggle menu">
+                        <i class="bi bi-list fs-4"></i>
+                    </button>
                     <div>
                         <div class="page-title">Analytics Console</div>
                         <div class="title-meta">Monitor sends, opens, replies, and campaign quality trends.</div>
@@ -122,6 +126,24 @@
                             </button>
                         </div>
                     </div>
+                    <!-- <div id="analytics-empty-state" class="empty-state text-center d-none mt-3"> -->
+                        <div id="analytics-empty-state"
+     class="empty-state analytics-empty-state text-center d-none mt-3">
+    <i class="bi bi-bar-chart-line display-5 text-muted"></i>
+
+    <h5 class="mt-3 mb-2">
+        No campaign data yet
+    </h5>
+
+    <p class="text-muted mb-3">
+        Launch a campaign to start tracking.
+    </p>
+
+    <a href="/campaigns.html" class="btn btn-primary">
+        <i class="bi bi-megaphone me-1"></i>
+        View Campaigns
+    </a>
+</div>
                     <div class="row g-3 mt-2">
                         <div class="col-lg-6">
                             <div class="p-3 rounded-3 panel-muted-box h-100">
@@ -365,30 +387,45 @@
                     },
                 });
             };
-
             const renderCampaignSelector = (campaignList) => {
-                campaignSelect.innerHTML = '';
-                if (!campaignList.length) {
-                    const opt = document.createElement('option');
-                    opt.value = '';
-                    opt.textContent = 'No campaigns found';
-                    campaignSelect.appendChild(opt);
-                    analyzeBtn.disabled = true;
-                    return;
-                }
-                analyzeBtn.disabled = false;
-                const placeholder = document.createElement('option');
-                placeholder.value = '';
-                placeholder.textContent = 'Select a campaign';
-                campaignSelect.appendChild(placeholder);
-                campaignList.forEach(c => {
-                    const opt = document.createElement('option');
-                    opt.value = c.id;
-                    opt.textContent = c.name;
-                    campaignSelect.appendChild(opt);
-                });
-            };
 
+    campaignSelect.innerHTML = '';
+
+    if (!campaignList.length) {
+
+        const emptyState = document.getElementById('analytics-empty-state');
+        if (emptyState) {
+            emptyState.classList.remove('d-none');
+        }
+
+        const inspectorContent = document.querySelector('.campaign-inspector .row');
+        if (inspectorContent) {
+            inspectorContent.classList.add('d-none');
+        }
+
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = 'No campaigns found';
+        campaignSelect.appendChild(opt);
+
+        analyzeBtn.disabled = true;
+        return;
+    }
+
+    analyzeBtn.disabled = false;
+
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Select a campaign';
+    campaignSelect.appendChild(placeholder);
+
+    campaignList.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.name;
+        campaignSelect.appendChild(opt);
+    });
+};
             const renderCampaignAnalysis = (campaign) => {
                 if (!campaign) {
                     summaryEl.textContent = 'Select a campaign to see details.';

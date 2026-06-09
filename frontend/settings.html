@@ -13,6 +13,7 @@
 </head>
 
 <body>
+    <div id="sidebar-overlay"></div>
     <div class="app-shell">
         <aside class="sidebar">
             <div class="d-flex align-items-center mb-4 mt-2">
@@ -45,7 +46,7 @@
                     </a>
                 </li>
                 <li class="nav-item mb-2">
-                    <a href="/settings.html" class="nav-link active d-flex align-items-center">
+                    <a href="/settings.html" class="nav-link d-flex align-items-center">
                         <i class="bi bi-gear me-2"></i> Settings
                     </a>
                 </li>
@@ -58,6 +59,9 @@
         <main class="main-area">
             <header class="top-header">
                 <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                    <button id="hamburger-btn" class="btn d-lg-none p-1" aria-label="Toggle menu">
+                        <i class="bi bi-list fs-4"></i>
+                    </button>
                     <div>
                         <div class="page-title">Workspace Settings</div>
                         <div class="title-meta">Manage profile, organization, sender accounts, and AI personalization.</div>
@@ -96,7 +100,12 @@
                             </div>
                             <div class="mb-3">
                                 <label class="form-label small text-muted fw-semibold">Organization ID</label>
-                                <input type="text" class="form-control" id="org-id" disabled>
+                                <div class="input-group">
+                                    <input type="text" class="form-control" id="org-id" disabled>
+                                    <button class="btn btn-outline-secondary" id="copy-org-id-btn">
+                                        <i class="bi bi-clipboard"></i>
+                                    </button>
+                                </div>
                             </div>
                             <div class="mb-3">
                                 <label class="form-label small text-muted fw-semibold">Gemini API Key</label>
@@ -174,6 +183,21 @@
         const defaultOAuthHost = isLocalhost ? 'http://127.0.0.1:8000' : 'https://leadorbit.onrender.com';
         const oauthHost = apiBaseUrl ? apiBaseUrl.replace(/\/api\/v1$/, '') : defaultOAuthHost;
 
+
+        function copyToClipboard(text, button) {
+            navigator.clipboard.writeText(text).then(() => {
+                const icon = button.querySelector('i');
+
+                icon.classList.remove('bi-clipboard');
+                icon.classList.add('bi-check');
+
+                setTimeout(() => {
+                    icon.classList.remove('bi-check');
+                    icon.classList.add('bi-clipboard');
+                }, 2000);
+            });
+        }
+
         document.addEventListener('DOMContentLoaded', async () => {
             try {
                 const res = await fetchWithAuth('/auth/me/');
@@ -190,6 +214,15 @@
                 console.error(e);
             }
 
+
+            const copyOrgBtn = document.getElementById('copy-org-id-btn');
+
+            copyOrgBtn?.addEventListener('click', () => {
+                const orgId = document.getElementById('org-id').value;
+                copyToClipboard(orgId, copyOrgBtn);
+            });
+            
+            
             const saveBtn = document.getElementById('save-profile-btn');
             if (saveBtn) {
                 saveBtn.addEventListener('click', async () => {

@@ -5,6 +5,30 @@ from tenants.models import Organization
 from users.models import User
 
 
+class RegisterViewTests(APITestCase):
+    def test_register_rejects_duplicate_email_case_insensitive(self):
+        organization = Organization.objects.create(name='Existing Org')
+        User.objects.create_user(
+            email='Admin@Example.com',
+            password='StrongPass123!',
+            organization=organization,
+            role='ADMIN',
+        )
+
+        response = self.client.post(
+            '/api/v1/auth/register/',
+            {
+                'email': 'admin@example.com',
+                'password': 'StrongPass123!',
+                'organization_name': 'New Org',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('email', response.data)
+
+
 class AuthMeViewTests(APITestCase):
     def setUp(self):
         self.organization = Organization.objects.create(name='Org Before')

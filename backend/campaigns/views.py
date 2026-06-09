@@ -133,6 +133,61 @@ class CampaignViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK,
         )
 
+    @action(detail=True, methods=['post'])
+    def pause(self, request, pk=None):
+        campaign = self.get_object()
+
+        if campaign.status != 'ACTIVE':
+            return Response(
+                {
+                    "error": "Only active campaigns can be paused.",
+                    "campaign_id": str(campaign.id),
+                    "status": campaign.status,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        campaign.status = 'PAUSED'
+        campaign.save(update_fields=['status'])
+
+        return Response(
+            {
+                "message": "Campaign paused.",
+                "campaign_id": str(campaign.id),
+                "status": campaign.status,
+            },
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=['post'])
+    def resume(self, request, pk=None):
+        from .tasks import process_active_leads
+
+        campaign = self.get_object()
+
+        if campaign.status != 'PAUSED':
+            return Response(
+                {
+                    "error": "Only paused campaigns can be resumed.",
+                    "campaign_id": str(campaign.id),
+                    "status": campaign.status,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        campaign.status = 'ACTIVE'
+        campaign.save(update_fields=['status'])
+        process_active_leads.delay()
+
+        return Response(
+            {
+                "message": "Campaign resumed. Processing queue triggered.",
+                "campaign_id": str(campaign.id),
+                "status": campaign.status,
+            },
+            status=status.HTTP_200_OK,
+        )
+
 class SequenceStepViewSet(viewsets.ModelViewSet):
     serializer_class = SequenceStepSerializer
     queryset = SequenceStep.objects.all()
@@ -399,7 +454,7 @@ class AIGenerateView(APIView):
     POST /api/v1/campaigns/ai-generate/
     Generate email content using the configured LLM provider for the campaign builder.
     """
-    permission_classes = [AllowAny]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, *args, **kwargs):
         prompt = (request.data.get('prompt') or '').strip()
@@ -469,9 +524,29 @@ class AIGenerateView(APIView):
         return f"SUBJECT: {subject}\nBODY: {body}"
     
 from django.http import HttpResponse
-from pathlib import Path
+from django.middleware.csrf import get_token
 from leads.models import Lead
 from .utils import verify_unsubscribe_token
+
+
+def _unsubscribe_page(title, message, extra_html=''):
+    return (
+        '<!DOCTYPE html>'
+        '<html lang="en">'
+        '<head>'
+        '<meta charset="utf-8">'
+        '<meta name="viewport" content="width=device-width,initial-scale=1">'
+        f'<title>{title} | LeadOrbit</title>'
+        '<style>body{margin:0;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Ubuntu,sans-serif;background:#f8fafc;color:#111827;}'
+        '.container{max-width:720px;margin:72px auto;padding:32px;background:#ffffff;border:1px solid #e5e7eb;border-radius:24px;box-shadow:0 20px 80px rgba(15,23,42,.08);}'
+        'h1{margin-top:0;font-size:2rem;color:#0f172a;}p{font-size:1rem;line-height:1.7;color:#475569;}'
+        'button{margin-top:12px;border:0;border-radius:999px;background:#1d4ed8;color:#fff;font-weight:700;padding:12px 20px;cursor:pointer;}'
+        '</style>'
+        '</head>'
+        f'<body><div class="container"><h1>{title}</h1><p>{message}</p>{extra_html}</div></body>'
+        '</html>'
+    )
+
 
 def unsubscribe_view(request, lead_id, token):
     """Public unsubscribe endpoint for GDPR/CAN-SPAM compliance."""
@@ -491,29 +566,28 @@ def unsubscribe_view(request, lead_id, token):
             status=404,
         )
 
+    if request.method != 'POST':
+        csrf_token = get_token(request)
+        form = (
+            f'<form method="post" action="{request.path}">'
+            f'<input type="hidden" name="csrfmiddlewaretoken" value="{csrf_token}">'
+            '<button type="submit">Confirm unsubscribe</button>'
+            '</form>'
+        )
+        html = _unsubscribe_page(
+            'Confirm unsubscribe',
+            'Please confirm that you want to unsubscribe from future emails sent through LeadOrbit.',
+            form,
+        )
+        return HttpResponse(html, content_type='text/html')
+
     lead.global_unsubscribe = True
     lead.save(update_fields=["global_unsubscribe"])
 
-    confirmation_path = Path(__file__).resolve().parents[2] / 'frontend' / 'unsubscribe.html'
-    if confirmation_path.exists():
-        html = confirmation_path.read_text(encoding='utf-8')
-    else:
-        html = (
-            '<!DOCTYPE html>'
-            '<html lang="en">'
-            '<head>'
-            '<meta charset="utf-8">'
-            '<meta name="viewport" content="width=device-width,initial-scale=1">'
-            '<title>Unsubscribed | LeadOrbit</title>'
-            '<style>body{margin:0;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Ubuntu,sans-serif;background:#f8fafc;color:#111827;}'
-            '.container{max-width:720px;margin:72px auto;padding:32px;background:#ffffff;border:1px solid #e5e7eb;border-radius:24px;box-shadow:0 20px 80px rgba(15,23,42,.08);}'
-            'h1{margin-top:0;font-size:2rem;color:#0f172a;}p{font-size:1rem;line-height:1.7;color:#475569;}a{color:#2563eb;text-decoration:none;}</style>'
-            '</head>'
-            '<body><div class="container"><h1>Unsubscribed</h1>'
-            '<p>You have been unsubscribed from all future emails sent through LeadOrbit.</p>'
-            '<p>If you received this link by mistake, no further action is needed.</p>'
-            '</div></body>'
-            '</html>'
-        )
+    html = _unsubscribe_page(
+        'Unsubscribed',
+        'You have been unsubscribed from all future emails sent through LeadOrbit.',
+        '<p>If you received this link by mistake, no further action is needed.</p>',
+    )
 
     return HttpResponse(html, content_type='text/html')

@@ -13,6 +13,7 @@
 </head>
 
 <body>
+    <div id="sidebar-overlay"></div>
     <div class="app-shell">
         <aside class="sidebar p-3 d-flex flex-column">
             <div class="d-flex align-items-center mb-4 mt-2">
@@ -35,7 +36,7 @@
                     </a>
                 </li>
                 <li class="nav-item mb-2">
-                    <a href="/campaigns.html" class="nav-link active d-flex align-items-center">
+                    <a href="/campaigns.html" class="nav-link d-flex align-items-center">
                         <i class="bi bi-megaphone me-2"></i> Campaigns
                     </a>
                 </li>
@@ -58,6 +59,9 @@
         <main class="main-area">
             <header class="top-header p-3">
                 <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                    <button id="hamburger-btn" class="btn d-lg-none p-1" aria-label="Toggle menu">
+                        <i class="bi bi-list fs-4"></i>
+                    </button>
                     <div>
                         <div class="page-title">Campaign Command Center</div>
                         <div class="title-meta">Build, monitor, and launch outreach sequences faster.</div>
@@ -256,7 +260,8 @@
                         <div class="empty-state text-center">
                             <i class="bi bi-megaphone display-6 text-muted"></i>
                             <h5 class="mt-3 mb-2">No campaigns found</h5>
-                            <p class="text-muted mb-3">Try another filter or create a brand new sequence.</p>
+
+                            <p class="text-muted mb-3">Build your first outreach sequence!</p>
                             <a href="/campaign-builder.html" class="btn btn-primary">
                                 <i class="bi bi-plus-lg me-1"></i> Create Campaign
                             </a>
@@ -273,9 +278,18 @@
                     ? previewSteps.map(label => `<span class="step-chip"><i class="bi bi-dot"></i>${escapeHtml(label)}</span>`).join('')
                     : '<span class="text-muted small">No sequence steps configured</span>';
 
-                const toggleTarget = status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
-                const toggleLabel = status === 'ACTIVE' ? 'Pause' : 'Activate';
-                const toggleIcon = status === 'ACTIVE' ? 'bi-pause-circle' : 'bi-play-circle';
+                const actionDetails = {
+                    ACTIVE: { endpoint: 'pause', nextStatus: 'PAUSED', label: 'Pause', icon: 'bi-pause-circle' },
+                    PAUSED: { endpoint: 'resume', nextStatus: 'ACTIVE', label: 'Resume', icon: 'bi-play-circle' },
+                    DRAFT: { endpoint: 'launch', nextStatus: 'ACTIVE', label: 'Launch', icon: 'bi-rocket-takeoff' },
+                }[status];
+                const actionButton = actionDetails ? `
+                                    <button class="btn btn-sm btn-outline-success"
+                                        data-action-id="${campaign.id}"
+                                        data-action-endpoint="${actionDetails.endpoint}"
+                                        data-next-status="${actionDetails.nextStatus}">
+                                        <i class="bi ${actionDetails.icon} me-1"></i>${actionDetails.label}
+                                    </button>` : '';
 
                 return `
                     <div class="col-12 col-md-6 col-xl-4">
@@ -311,31 +325,26 @@
                                     <a href="/campaign-builder.html?id=${campaign.id}" class="btn btn-sm btn-outline-primary flex-grow-1">
                                         <i class="bi bi-pencil me-1"></i> Edit
                                     </a>
-                                    <button class="btn btn-sm btn-outline-success"
-                                        data-toggle-id="${campaign.id}"
-                                        data-current-status="${status}"
-                                        data-toggle-target="${toggleTarget}">
-                                        <i class="bi ${toggleIcon} me-1"></i>${toggleLabel}
-                                    </button>
+                                    ${actionButton}
                                 </div>
                             </div>
                         </div>
                     </div>`;
             }).join('');
 
-            grid.querySelectorAll('[data-toggle-id]').forEach(button => {
+            grid.querySelectorAll('[data-action-id]').forEach(button => {
                 button.addEventListener('click', async () => {
-                    const campaignId = button.dataset.toggleId;
-                    const nextStatus = button.dataset.toggleTarget;
+                    const campaignId = button.dataset.actionId;
+                    const endpoint = button.dataset.actionEndpoint;
+                    const nextStatus = button.dataset.nextStatus;
                     const originalLabel = button.innerHTML;
 
                     button.disabled = true;
                     button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Updating';
 
                     try {
-                        const res = await fetchWithAuth(`/campaigns/${campaignId}/`, {
-                            method: 'PATCH',
-                            body: JSON.stringify({ status: nextStatus }),
+                        const res = await fetchWithAuth(`/campaigns/${campaignId}/${endpoint}/`, {
+                            method: 'POST',
                         });
 
                         if (!res.ok) {

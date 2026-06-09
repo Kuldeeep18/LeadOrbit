@@ -942,6 +942,63 @@ class CampaignWorkflowTests(APITestCase):
         response = self.client.post(f'/api/v1/campaigns/{campaign.id}/launch/', {}, format='json')
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
 
+    def test_pause_action_pauses_active_campaign(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Pause active campaign',
+            status='ACTIVE',
+        )
+
+        response = self.client.post(f'/api/v1/campaigns/{campaign.id}/pause/', {}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        campaign.refresh_from_db()
+        self.assertEqual(campaign.status, 'PAUSED')
+        self.assertEqual(response.data['status'], 'PAUSED')
+
+    def test_pause_rejects_non_active_campaign(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Pause draft campaign',
+            status='DRAFT',
+        )
+
+        response = self.client.post(f'/api/v1/campaigns/{campaign.id}/pause/', {}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        campaign.refresh_from_db()
+        self.assertEqual(campaign.status, 'DRAFT')
+
+    @override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+    def test_resume_action_activates_paused_campaign_and_triggers_processing(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Resume paused campaign',
+            status='PAUSED',
+        )
+
+        with patch('campaigns.tasks.process_active_leads.delay') as mocked_delay:
+            response = self.client.post(f'/api/v1/campaigns/{campaign.id}/resume/', {}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        campaign.refresh_from_db()
+        self.assertEqual(campaign.status, 'ACTIVE')
+        self.assertEqual(response.data['status'], 'ACTIVE')
+        mocked_delay.assert_called_once()
+
+    def test_resume_rejects_non_paused_campaign(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Resume active campaign',
+            status='ACTIVE',
+        )
+
+        response = self.client.post(f'/api/v1/campaigns/{campaign.id}/resume/', {}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        campaign.refresh_from_db()
+        self.assertEqual(campaign.status, 'ACTIVE')
+
     def test_condition_time_is_mapped_to_delay_minutes(self):
         payload = {
             'name': 'Condition delay mapping',
@@ -1010,6 +1067,18 @@ class CampaignWorkflowTests(APITestCase):
         self.assertTrue(response.data.get('fallback'))
         self.assertIn('SUBJECT:', response.data.get('generated', ''))
 
+    @override_settings(GEMINI_API_KEY='')
+    def test_ai_generate_requires_authentication(self):
+        self.client.force_authenticate(user=None)
+
+        response = self.client.post(
+            '/api/v1/campaigns/ai-generate/',
+            {'prompt': 'Write an outreach email'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
     def test_dashboard_analytics_isolates_data_by_tenant(self):
         org2 = Organization.objects.create(name='Other Corp')
         other_user = User.objects.create_user(
@@ -1056,7 +1125,7 @@ class CampaignWorkflowTests(APITestCase):
         response = self.client.get('/api/v1/analytics/dashboard/')
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
-    def test_unsubscribe_view_marks_lead_unsubscribed(self):
+    def test_unsubscribe_get_shows_confirmation_without_updating_lead(self):
         lead = Lead.objects.create(
             organization=self.organization,
             email='unsubscribe@acme.test',
@@ -1064,6 +1133,21 @@ class CampaignWorkflowTests(APITestCase):
         token = generate_unsubscribe_token(lead.id)
 
         response = self.client.get(f'/api/v1/unsubscribe/{lead.id}/{token}/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('Confirm unsubscribe', response.content.decode('utf-8'))
+        self.assertIn('method="post"', response.content.decode('utf-8'))
+
+        lead.refresh_from_db()
+        self.assertFalse(lead.global_unsubscribe)
+
+    def test_unsubscribe_post_marks_lead_unsubscribed(self):
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='unsubscribe@acme.test',
+        )
+        token = generate_unsubscribe_token(lead.id)
+
+        response = self.client.post(f'/api/v1/unsubscribe/{lead.id}/{token}/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('You have been unsubscribed', response.content.decode('utf-8'))
 

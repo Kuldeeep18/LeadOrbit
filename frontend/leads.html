@@ -13,6 +13,7 @@
 </head>
 
 <body>
+    <div id="sidebar-overlay"></div>
     <div class="app-shell">
         <aside class="sidebar">
             <div class="d-flex align-items-center mb-4 mt-2">
@@ -58,6 +59,9 @@
         <main class="main-area">
             <header class="top-header">
                 <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                    <button id="hamburger-btn" class="btn d-lg-none p-1" aria-label="Toggle menu">
+                        <i class="bi bi-list fs-4"></i>
+                    </button>
                     <div>
                         <div class="page-title">Lead Workspace</div>
                         <div class="title-meta">Upload, review, and segment leads for campaign enrollment.</div>
@@ -165,20 +169,61 @@
 
         let allLeads = [];
 
+        function copyToClipboard(text, button) {
+            navigator.clipboard.writeText(text).then(() => {
+                const icon = button.querySelector('i');
+
+                icon.classList.remove('bi-clipboard');
+                icon.classList.add('bi-check');
+
+                setTimeout(() => {
+                    icon.classList.remove('bi-check');
+                    icon.classList.add('bi-clipboard');
+                }, 2000);
+            });
+        }
+
         function renderLeadRows(leads) {
             const tbody = document.getElementById('leads-table-body');
             if (leads.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="text-center py-5 text-muted">
-                    <i class="bi bi-people" style="font-size: 2rem;"></i>
-                    <p class="mt-2 mb-0">No leads found in this account.</p>
-                </td></tr>`;
+             tbody.innerHTML = `
+<tr>
+    <td colspan="6" class="text-center py-5">
+        <div class="empty-state">
+            <i class="bi bi-people display-4 text-secondary"></i>
+
+            <h5 class="mt-3 mb-2">
+                No leads yet
+            </h5>
+
+            <p class="text-muted mb-3">
+                Import your first CSV to get started!
+            </p>
+
+            <button
+                class="btn btn-primary btn-sm"
+                data-bs-toggle="modal"
+                data-bs-target="#uploadModal">
+                <i class="bi bi-upload me-1"></i>
+                Import CSV
+            </button>
+        </div>
+    </td>
+</tr>`;
                 return;
             }
 
             tbody.innerHTML = leads.map(lead => `
                 <tr>
                     <td class="fw-semibold">${lead.first_name || ''} ${lead.last_name || ''}</td>
-                    <td>${lead.email}</td>
+                    <td>
+                        <span>${lead.email}</span>
+                        <button
+                            class="btn btn-sm btn-outline-secondary copy-email-btn"
+                            data-email="${lead.email}">
+                            <i class="bi bi-clipboard"></i>
+                        </button>
+                    </td>
                     <td>${lead.phone || '<span class="text-muted">-</span>'}</td>
                     <td>${lead.company || '<span class="text-muted">-</span>'}</td>
                     <td><span class="chip" style="background:#e0f2fe;color:#0369a1;">${lead.score}</span></td>
@@ -187,6 +232,13 @@
                         : '<span class="chip" style="background:#dcfce7;color:#166534;">Active</span>'}</td>
                 </tr>
             `).join('');
+
+            document.querySelectorAll('.copy-email-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    copyToClipboard(btn.dataset.email, btn);
+                });
+            });
+            
         }
 
         function renderStats(leads) {

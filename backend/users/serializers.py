@@ -20,6 +20,11 @@ class RegisterSerializer(serializers.Serializer):
     first_name = serializers.CharField(required=False)
     last_name = serializers.CharField(required=False)
 
+    def validate_email(self, value):
+        if User.objects.filter(email__iexact=value).exists():
+            raise serializers.ValidationError('A user with this email already exists.')
+        return value
+
     def create(self, validated_data):
         org = Organization.objects.create(name=validated_data['organization_name'])
         user = User.objects.create_user(

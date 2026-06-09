@@ -32,7 +32,6 @@
             padding: 0 20px;
             z-index: 10;
         }
-
         .top-bar .campaign-name {
             border: none;
             background: transparent;
@@ -838,6 +837,40 @@
 
             .template-grid {
                 grid-template-columns: 1fr;
+            }
+        }
+
+        @media (max-width: 767px) {
+            .top-bar {
+                height: auto;
+                flex-wrap: wrap;
+                gap: 8px;
+                padding: 10px 12px;
+            }
+
+            .top-bar .campaign-name {
+                width: 160px;
+                font-size: 0.9rem;
+            }
+
+            .tab-pills .tab {
+                padding: 5px 10px;
+                font-size: 0.78rem;
+            }
+
+            .main-layout {
+                flex-direction: column;
+                height: auto;
+            }
+
+            .editor-panel {
+                width: 100% !important;
+                border-left: none;
+                border-top: 1px solid #e2e8f0;
+            }
+
+            .canvas-area {
+                min-height: 50vh;
             }
         }
     </style>
