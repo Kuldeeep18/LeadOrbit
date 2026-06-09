@@ -2,8 +2,17 @@ from rest_framework import viewsets, parsers, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
+from django.http import StreamingHttpResponse
+import csv
 from .models import Lead, Tag
 from .serializers import LeadSerializer, TagSerializer
+
+class Echo:
+    """An object that implements just the write method of the file-like interface."""
+    def write(self, value):
+        """Write the value by returning it, instead of storing in a buffer."""
+        return value
+
 
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 25
@@ -60,6 +69,39 @@ class LeadViewSet(viewsets.ModelViewSet):
         import_leads_from_csv.delay(file_contents, request.user.organization.id)
         
         return Response({"message": "File received. Processing in background.", "filename": file_obj.name}, status=status.HTTP_202_ACCEPTED)
+
+    @action(detail=False, methods=['get'])
+    def export(self, request):
+        queryset = Lead.objects.filter(organization=request.user.organization).prefetch_related('lead_tags__tag')
+
+        def iter_items():
+            yield [
+                'first_name', 'last_name', 'email', 'company', 'phone',
+                'linkedin_url', 'score', 'tags', 'created_at'
+            ]
+            for lead in queryset:
+                tags = ", ".join([lt.tag.name for lt in lead.lead_tags.all()])
+                yield [
+                    lead.first_name or '',
+                    lead.last_name or '',
+                    lead.email or '',
+                    lead.company or '',
+                    lead.phone or '',
+                    lead.linkedin_url or '',
+                    lead.score,
+                    tags,
+                    lead.created_at.strftime('%Y-%m-%d %H:%M:%S') if lead.created_at else ''
+                ]
+
+        pseudo_buffer = Echo()
+        writer = csv.writer(pseudo_buffer)
+        
+        response = StreamingHttpResponse(
+            (writer.writerow(row) for row in iter_items()),
+            content_type="text/csv"
+        )
+        response['Content-Disposition'] = 'attachment; filename="leads_export.csv"'
+        return response
 
 class TagViewSet(viewsets.ModelViewSet):
     serializer_class = TagSerializer

@@ -76,6 +76,9 @@
                         <select id="tag-filter" class="form-select form-select-sm" style="width: auto;">
                             <option value="">All Tags</option>
                         </select>
+                        <button id="export-btn" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-download me-1"></i> Export CSV
+                        </button>
                         <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#uploadModal">
                             <i class="bi bi-upload me-1"></i> Import CSV
                         </button>
@@ -383,6 +386,40 @@
 
             document.getElementById('lead-search').addEventListener('input', applySearch);
             document.getElementById('tag-filter').addEventListener('change', () => fetchLeads(1));
+
+            const exportBtn = document.getElementById('export-btn');
+            if (exportBtn) {
+                exportBtn.addEventListener('click', async () => {
+                    const originalHtml = exportBtn.innerHTML;
+                    exportBtn.disabled = true;
+                    exportBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Exporting...';
+                    
+                    try {
+                        const res = await fetchWithAuth('/leads/export/');
+                        if (res.ok) {
+                            const blob = await res.blob();
+                            const url = window.URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.style.display = 'none';
+                            a.href = url;
+                            a.download = 'leads_export.csv';
+                            document.body.appendChild(a);
+                            a.click();
+                            window.URL.revokeObjectURL(url);
+                            document.body.removeChild(a);
+                            showToast('Export successful!', 'success');
+                        } else {
+                            showToast('Failed to export leads.', 'error');
+                        }
+                    } catch (err) {
+                        console.error('Export error:', err);
+                        showToast(`Error: ${err.message}`, 'error');
+                    } finally {
+                        exportBtn.disabled = false;
+                        exportBtn.innerHTML = originalHtml;
+                    }
+                });
+            }
 
             document.getElementById('upload-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
