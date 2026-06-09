@@ -124,6 +124,24 @@ def import_leads_from_csv(file_contents, organization_id, job_id=None):
         phone = _get_field(normalized_row, 'phone', 'phoneNumber', 'phone_number', 'mobile', 'phone number')
         custom_variables = _extract_custom_variables(row)
 
+        standard_keys = [
+            'email', 'work_email', 'email_address',
+            'firstName', 'first_name', 'firstname', 'first name',
+            'lastName', 'last_name', 'lastname', 'last name',
+            'companyName', 'company', 'company_name', 'organization',
+            'linkedinUrl', 'linkedin_url', 'linkedin', 'linkedin_profile',
+            'phone', 'phoneNumber', 'phone_number', 'mobile', 'phone number'
+        ]
+        standard_normalized_keys = {_normalize_key(k) for k in standard_keys}
+
+        custom_data = {}
+        for original_key, original_value in row.items():
+            if not original_key:
+                continue
+            norm_key = _normalize_key(original_key)
+            if norm_key not in standard_normalized_keys and original_value:
+                custom_data[original_key] = original_value.strip()
+
         # Normalize phone to E.164 format (add +91 for 10-digit Indian numbers)
         if phone and not phone.startswith('+'):
             phone = re.sub(r'[^0-9]', '', phone)  # strip non-digits
@@ -146,6 +164,7 @@ def import_leads_from_csv(file_contents, organization_id, job_id=None):
                     'linkedin_url': linkedin_url or None,
                     'phone': phone or None,
                     'custom_variables': custom_variables,
+                    'custom_data': custom_data,
                 }
             )
         except Exception as exc:
@@ -158,7 +177,6 @@ def import_leads_from_csv(file_contents, organization_id, job_id=None):
             })
             logger.exception("Failed to import lead row %s for organization %s", row_number, org.id)
             continue
-
         if created:
             leads_created += 1
         else:
