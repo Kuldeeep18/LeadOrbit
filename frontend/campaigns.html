@@ -376,6 +376,9 @@
                                     <a href="/campaign-builder.html?id=${campaign.id}" class="btn btn-sm btn-outline-primary flex-grow-1">
                                        <i class="bi bi-pencil me-1" aria-hidden="true"></i> Edit
                                     </a>
+                                    <button class="btn btn-sm btn-outline-secondary btn-duplicate" data-duplicate-id="${campaign.id}" title="Duplicate Campaign">
+                                        <i class="bi bi-files"></i>
+                                    </button>
                                     ${actionButton}
                                     <button class="btn btn-sm btn-outline-danger flex-grow-1"
                                         data-delete-id="${campaign.id}"
@@ -387,6 +390,35 @@
                         </div>
                     </div>`;
             }).join('');
+
+            grid.querySelectorAll('.btn-duplicate').forEach(button => {
+                button.addEventListener('click', async () => {
+                    const campaignId = button.dataset.duplicateId;
+                    const originalHtml = button.innerHTML;
+                    button.disabled = true;
+                    button.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+                    try {
+                        const res = await fetchWithAuth(`/campaigns/${campaignId}/duplicate/`, {
+                            method: 'POST',
+                        });
+
+                        if (!res.ok) {
+                            throw new Error('Failed to duplicate campaign.');
+                        }
+
+                        const newCampaign = await res.json();
+                        showToast('Campaign duplicated successfully.', 'success');
+                        setTimeout(() => {
+                            window.location.href = `/campaign-builder.html?id=${newCampaign.id}`;
+                        }, 500);
+                    } catch (error) {
+                        button.disabled = false;
+                        button.innerHTML = originalHtml;
+                        showToast(error.message || 'Could not duplicate campaign.', 'error');
+                    }
+                });
+            });
 
             grid.querySelectorAll('[data-action-id]').forEach(button => {
                 button.addEventListener('click', async () => {
