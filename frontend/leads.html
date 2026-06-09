@@ -73,6 +73,9 @@
                                 <input type="text" id="lead-search" class="form-control" placeholder="Search name, email, company">
                             </div>
                         </div>
+                        <select id="tag-filter" class="form-select form-select-sm" style="width: auto;">
+                            <option value="">All Tags</option>
+                        </select>
                         <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#uploadModal">
                             <i class="bi bi-upload me-1"></i> Import CSV
                         </button>
@@ -251,32 +254,70 @@
             document.getElementById('avg-score').textContent = avgScore;
         }
 
-        function applySearch() {
-            const q = (document.getElementById('lead-search').value || '').trim().toLowerCase();
-            if (!q) {
-                renderLeadRows(allLeads);
-                return;
-            }
-            const filtered = allLeads.filter(lead => {
-                const row = `${lead.first_name || ''} ${lead.last_name || ''} ${lead.email || ''} ${lead.company || ''}`.toLowerCase();
-                return row.includes(q);
-            });
-            renderLeadRows(filtered);
-        }
+        let debounceTimer;
+        
+        async function fetchLeads() {
+            const q = (document.getElementById('lead-search').value || '').trim();
+            const tag = document.getElementById('tag-filter').value;
+            
+            const tbody = document.getElementById('leads-table-body');
+            tbody.innerHTML = `<tr><td colspan="6" class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>Loading...</td></tr>`;
 
-        document.addEventListener('DOMContentLoaded', async () => {
             try {
-                const res = await fetchWithAuth('/leads/');
+                let url = '/leads/';
+                const params = new URLSearchParams();
+                if (q) params.append('search', q);
+                if (tag) params.append('tag', tag);
+                
+                if (params.toString()) {
+                    url += '?' + params.toString();
+                }
+
+                const res = await fetchWithAuth(url);
                 if (res.ok) {
                     allLeads = await res.json();
                     renderStats(allLeads);
-                    renderLeadRows(allLeads);
+                    
+                    if (allLeads.length === 0 && (q || tag)) {
+                        // Empty state for search/filter
+                        tbody.innerHTML = `<tr><td colspan="6" class="text-center py-5"><div class="empty-state"><i class="bi bi-search display-4 text-secondary"></i><h5 class="mt-3 mb-2">No results found</h5><p class="text-muted mb-0">Try adjusting your search or filters.</p></div></td></tr>`;
+                    } else {
+                        renderLeadRows(allLeads);
+                    }
                 }
             } catch (e) {
                 console.error('Error fetching leads:', e);
             }
+        }
+
+        function applySearch() {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                fetchLeads();
+            }, 300);
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            fetchLeads();
+            
+            try {
+                const res = await fetchWithAuth('/tags/');
+                if (res.ok) {
+                    const tags = await res.json();
+                    const tagSelect = document.getElementById('tag-filter');
+                    tags.forEach(tag => {
+                        const option = document.createElement('option');
+                        option.value = tag.id;
+                        option.textContent = tag.name;
+                        tagSelect.appendChild(option);
+                    });
+                }
+            } catch (e) {
+                console.error('Error fetching tags:', e);
+            }
 
             document.getElementById('lead-search').addEventListener('input', applySearch);
+            document.getElementById('tag-filter').addEventListener('change', fetchLeads);
 
             document.getElementById('upload-form').addEventListener('submit', async (e) => {
                 e.preventDefault();

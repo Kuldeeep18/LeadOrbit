@@ -10,7 +10,24 @@ class LeadViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         # Do not rely only on thread-local tenant middleware for JWT requests.
-        return Lead.objects.filter(organization=self.request.user.organization)
+        from django.db.models import Q
+        queryset = Lead.objects.filter(organization=self.request.user.organization)
+
+        search = self.request.query_params.get('search')
+        tag = self.request.query_params.get('tag')
+
+        if search:
+            queryset = queryset.filter(
+                Q(email__icontains=search) |
+                Q(first_name__icontains=search) |
+                Q(last_name__icontains=search) |
+                Q(company__icontains=search)
+            )
+
+        if tag:
+            queryset = queryset.filter(lead_tags__tag__id=tag)
+
+        return queryset
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization)
