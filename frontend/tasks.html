@@ -126,6 +126,7 @@
     <script type="module" src="/main.js"></script>
     <script type="module">
         import { fetchWithAuth } from '/api.js';
+        import { showToast } from '/toast.js';
 
         let currentTaskId = null;
         let taskModal = null;
@@ -224,7 +225,7 @@
                 loadTasks(); // Reload the list
             } catch (err) {
                 console.error(err);
-                alert(`Error: Could not ${action} the task.`);
+                showToast(`Error: Could not ${action} the task.`, 'error');
             } finally {
                 btn.textContent = originalText;
                 btn.disabled = false;
