@@ -2,6 +2,8 @@ from django.db.models import Q
 from rest_framework import viewsets, parsers, status
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action
+from django.http import StreamingHttpResponse
+import csv
 from rest_framework.response import Response
 from users.permissions import IsOrgManager
 from .models import BlockedDomain, Lead, LeadImportJob, Tag, LeadTag
@@ -10,6 +12,12 @@ from .serializers import BlockedDomainSerializer, LeadImportJobSerializer, LeadS
 
 class LeadImportJobPagination(PageNumberPagination):
     page_size = 10
+
+class Echo:
+    """An object that implements just the write method of the file-like interface."""
+    def write(self, value):
+        """Write the value by returning it, instead of storing in a buffer."""
+        return value
 
 
 class LeadViewSet(viewsets.ModelViewSet):
@@ -151,6 +159,39 @@ class LeadViewSet(viewsets.ModelViewSet):
         # Return the updated tag list
         updated_tags = Tag.objects.filter(tagged_leads__lead=lead)
         return Response(TagSerializer(updated_tags, many=True).data, status=status.HTTP_200_OK)
+
+    @action(detail=False, methods=['get'])
+    def export(self, request):
+        queryset = Lead.objects.filter(organization=request.user.organization).prefetch_related('lead_tags__tag')
+
+        def iter_items():
+            yield [
+                'first_name', 'last_name', 'email', 'company', 'phone',
+                'linkedin_url', 'score', 'tags', 'created_at'
+            ]
+            for lead in queryset:
+                tags = ", ".join([lt.tag.name for lt in lead.lead_tags.all()])
+                yield [
+                    lead.first_name or '',
+                    lead.last_name or '',
+                    lead.email or '',
+                    lead.company or '',
+                    lead.phone or '',
+                    lead.linkedin_url or '',
+                    lead.score,
+                    tags,
+                    lead.created_at.strftime('%Y-%m-%d %H:%M:%S') if lead.created_at else ''
+                ]
+
+        pseudo_buffer = Echo()
+        writer = csv.writer(pseudo_buffer)
+        
+        response = StreamingHttpResponse(
+            (writer.writerow(row) for row in iter_items()),
+            content_type="text/csv"
+        )
+        response['Content-Disposition'] = 'attachment; filename="leads_export.csv"'
+        return response
 
 
 class LeadImportJobViewSet(viewsets.ReadOnlyModelViewSet):
