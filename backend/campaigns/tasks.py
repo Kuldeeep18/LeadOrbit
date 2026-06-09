@@ -434,6 +434,7 @@ def send_email_step(campaign_lead_id, step_id):
                 )
                 clead.last_sent_message_id = message_id
                 clead.save(update_fields=['last_sent_message_id'])
+                clead.lead.recalculate_score()
                 logger.info(f"Gmail SENT to {clead.lead.email} | msg_id={message_id}")
             except Exception as gmail_err:
                 logger.error(f"Gmail API send failed for {clead.lead.email}: {gmail_err}")
@@ -579,6 +580,7 @@ def poll_gmail_for_replies():
                 if uses_reply_yes_branch:
                     clead.last_replied_at = timezone.now()
                     clead.save(update_fields=['last_replied_at'])
+                    clead.lead.recalculate_score()
                     total_replies += 1
                     logger.info(
                         f"Reply detected for {clead.lead.email} in campaign {clead.campaign.name}; "
@@ -610,6 +612,7 @@ def poll_gmail_for_replies():
 
                 clead.status = 'REPLIED'
                 clead.save(update_fields=['status'])
+                clead.lead.recalculate_score()
                 total_replies += 1
                 logger.info(f"Reply detected for {clead.lead.email} in campaign {clead.campaign.name}")
                 _maybe_mark_campaign_completed(clead.campaign)

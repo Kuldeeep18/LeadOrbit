@@ -3,7 +3,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from leads.models import Lead
+from leads.models import Lead, update_lead_score
 
 from .models import Campaign, CampaignLead, SequenceStep
 from .serializers import CampaignSerializer, SequenceStepSerializer
@@ -263,6 +263,8 @@ class WebhookView(APIView):
                         cl.save(update_fields=['last_clicked_at'])
                         if cl.current_step and cl.current_step.channel_type == 'CONDITION_CLICK':
                             _execute_condition_click_step(cl, cl.current_step, now=now)
+
+                    update_lead_score(cl.lead)
             except Exception as e:
                 pass
                 

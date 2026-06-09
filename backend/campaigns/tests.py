@@ -1125,6 +1125,65 @@ class CampaignWorkflowTests(APITestCase):
         response = self.client.get('/api/v1/analytics/dashboard/')
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
+    def test_lead_score_recalculates_from_campaign_engagement(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Score test',
+            status='ACTIVE',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='score@acme.test',
+        )
+        CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='REPLIED',
+            last_sent_message_id='msg-1',
+            last_opened_at=timezone.now(),
+            last_clicked_at=timezone.now(),
+            last_replied_at=timezone.now(),
+        )
+
+        score = lead.recalculate_score()
+
+        self.assertEqual(score, 41)
+        lead.refresh_from_db()
+        self.assertEqual(lead.score, 41)
+
+    def test_webhook_updates_lead_score_after_engagement_event(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Webhook score test',
+            status='ACTIVE',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='webhook-score@acme.test',
+        )
+        CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='ACTIVE',
+            last_sent_message_id='webhook-msg',
+        )
+
+        response = self.client.post(
+            '/api/v1/webhooks/email/',
+            {
+                'event': 'open',
+                'email': lead.email,
+                'message_id': 'webhook-msg',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        lead.refresh_from_db()
+        self.assertEqual(lead.score, 6)
+
     def test_unsubscribe_get_shows_confirmation_without_updating_lead(self):
         lead = Lead.objects.create(
             organization=self.organization,
