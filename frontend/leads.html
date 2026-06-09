@@ -881,6 +881,7 @@
                     }
                 } catch (err) {
                     statusEl.innerHTML = `<span class="text-danger">Error: ${err.message}</span>`;
+                    showToast(`Error: ${err.message}`, 'error');
                 } finally {
                     btn.disabled = false;
                     btn.innerHTML = '<i class="bi bi-cloud-upload me-1" aria-hidden="true"></i> Upload and Process';
