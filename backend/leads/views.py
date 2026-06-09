@@ -11,6 +11,9 @@ from .serializers import BlockedDomainSerializer, LeadImportJobSerializer, LeadS
 class LeadImportJobPagination(PageNumberPagination):
     page_size = 10
 
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 25
+    page_size_query_param = 'page_size'
 
 class LeadViewSet(viewsets.ModelViewSet):
     serializer_class = LeadSerializer
@@ -24,6 +27,8 @@ class LeadViewSet(viewsets.ModelViewSet):
         'import_csv',
         'assign_tags',
     })
+
+    pagination_class = StandardResultsSetPagination
 
     def get_permissions(self):
         permissions = super().get_permissions()

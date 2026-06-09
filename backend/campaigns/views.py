@@ -10,6 +10,7 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.pagination import PageNumberPagination
 
 from leads.models import Lead
 from users.permissions import IsOrgManager
@@ -18,6 +19,10 @@ from .models import Campaign, CampaignLead, SequenceStep, EmailTemplate, ManualT
 from .serializers import CampaignSerializer, SequenceStepSerializer, EmailTemplateSerializer, ManualTaskSerializer
 
 logger = logging.getLogger(__name__)
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 25
+    page_size_query_param = 'page_size'
 
 class CampaignViewSet(viewsets.ModelViewSet):
     serializer_class = CampaignSerializer
@@ -33,6 +38,8 @@ class CampaignViewSet(viewsets.ModelViewSet):
         'resume',
     })
 
+    pagination_class = StandardResultsSetPagination
+
     def get_permissions(self):
         permissions = super().get_permissions()
         if self.action in self.manager_actions:
@@ -40,11 +47,25 @@ class CampaignViewSet(viewsets.ModelViewSet):
         return permissions
 
     def get_queryset(self):
-        return (
+        queryset = (
             Campaign.objects.filter(organization=self.request.user.organization)
             .select_related('connected_account')
             .prefetch_related('steps', 'enrolled_leads')
         )
+        
+        search = self.request.query_params.get('search')
+        status_param = self.request.query_params.get('status')
+        
+        if status_param and status_param != 'all':
+            queryset = queryset.filter(status=status_param)
+            
+        if search:
+            from django.db.models import Q
+            queryset = queryset.filter(
+                Q(name__icontains=search) | Q(status__icontains=search)
+            )
+            
+        return queryset.order_by('-created_at')
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization)

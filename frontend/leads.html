@@ -630,8 +630,8 @@
             });
         }
 
-        function renderStats(leads) {
-            document.getElementById('leads-count').textContent = leads.length;
+        function renderStats(leads, totalCount) {
+            document.getElementById('leads-count').textContent = totalCount !== undefined ? totalCount : leads.length;
             const active = leads.filter(l => !l.global_unsubscribe).length;
             document.getElementById('active-leads-count').textContent = active;
             document.getElementById('unsubscribed-count').textContent = leads.length - active;
@@ -640,6 +640,8 @@
                 : '0.0';
             document.getElementById('avg-score').textContent = avgScore;
         }
+
+        let currentPage = 1;
 
         // ─── Filter Panel ────────────────────────────────────────────────────
 
@@ -751,7 +753,9 @@
             }
         }
 
-        async function fetchLeadsWithFilters(params = {}) {
+        async function fetchLeadsWithFilters(params = {}, page = 1) {
+            currentPage = page;
+            params.page = page;
             const qs = new URLSearchParams(params).toString();
             const endpoint = qs ? `/leads/?${qs}` : '/leads/';
             const res = await fetchWithAuth(endpoint);
@@ -759,16 +763,72 @@
             return res.json();
         }
 
-        async function applyFilters() {
+        function renderPagination(totalCount, nextUrl, prevUrl) {
+            const container = document.getElementById('pagination-container');
+            const info = document.getElementById('pagination-info');
+            const controls = document.getElementById('pagination-controls');
+            
+            if (!container) return;
+
+            if (totalCount === 0) {
+                container.style.setProperty('display', 'none', 'important');
+                return;
+            }
+            container.style.setProperty('display', 'flex', 'important');
+            
+            const pageSize = 25;
+            const start = (currentPage - 1) * pageSize + 1;
+            const end = Math.min(currentPage * pageSize, totalCount);
+            if(info) info.textContent = `Showing ${start}-${end} of ${totalCount} leads`;
+            
+            const totalPages = Math.ceil(totalCount / pageSize);
+            let html = '';
+            
+            html += `<li class="page-item ${!prevUrl ? 'disabled' : ''}">
+                <a class="page-link" href="#" data-page="${currentPage - 1}">Previous</a>
+            </li>`;
+            
+            for (let i = 1; i <= totalPages; i++) {
+                if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+                    html += `<li class="page-item ${i === currentPage ? 'active' : ''}">
+                        <a class="page-link" href="#" data-page="${i}">${i}</a>
+                    </li>`;
+                } else if (i === currentPage - 2 || i === currentPage + 2) {
+                    html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+                }
+            }
+            
+            html += `<li class="page-item ${!nextUrl ? 'disabled' : ''}">
+                <a class="page-link" href="#" data-page="${currentPage + 1}">Next</a>
+            </li>`;
+            
+            if(controls) {
+                controls.innerHTML = html;
+                controls.querySelectorAll('.page-link').forEach(link => {
+                    link.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        const page = parseInt(e.target.dataset.page);
+                        if (page && page !== currentPage && page >= 1 && page <= totalPages) {
+                            applyFilters(page);
+                        }
+                    });
+                });
+            }
+        }
+
+        async function applyFilters(page = 1) {
             const params = getFilterParams();
             activeFilters = params;
             updateFilterIndicator(params);
 
             try {
-                const leads = await fetchLeadsWithFilters(params);
-                allLeads = leads;
-                renderStats(leads);
-                renderLeadRows(leads);
+                const data = await fetchLeadsWithFilters(params, page);
+                const isPaginated = !!data.results;
+                allLeads = isPaginated ? data.results : data;
+                const totalCount = isPaginated ? data.count : allLeads.length;
+                renderStats(allLeads, totalCount);
+                renderLeadRows(allLeads);
+                renderPagination(totalCount, isPaginated ? data.next : null, isPaginated ? data.previous : null);
             } catch (e) {
                 console.error('Error applying filters:', e);
             }
@@ -786,12 +846,17 @@
 
         // ─── Data loading ────────────────────────────────────────────────────
 
-        async function loadLeads() {
-            const res = await fetchWithAuth('/leads/');
+        async function loadLeads(page = 1) {
+            currentPage = page;
+            const res = await fetchWithAuth(`/leads/?page=${page}`);
             if (!res.ok) return;
-            allLeads = await res.json();
-            renderStats(allLeads);
+            const data = await res.json();
+            const isPaginated = !!data.results;
+            allLeads = isPaginated ? data.results : data;
+            const totalCount = isPaginated ? data.count : allLeads.length;
+            renderStats(allLeads, totalCount);
             renderLeadRows(allLeads);
+            renderPagination(totalCount, isPaginated ? data.next : null, isPaginated ? data.previous : null);
         }
 
         async function loadImportHistory() {
