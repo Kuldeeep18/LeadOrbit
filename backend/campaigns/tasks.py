@@ -154,6 +154,20 @@ def _advance_to_next_step(clead, completed_step, now=None):
 
 
 def _execute_non_email_step(clead, step, now=None):
+    if step.channel_type in ['MANUAL', 'LINKEDIN', 'WHATSAPP']:
+        from .models import ManualTask
+        ManualTask.objects.create(
+            organization=clead.organization,
+            campaign_lead=clead,
+            step=step,
+            status='PENDING'
+        )
+        clead.status = 'PAUSED'
+        clead.next_execution_time = None
+        clead.save(update_fields=['status', 'next_execution_time'])
+        logger.info(f"Created manual task ({step.channel_type}) for {clead.lead.email}; lead paused.")
+        return
+
     if step.channel_type == 'CONDITION_REPLY':
         _execute_condition_reply_step(clead, step, now=now)
         return
