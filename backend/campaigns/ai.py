@@ -194,6 +194,11 @@ def _apply_merge_tags(text, lead):
 
     for token, value in replacements.items():
         base = base.replace(token, value)
+
+    custom_variables = getattr(lead, 'custom_variables', None)
+    if isinstance(custom_variables, dict):
+        for key, value in custom_variables.items():
+            base = base.replace(f'{{{{{key}}}}}', value or '')
     return base
 
 

@@ -9,11 +9,13 @@ from rest_framework.test import APITestCase
 from campaigns.models import Campaign, CampaignLead, ConnectedEmailAccount, SequenceStep
 from campaigns.tasks import (
     _get_campaign_steps,
+    _personalize_text,
     poll_gmail_for_replies,
     process_active_leads,
     process_active_leads_once,
     send_email_step,
 )
+from campaigns.ai import _apply_merge_tags
 from campaigns.utils import generate_unsubscribe_token
 from leads.models import Lead
 from tenants.models import Organization
@@ -111,6 +113,36 @@ class CampaignWorkflowTests(APITestCase):
                 self.assertEqual(steps[index].delay_minutes, delay_minutes)
                 self.assertEqual(steps[index].template_subject or '', subject)
                 self.assertEqual(steps[index].template_body or '', body)
+
+    def test_custom_variables_fill_merge_tags_in_sms_and_email_fallbacks(self):
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='custom@example.com',
+            first_name='Ada',
+            last_name='Lovelace',
+            company='Analytical Engines',
+            custom_variables={
+                'industry': 'SaaS',
+                'meeting_time': 'Thursday 3 PM',
+            },
+        )
+
+        sms_text = _personalize_text(
+            'Hi {{firstName}}, your {{industry}} demo for {{company}} is at {{meeting_time}}.',
+            lead,
+        )
+        email_subject = _apply_merge_tags('Intro for {{company}}', lead)
+        email_body = _apply_merge_tags(
+            'Hi {{firstName}}, thanks for the {{industry}} intro.',
+            lead,
+        )
+
+        self.assertEqual(
+            sms_text,
+            'Hi Ada, your SaaS demo for Analytical Engines is at Thursday 3 PM.',
+        )
+        self.assertEqual(email_subject, 'Intro for Analytical Engines')
+        self.assertEqual(email_body, 'Hi Ada, thanks for the SaaS intro.')
 
     def test_process_active_leads_advances_all_non_email_step_types(self):
         campaign = Campaign.objects.create(
