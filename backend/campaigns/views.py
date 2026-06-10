@@ -17,11 +17,26 @@ class CampaignViewSet(viewsets.ModelViewSet):
     queryset = Campaign.objects.all()
 
     def get_queryset(self):
-        return (
+        queryset = (
             Campaign.objects.filter(organization=self.request.user.organization)
             .select_related('connected_account')
             .prefetch_related('steps', 'enrolled_leads')
         )
+        search = (self.request.query_params.get('search') or '').strip()
+        status_filter = (self.request.query_params.get('status') or '').strip().upper()
+
+        if search:
+            from django.db.models import Q
+
+            queryset = queryset.filter(
+                Q(name__icontains=search) | Q(status__icontains=search)
+            )
+
+        valid_statuses = {choice[0] for choice in Campaign.STATUS_CHOICES}
+        if status_filter and status_filter != 'ALL' and status_filter in valid_statuses:
+            queryset = queryset.filter(status=status_filter)
+
+        return queryset
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization)

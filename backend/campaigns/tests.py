@@ -112,6 +112,34 @@ class CampaignWorkflowTests(APITestCase):
                 self.assertEqual(steps[index].template_subject or '', subject)
                 self.assertEqual(steps[index].template_body or '', body)
 
+    def test_campaign_list_supports_search_and_status_filters(self):
+        Campaign.objects.create(
+            organization=self.organization,
+            name='Launch Alpha',
+            status='ACTIVE',
+        )
+        Campaign.objects.create(
+            organization=self.organization,
+            name='Launch Beta',
+            status='DRAFT',
+        )
+        Campaign.objects.create(
+            organization=self.organization,
+            name='Paused Internal',
+            status='PAUSED',
+        )
+
+        search_response = self.client.get('/api/v1/campaigns/?search=launch')
+        self.assertEqual(search_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(search_response.data), 2)
+        self.assertTrue(all('launch' in c['name'].lower() for c in search_response.data))
+
+        filtered_response = self.client.get('/api/v1/campaigns/?search=launch&status=ACTIVE')
+        self.assertEqual(filtered_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(filtered_response.data), 1)
+        self.assertEqual(filtered_response.data[0]['name'], 'Launch Alpha')
+        self.assertEqual(filtered_response.data[0]['status'], 'ACTIVE')
+
     def test_process_active_leads_advances_all_non_email_step_types(self):
         campaign = Campaign.objects.create(
             organization=self.organization,
