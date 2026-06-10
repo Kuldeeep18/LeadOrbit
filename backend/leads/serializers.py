@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import Lead, Tag, LeadTag
+from .models import Lead, LeadImportJob, Tag, LeadTag
 
 class TagSerializer(serializers.ModelSerializer):
     class Meta:
@@ -17,3 +17,17 @@ class LeadSerializer(serializers.ModelSerializer):
     def get_tags(self, obj):
         tags = Tag.objects.filter(tagged_leads__lead=obj)
         return TagSerializer(tags, many=True).data
+
+
+class LeadImportJobSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LeadImportJob
+        fields = [
+            'id',
+            'filename',
+            'total_rows',
+            'imported_count',
+            'failed_count',
+            'error_log',
+            'created_at',
+        ]

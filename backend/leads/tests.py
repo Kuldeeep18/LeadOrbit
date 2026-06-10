@@ -1,7 +1,7 @@
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from leads.models import Lead
+from leads.models import Lead, LeadImportJob
 from leads.tasks import import_leads_from_csv
 from tenants.models import Organization
 from users.models import User
@@ -25,6 +25,33 @@ class LeadImportTests(APITestCase):
         self.assertEqual(lead.company, 'Acme')
         self.assertEqual(lead.linkedin_url, 'https://linkedin.com/in/alice')
         self.assertEqual(lead.phone, '+123456789')
+
+    def test_import_records_row_errors_in_import_job_history(self):
+        job = LeadImportJob.objects.create(
+            organization=self.organization,
+            filename='prospects.csv',
+        )
+
+        csv_data = (
+            "email,first_name,company\n"
+            "valid@example.com,Alice,Acme\n"
+            "invalid-email,Bob,Acme\n"
+            "valid@example.com,Duplicate,Acme\n"
+            ",NoEmail,Acme\n"
+        )
+
+        import_leads_from_csv(csv_data, str(self.organization.id), str(job.id), 'prospects.csv')
+
+        job.refresh_from_db()
+        self.assertEqual(job.filename, 'prospects.csv')
+        self.assertEqual(job.total_rows, 4)
+        self.assertEqual(job.imported_count, 1)
+        self.assertEqual(job.failed_count, 3)
+        self.assertEqual(len(job.error_log), 3)
+        self.assertTrue(any(item['error'] == 'Invalid email format' for item in job.error_log))
+        self.assertTrue(any(item['error'] == 'Duplicate email in CSV' for item in job.error_log))
+        self.assertTrue(any(item['error'] == 'Email is required' for item in job.error_log))
+        self.assertEqual(Lead.objects.filter(organization=self.organization).count(), 1)
 
 
 class LeadIsolationAPITests(APITestCase):
@@ -88,3 +115,28 @@ class LeadIsolationAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(Lead.objects.filter(id=self.lead_a.id).exists())
         self.assertTrue(Lead.objects.filter(id=self.lead_b.id).exists())
+
+    def test_import_history_is_paginated_and_scoped_to_organization(self):
+        LeadImportJob.objects.create(
+            organization=self.org_a,
+            filename='org-a.csv',
+            total_rows=2,
+            imported_count=2,
+            failed_count=0,
+            error_log=[],
+        )
+        LeadImportJob.objects.create(
+            organization=self.org_b,
+            filename='org-b.csv',
+            total_rows=3,
+            imported_count=2,
+            failed_count=1,
+            error_log=[{'row': 3, 'email': 'bad@example.com', 'error': 'Invalid email format'}],
+        )
+
+        self.client.force_authenticate(self.user_a)
+        response = self.client.get('/api/v1/lead-import-jobs/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['count'], 1)
+        self.assertEqual(len(response.data['results']), 1)
+        self.assertEqual(response.data['results'][0]['filename'], 'org-a.csv')

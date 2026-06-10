@@ -10,7 +10,7 @@ class CustomTokenObtainPairView(BaseTokenObtainPairView):
     serializer_class = CustomTokenObtainSerializer
 
 from users.views import AuthViewSet
-from leads.views import LeadViewSet, TagViewSet
+from leads.views import LeadImportJobViewSet, LeadViewSet, TagViewSet
 from campaigns.views import (
     CampaignViewSet,
     SequenceStepViewSet,
@@ -32,6 +32,7 @@ def api_root(_request):
 router = DefaultRouter()
 router.register(r'auth', AuthViewSet, basename='auth')
 router.register(r'leads', LeadViewSet, basename='leads')
+router.register(r'lead-import-jobs', LeadImportJobViewSet, basename='lead-import-jobs')
 router.register(r'tags', TagViewSet, basename='tags')
 router.register(r'campaigns', CampaignViewSet, basename='campaigns')
 
@@ -52,4 +53,3 @@ urlpatterns = [
     path('api/v1/unsubscribe/<uuid:lead_id>/<str:token>/', unsubscribe_view, name='unsubscribe'),
     path('api/v1/', include(router.urls)),
 ]
-
