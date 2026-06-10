@@ -1130,6 +1130,50 @@
             return `${value.slice(0, limit)}...`;
         }
 
+        const SPINTAX_SAMPLE_LEAD = {
+            firstName: 'Ari',
+            lastName: 'Sharma',
+            email: 'ari@example.com',
+            company: 'Acme',
+            icebreaker: 'your recent launch caught my eye',
+        };
+
+        function parseSpintax(text) {
+            let rendered = String(text || '');
+            const pattern = /\{([^{}]*\|[^{}]*)\}/;
+            for (let i = 0; i < 25; i += 1) {
+                const match = rendered.match(pattern);
+                if (!match) break;
+                const choices = match[1].split('|');
+                const choice = choices[Math.floor(Math.random() * choices.length)] || '';
+                rendered = `${rendered.slice(0, match.index)}${choice}${rendered.slice(match.index + match[0].length)}`;
+            }
+            return rendered;
+        }
+
+        function applyPreviewMergeTags(text) {
+            return String(text || '')
+                .replaceAll('{{firstName}}', SPINTAX_SAMPLE_LEAD.firstName)
+                .replaceAll('{{first_name}}', SPINTAX_SAMPLE_LEAD.firstName)
+                .replaceAll('{{lastName}}', SPINTAX_SAMPLE_LEAD.lastName)
+                .replaceAll('{{last_name}}', SPINTAX_SAMPLE_LEAD.lastName)
+                .replaceAll('{{email}}', SPINTAX_SAMPLE_LEAD.email)
+                .replaceAll('{{company}}', SPINTAX_SAMPLE_LEAD.company)
+                .replaceAll('{{icebreaker}}', SPINTAX_SAMPLE_LEAD.icebreaker);
+        }
+
+        function renderSpintaxPreview(step) {
+            const preview = document.getElementById('spintax-preview');
+            if (!preview) return;
+            const subject = parseSpintax(applyPreviewMergeTags(step.subject || ''));
+            const body = parseSpintax(applyPreviewMergeTags(step.body || ''));
+            preview.innerHTML = `
+                <div class="fw-semibold mb-1">${escapeHtml(subject || '(empty subject)')}</div>
+                <div style="white-space:pre-wrap;">${escapeHtml(body || '(empty body)')}</div>
+            `;
+            preview.classList.remove('d-none');
+        }
+
         const SEQUENCE_TEMPLATES = [
             {
                 key: 'quick-touch',
@@ -1711,6 +1755,12 @@
                         <span class="merge-tag" data-tag="{{icebreaker}}"><i class="bi bi-stars me-1"></i>{{icebreaker}}</span>
                     </div>
                 </div>
+                <div class="mb-3">
+                    <button class="btn btn-sm btn-outline-secondary" id="spintax-preview-btn">
+                        <i class="bi bi-shuffle me-1"></i> Preview variation
+                    </button>
+                    <div id="spintax-preview" class="d-none mt-2 p-3 rounded-3 border bg-light small"></div>
+                </div>
 
                 <!-- AI Generation Result -->
                 <div id="ai-result" class="d-none mb-3">
@@ -1751,6 +1801,7 @@
 
             // AI Generate button
             document.getElementById('ai-generate-btn').addEventListener('click', () => openAIComposer(step));
+            document.getElementById('spintax-preview-btn').addEventListener('click', () => renderSpintaxPreview(step));
         }
 
         function renderWaitEditor(panel, step) {
@@ -2283,4 +2334,3 @@
 </body>
 
 </html>
-
