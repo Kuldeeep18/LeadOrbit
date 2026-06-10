@@ -1,18 +1,22 @@
 from django.db import models
 from tenants.models import TenantModel
 import uuid
+from .fields import EncryptedJSONField, EncryptedTextField
 
 class Lead(TenantModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.EmailField()
-    first_name = models.CharField(max_length=100, blank=True, null=True)
-    last_name = models.CharField(max_length=100, blank=True, null=True)
-    company = models.CharField(max_length=255, blank=True, null=True)
-    phone = models.CharField(max_length=50, blank=True, null=True)
-    linkedin_url = models.URLField(max_length=255, blank=True, null=True)
-    custom_data = models.JSONField(default=dict, blank=True)
+    first_name = EncryptedTextField(blank=True, null=True)
+    last_name = EncryptedTextField(blank=True, null=True)
+    company = EncryptedTextField(blank=True, null=True)
+    phone = EncryptedTextField(blank=True, null=True)
+    linkedin_url = EncryptedTextField(blank=True, null=True)
+    custom_data = EncryptedJSONField(default=dict, blank=True)
     global_unsubscribe = models.BooleanField(default=False)
     score = models.IntegerField(default=0)
+    crm_source = models.CharField(max_length=80, blank=True, null=True)
+    crm_external_id = models.CharField(max_length=255, blank=True, null=True)
+    crm_synced_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         unique_together = ('organization', 'email')

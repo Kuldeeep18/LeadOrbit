@@ -8,7 +8,8 @@ from django.utils import timezone
 from .ai import personalize_email
 from .gmail_service import build_unsubscribe_url, check_for_replies, send_gmail
 from .sms_service import send_sms, initiate_call
-from .models import CampaignLead, SequenceStep
+from .models import Campaign, CampaignLead, SequenceStep
+from leads.models import Lead
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,82 @@ def _get_step_metadata(raw_steps, step_order):
         'condition_branch': condition_branch,
         'condition_parent_index': _coerce_int(raw_step.get('condition_parent_index')),
     }
+
+
+def _campaign_auto_enroll_enabled(campaign):
+    settings = campaign.settings if isinstance(campaign.settings, dict) else {}
+    automation = settings.get('automation') if isinstance(settings, dict) else {}
+    return bool(isinstance(automation, dict) and automation.get('auto_enroll_new_leads'))
+
+
+def _enroll_lead_in_campaign(campaign, lead):
+    if not _campaign_auto_enroll_enabled(campaign):
+        return False
+    if not SequenceStep.objects.filter(campaign=campaign).exists():
+        return False
+
+    _, created = CampaignLead.objects.get_or_create(
+        campaign=campaign,
+        lead=lead,
+        defaults={'organization': campaign.organization},
+    )
+    if created:
+        logger.info(
+            f"Auto-enrolled lead {lead.email} into nurture campaign {campaign.name}"
+        )
+    return created
+
+
+def auto_enroll_lead_into_active_campaigns(lead):
+    """
+    Enroll a newly created or updated lead into any active campaigns that have
+    auto-enrollment enabled.
+    """
+    if not getattr(lead, 'organization_id', None):
+        return 0
+
+    enrolled_count = 0
+    campaigns = Campaign.objects.filter(
+        organization=lead.organization,
+        status='ACTIVE',
+    ).prefetch_related('steps')
+
+    for campaign in campaigns:
+        if _enroll_lead_in_campaign(campaign, lead):
+            enrolled_count += 1
+
+    return enrolled_count
+
+
+def backfill_campaign_with_existing_leads(campaign):
+    """
+    Backfill a nurture campaign with the existing leads in the current org.
+    Used when a nurture campaign is launched without manually selected leads.
+    """
+    if not _campaign_auto_enroll_enabled(campaign):
+        return 0
+
+    already_enrolled = set(
+        CampaignLead.objects.filter(campaign_id=campaign.id).values_list('lead_id', flat=True)
+    )
+    eligible_leads = Lead.objects.filter(
+        organization=campaign.organization,
+        global_unsubscribe=False,
+    )
+    if already_enrolled:
+        eligible_leads = eligible_leads.exclude(id__in=already_enrolled)
+
+    enrolled_count = 0
+    for lead in eligible_leads.iterator():
+        if _enroll_lead_in_campaign(campaign, lead):
+            enrolled_count += 1
+
+    if enrolled_count:
+        logger.info(
+            f"Backfilled {enrolled_count} leads into nurture campaign {campaign.name}"
+        )
+
+    return enrolled_count
 
 
 def _find_branch_step_order(raw_steps, condition_step_order, branch):
