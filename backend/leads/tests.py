@@ -1,7 +1,7 @@
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from leads.models import Lead
+from leads.models import Lead, LeadTag, Tag
 from leads.tasks import import_leads_from_csv
 from tenants.models import Organization
 from users.models import User
@@ -88,3 +88,71 @@ class LeadIsolationAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(Lead.objects.filter(id=self.lead_a.id).exists())
         self.assertTrue(Lead.objects.filter(id=self.lead_b.id).exists())
+
+    def test_list_leads_supports_search_across_core_fields(self):
+        search_lead = Lead.objects.create(
+            organization=self.org_a,
+            email='alice@example.com',
+            first_name='Alice',
+            last_name='Stone',
+            company='Acme Labs',
+        )
+        Lead.objects.create(
+            organization=self.org_b,
+            email='alice@other-org.com',
+            first_name='Alice',
+            last_name='Stone',
+            company='Acme Labs',
+        )
+
+        self.client.force_authenticate(self.user_a)
+
+        for query in ['alice', 'stone', 'acme', 'alice@example.com']:
+            with self.subTest(query=query):
+                response = self.client.get('/api/v1/leads/', {'search': query})
+                self.assertEqual(response.status_code, status.HTTP_200_OK)
+                emails = {item['email'] for item in response.data}
+                self.assertIn(search_lead.email, emails)
+                self.assertNotIn('alice@other-org.com', emails)
+
+    def test_list_leads_supports_tag_filtering_with_tenant_isolation(self):
+        vip_tag = Tag.objects.create(
+            organization=self.org_a,
+            name='VIP',
+        )
+        LeadTag.objects.create(
+            organization=self.org_a,
+            lead=self.lead_a,
+            tag=vip_tag,
+        )
+        lead_without_tag = Lead.objects.create(
+            organization=self.org_a,
+            email='untagged@example.com',
+            first_name='No',
+            last_name='Tag',
+        )
+
+        org_b_tag = Tag.objects.create(
+            organization=self.org_b,
+            name='VIP',
+        )
+        Lead.objects.create(
+            organization=self.org_b,
+            email='other-org-vip@example.com',
+            first_name='Other',
+            last_name='Org',
+        )
+        LeadTag.objects.create(
+            organization=self.org_b,
+            lead=self.lead_b,
+            tag=org_b_tag,
+        )
+
+        self.client.force_authenticate(self.user_a)
+        response = self.client.get('/api/v1/leads/', {'tag': str(vip_tag.id)})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        emails = {item['email'] for item in response.data}
+        self.assertIn(self.lead_a.email, emails)
+        self.assertNotIn(lead_without_tag.email, emails)
+        self.assertNotIn('other-org-vip@example.com', emails)
