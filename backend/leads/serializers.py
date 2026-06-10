@@ -15,5 +15,9 @@ class LeadSerializer(serializers.ModelSerializer):
         read_only_fields = ['organization', 'score']
 
     def get_tags(self, obj):
+        if hasattr(obj, 'lead_tags'):
+            tags = [lead_tag.tag for lead_tag in obj.lead_tags.all() if getattr(lead_tag, 'tag', None)]
+            return TagSerializer(tags, many=True).data
+
         tags = Tag.objects.filter(tagged_leads__lead=obj)
         return TagSerializer(tags, many=True).data
