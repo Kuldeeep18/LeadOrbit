@@ -1,3 +1,13 @@
+import csv
+import io
+from datetime import timedelta
+
+from reportlab.lib import colors
+from reportlab.lib.pagesizes import letter
+from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
+from reportlab.lib.units import inch
+from reportlab.platypus import Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -7,6 +17,271 @@ from leads.models import Lead
 
 from .models import Campaign, CampaignLead, SequenceStep
 from .serializers import CampaignSerializer, SequenceStepSerializer
+
+
+def _build_analytics_payload(org, days=30, campaign_scope=None):
+    from django.db.models import Count
+    from django.db.models.functions import TruncDate
+    from django.utils import timezone
+
+    cutoff = timezone.now() - timedelta(days=days)
+
+    all_cls = CampaignLead.objects.filter(organization=org)
+    if campaign_scope is not None:
+        all_cls = all_cls.filter(campaign=campaign_scope)
+
+    sent_statuses = ['ACTIVE', 'FINISHED', 'REPLIED', 'BOUNCED']
+    emails_sent = all_cls.filter(status__in=sent_statuses).count()
+    opened = all_cls.filter(last_opened_at__isnull=False).count()
+    replied = all_cls.filter(status='REPLIED').count()
+    clicked = all_cls.filter(last_clicked_at__isnull=False).count()
+    bounced = all_cls.filter(status='BOUNCED').count()
+
+    if campaign_scope is None:
+        total_leads = Lead.objects.filter(organization=org).count()
+        active_campaigns = Campaign.objects.filter(organization=org, status='ACTIVE').count()
+    else:
+        total_leads = campaign_scope.enrolled_leads.count()
+        active_campaigns = 1 if campaign_scope.status == 'ACTIVE' else 0
+
+    open_rate = round((opened / emails_sent * 100) if emails_sent > 0 else 0, 1)
+    reply_rate = round((replied / emails_sent * 100) if emails_sent > 0 else 0, 1)
+    click_rate = round((clicked / emails_sent * 100) if emails_sent > 0 else 0, 1)
+    bounce_rate = round((bounced / emails_sent * 100) if emails_sent > 0 else 0, 1)
+
+    ts_qs = all_cls.filter(created_at__gte=cutoff)
+    sent_by_day = dict(
+        ts_qs.filter(status__in=sent_statuses)
+        .annotate(day=TruncDate('created_at'))
+        .values('day')
+        .annotate(count=Count('id'))
+        .values_list('day', 'count')
+    )
+    opened_by_day = dict(
+        ts_qs.filter(last_opened_at__isnull=False)
+        .annotate(day=TruncDate('last_opened_at'))
+        .values('day')
+        .annotate(count=Count('id'))
+        .values_list('day', 'count')
+    )
+    replied_by_day = dict(
+        ts_qs.filter(last_replied_at__isnull=False)
+        .annotate(day=TruncDate('last_replied_at'))
+        .values('day')
+        .annotate(count=Count('id'))
+        .values_list('day', 'count')
+    )
+
+    labels = []
+    sent_series = []
+    opened_series = []
+    replied_series = []
+    today = timezone.now().date()
+    for i in range(days):
+        d = today - timedelta(days=days - 1 - i)
+        labels.append(d.isoformat())
+        sent_series.append(sent_by_day.get(d, 0))
+        opened_series.append(opened_by_day.get(d, 0))
+        replied_series.append(replied_by_day.get(d, 0))
+
+    campaign_qs = Campaign.objects.filter(organization=org).order_by('-created_at')
+    if campaign_scope is not None:
+        campaign_qs = campaign_qs.filter(id=campaign_scope.id)
+
+    campaign_stats = []
+    for c in campaign_qs[:20]:
+        cls = CampaignLead.objects.filter(campaign=c, organization=org)
+        c_sent = cls.filter(status__in=sent_statuses).count()
+        c_opened = cls.filter(last_opened_at__isnull=False).count()
+        c_replied = cls.filter(status='REPLIED').count()
+        c_bounced = cls.filter(status='BOUNCED').count()
+        campaign_stats.append({
+            'id': str(c.id),
+            'name': c.name,
+            'status': c.status,
+            'enrolled': cls.count(),
+            'sent': c_sent,
+            'opened': c_opened,
+            'replied': c_replied,
+            'bounced': c_bounced,
+        })
+
+    recent = []
+    for cl in all_cls.order_by('-updated_at')[:10]:
+        action = cl.status.lower()
+        lead_name = cl.lead.email if cl.lead else 'Unknown'
+        recent.append({
+            'type': f'lead_{action}',
+            'description': f'{lead_name} — {action} in {cl.campaign.name}',
+            'time': cl.updated_at.isoformat() if cl.updated_at else '',
+        })
+
+    return {
+        'total_leads': total_leads,
+        'active_campaigns': active_campaigns,
+        'emails_sent': emails_sent,
+        'opened': opened,
+        'replied': replied,
+        'clicked': clicked,
+        'bounced': bounced,
+        'open_rate': open_rate,
+        'reply_rate': reply_rate,
+        'click_rate': click_rate,
+        'bounce_rate': bounce_rate,
+        'time_series': {
+            'labels': labels,
+            'sent': sent_series,
+            'opened': opened_series,
+            'replied': replied_series,
+        },
+        'campaign_stats': campaign_stats,
+        'recent_activity': recent,
+    }
+
+
+def _analytics_scope_label(campaign_scope):
+    if campaign_scope is None:
+        return 'All campaigns'
+    return f'{campaign_scope.name} ({campaign_scope.status})'
+
+
+def _render_analytics_csv(payload, campaign_scope=None, days=30):
+    buffer = io.StringIO()
+    writer = csv.writer(buffer)
+
+    writer.writerow(['LeadOrbit Campaign Analytics Export'])
+    writer.writerow(['Scope', _analytics_scope_label(campaign_scope)])
+    writer.writerow(['Days', days])
+    writer.writerow([])
+
+    writer.writerow(['Metric', 'Value'])
+    writer.writerow(['Total leads', payload['total_leads']])
+    writer.writerow(['Active campaigns', payload['active_campaigns']])
+    writer.writerow(['Emails sent', payload['emails_sent']])
+    writer.writerow(['Opened', payload['opened']])
+    writer.writerow(['Replied', payload['replied']])
+    writer.writerow(['Clicked', payload['clicked']])
+    writer.writerow(['Bounced', payload['bounced']])
+    writer.writerow(['Open rate', f"{payload['open_rate']}%"])
+    writer.writerow(['Reply rate', f"{payload['reply_rate']}%"])
+    writer.writerow(['Click rate', f"{payload['click_rate']}%"])
+    writer.writerow(['Bounce rate', f"{payload['bounce_rate']}%"])
+    writer.writerow([])
+
+    writer.writerow(['Campaign stats'])
+    writer.writerow(['Campaign', 'Status', 'Enrolled', 'Sent', 'Opened', 'Replied', 'Bounced'])
+    for campaign in payload['campaign_stats']:
+        writer.writerow([
+            campaign['name'],
+            campaign['status'],
+            campaign['enrolled'],
+            campaign['sent'],
+            campaign['opened'],
+            campaign['replied'],
+            campaign['bounced'],
+        ])
+    writer.writerow([])
+
+    writer.writerow(['Recent activity'])
+    writer.writerow(['Type', 'Description', 'Time'])
+    for item in payload['recent_activity']:
+        writer.writerow([item['type'], item['description'], item['time']])
+
+    return buffer.getvalue().encode('utf-8')
+
+
+def _render_analytics_pdf(payload, campaign_scope=None, days=30):
+    buffer = io.BytesIO()
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
+    styles = getSampleStyleSheet()
+    styles.add(ParagraphStyle(
+        name='LeadOrbitSubtle',
+        parent=styles['BodyText'],
+        textColor=colors.HexColor('#475569'),
+        fontSize=9,
+        leading=12,
+    ))
+
+    elements = []
+    elements.append(Paragraph('LeadOrbit Campaign Analytics Export', styles['Title']))
+    elements.append(Spacer(1, 0.15 * inch))
+    elements.append(Paragraph(f"Scope: {_analytics_scope_label(campaign_scope)}", styles['LeadOrbitSubtle']))
+    elements.append(Paragraph(f"Days: {days}", styles['LeadOrbitSubtle']))
+    elements.append(Spacer(1, 0.2 * inch))
+
+    summary_data = [
+        ['Metric', 'Value'],
+        ['Total leads', str(payload['total_leads'])],
+        ['Active campaigns', str(payload['active_campaigns'])],
+        ['Emails sent', str(payload['emails_sent'])],
+        ['Opened', str(payload['opened'])],
+        ['Replied', str(payload['replied'])],
+        ['Clicked', str(payload['clicked'])],
+        ['Bounced', str(payload['bounced'])],
+        ['Open rate', f"{payload['open_rate']}%"],
+        ['Reply rate', f"{payload['reply_rate']}%"],
+        ['Click rate', f"{payload['click_rate']}%"],
+        ['Bounce rate', f"{payload['bounce_rate']}%"],
+    ]
+    summary_table = Table(summary_data, colWidths=[2.1 * inch, 3.2 * inch], hAlign='LEFT')
+    summary_table.setStyle(TableStyle([
+        ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#e2e8f0')),
+        ('TEXTCOLOR', (0, 0), (-1, 0), colors.HexColor('#0f172a')),
+        ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+        ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ('LEADING', (0, 0), (-1, -1), 11),
+        ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#cbd5e1')),
+        ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8fafc')]),
+        ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+    ]))
+    elements.append(summary_table)
+    elements.append(Spacer(1, 0.25 * inch))
+
+    if payload['campaign_stats']:
+        elements.append(Paragraph('Campaign Stats', styles['Heading2']))
+        campaign_table_data = [['Campaign', 'Status', 'Enrolled', 'Sent', 'Opened', 'Replied', 'Bounced']]
+        for campaign in payload['campaign_stats']:
+            campaign_table_data.append([
+                campaign['name'],
+                campaign['status'],
+                str(campaign['enrolled']),
+                str(campaign['sent']),
+                str(campaign['opened']),
+                str(campaign['replied']),
+                str(campaign['bounced']),
+            ])
+        campaign_table = Table(campaign_table_data, repeatRows=1, colWidths=[1.6 * inch, 0.8 * inch, 0.65 * inch, 0.55 * inch, 0.6 * inch, 0.6 * inch, 0.65 * inch])
+        campaign_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1d4ed8')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
+            ('LEADING', (0, 0), (-1, -1), 10),
+            ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#cbd5e1')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8fafc')]),
+        ]))
+        elements.append(campaign_table)
+        elements.append(Spacer(1, 0.25 * inch))
+
+    if payload['recent_activity']:
+        elements.append(Paragraph('Recent Activity', styles['Heading2']))
+        activity_table_data = [['Type', 'Description', 'Time']]
+        for item in payload['recent_activity']:
+            activity_table_data.append([item['type'], item['description'], item['time']])
+        activity_table = Table(activity_table_data, repeatRows=1, colWidths=[1.2 * inch, 3.2 * inch, 1.5 * inch])
+        activity_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#334155')),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.white),
+            ('FONTNAME', (0, 0), (-1, 0), 'Helvetica-Bold'),
+            ('FONTSIZE', (0, 0), (-1, -1), 8),
+            ('LEADING', (0, 0), (-1, -1), 10),
+            ('GRID', (0, 0), (-1, -1), 0.4, colors.HexColor('#cbd5e1')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#f8fafc')]),
+        ]))
+        elements.append(activity_table)
+
+    doc.build(elements)
+    return buffer.getvalue()
 
 class CampaignViewSet(viewsets.ModelViewSet):
     serializer_class = CampaignSerializer
@@ -276,11 +551,6 @@ class DashboardAnalyticsView(APIView):
     permission_classes = [IsAuthenticated]
 
     def get(self, request, *args, **kwargs):
-        from django.utils import timezone
-        from datetime import timedelta
-        from django.db.models import Count, Q
-        from django.db.models.functions import TruncDate
-
         org = getattr(request.user, 'organization', None)
         if org is None:
             return Response(
@@ -294,115 +564,53 @@ class DashboardAnalyticsView(APIView):
         except (TypeError, ValueError):
             days = 30
         days = max(1, min(days, 365))
+        payload = _build_analytics_payload(org, days=days)
+        return Response(payload)
 
-        cutoff = timezone.now() - timedelta(days=days)
 
-        # ── Aggregate KPIs from CampaignLead ──
-        all_cls = CampaignLead.objects.filter(organization=org)
+class ExportCampaignAnalyticsView(APIView):
+    permission_classes = [IsAuthenticated]
 
-        sent_statuses = ['ACTIVE', 'FINISHED', 'REPLIED', 'BOUNCED']
-        emails_sent = all_cls.filter(status__in=sent_statuses).count()
-        opened = all_cls.filter(last_opened_at__isnull=False).count()
-        replied = all_cls.filter(status='REPLIED').count()
-        clicked = all_cls.filter(last_clicked_at__isnull=False).count()
-        bounced = all_cls.filter(status='BOUNCED').count()
+    def get(self, request, *args, **kwargs):
+        org = getattr(request.user, 'organization', None)
+        if org is None:
+            return Response(
+                {'detail': 'Organization context required for analytics export.'},
+                status=status.HTTP_403_FORBIDDEN,
+            )
 
-        total_leads = Lead.objects.filter(organization=org).count()
-        active_campaigns = Campaign.objects.filter(organization=org, status='ACTIVE').count()
+        days_param = request.query_params.get('days', 30)
+        try:
+            days = int(days_param)
+        except (TypeError, ValueError):
+            days = 30
+        days = max(1, min(days, 365))
 
-        open_rate = round((opened / emails_sent * 100) if emails_sent > 0 else 0, 1)
-        reply_rate = round((replied / emails_sent * 100) if emails_sent > 0 else 0, 1)
-        click_rate = round((clicked / emails_sent * 100) if emails_sent > 0 else 0, 1)
-        bounce_rate = round((bounced / emails_sent * 100) if emails_sent > 0 else 0, 1)
+        export_format = (request.query_params.get('export_format') or 'csv').strip().lower()
+        campaign_id = (request.query_params.get('campaign_id') or '').strip()
+        campaign_scope = None
+        if campaign_id:
+            campaign_scope = Campaign.objects.filter(organization=org, id=campaign_id).first()
+            if campaign_scope is None:
+                return Response(
+                    {'detail': 'Requested campaign was not found for the current organization.'},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
 
-        # ── Time-series: daily aggregates within the window ──
-        ts_qs = all_cls.filter(created_at__gte=cutoff)
+        payload = _build_analytics_payload(org, days=days, campaign_scope=campaign_scope)
+        slug = 'all-campaigns' if campaign_scope is None else campaign_scope.name.lower().replace(' ', '-')
+        filename_base = f'leadorbit-analytics-{slug}-{days}d'
 
-        sent_by_day = dict(
-            ts_qs.filter(status__in=sent_statuses)
-            .annotate(day=TruncDate('created_at'))
-            .values('day')
-            .annotate(count=Count('id'))
-            .values_list('day', 'count')
-        )
-        opened_by_day = dict(
-            ts_qs.filter(last_opened_at__isnull=False)
-            .annotate(day=TruncDate('last_opened_at'))
-            .values('day')
-            .annotate(count=Count('id'))
-            .values_list('day', 'count')
-        )
-        replied_by_day = dict(
-            ts_qs.filter(last_replied_at__isnull=False)
-            .annotate(day=TruncDate('last_replied_at'))
-            .values('day')
-            .annotate(count=Count('id'))
-            .values_list('day', 'count')
-        )
+        if export_format == 'pdf':
+            pdf_bytes = _render_analytics_pdf(payload, campaign_scope=campaign_scope, days=days)
+            response = HttpResponse(pdf_bytes, content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="{filename_base}.pdf"'
+            return response
 
-        labels = []
-        sent_series = []
-        opened_series = []
-        replied_series = []
-        today = timezone.now().date()
-        for i in range(days):
-            d = today - timedelta(days=days - 1 - i)
-            labels.append(d.isoformat())
-            sent_series.append(sent_by_day.get(d, 0))
-            opened_series.append(opened_by_day.get(d, 0))
-            replied_series.append(replied_by_day.get(d, 0))
-
-        # ── Per-campaign breakdown ──
-        campaign_stats = []
-        for c in Campaign.objects.filter(organization=org).order_by('-created_at')[:20]:
-            cls = CampaignLead.objects.filter(campaign=c, organization=org)
-            c_sent = cls.filter(status__in=sent_statuses).count()
-            c_opened = cls.filter(last_opened_at__isnull=False).count()
-            c_replied = cls.filter(status='REPLIED').count()
-            c_bounced = cls.filter(status='BOUNCED').count()
-            campaign_stats.append({
-                'id': str(c.id),
-                'name': c.name,
-                'status': c.status,
-                'enrolled': cls.count(),
-                'sent': c_sent,
-                'opened': c_opened,
-                'replied': c_replied,
-                'bounced': c_bounced,
-            })
-
-        # ── Recent activity (real data) ──
-        recent = []
-        for cl in all_cls.order_by('-updated_at')[:10]:
-            action = cl.status.lower()
-            lead_name = cl.lead.email if cl.lead else 'Unknown'
-            recent.append({
-                'type': f'lead_{action}',
-                'description': f'{lead_name} — {action} in {cl.campaign.name}',
-                'time': cl.updated_at.isoformat() if cl.updated_at else '',
-            })
-
-        return Response({
-            'total_leads': total_leads,
-            'active_campaigns': active_campaigns,
-            'emails_sent': emails_sent,
-            'opened': opened,
-            'replied': replied,
-            'clicked': clicked,
-            'bounced': bounced,
-            'open_rate': open_rate,
-            'reply_rate': reply_rate,
-            'click_rate': click_rate,
-            'bounce_rate': bounce_rate,
-            'time_series': {
-                'labels': labels,
-                'sent': sent_series,
-                'opened': opened_series,
-                'replied': replied_series,
-            },
-            'campaign_stats': campaign_stats,
-            'recent_activity': recent,
-        })
+        csv_bytes = _render_analytics_csv(payload, campaign_scope=campaign_scope, days=days)
+        response = HttpResponse(csv_bytes, content_type='text/csv')
+        response['Content-Disposition'] = f'attachment; filename="{filename_base}.csv"'
+        return response
 
 
 class AIGenerateView(APIView):
