@@ -7,6 +7,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from campaigns.models import Campaign, CampaignLead, ConnectedEmailAccount, SequenceStep
+from campaigns.spintax import parse_spintax
 from campaigns.tasks import (
     _get_campaign_steps,
     poll_gmail_for_replies,
@@ -447,6 +448,64 @@ class CampaignWorkflowTests(APITestCase):
         with patch('campaigns.tasks.send_email_step.delay') as mocked_delay:
             process_active_leads()
             mocked_delay.assert_called_once_with(campaign_lead.id, email_step.id)
+
+    def test_parse_spintax_resolves_nested_variants_with_custom_chooser(self):
+        rendered = parse_spintax(
+            '{Hi|Hello} {{firstName}}, {quick {idea|thought}|short note}',
+            chooser=lambda choices: choices[-1],
+        )
+
+        self.assertEqual(rendered, 'Hello {{firstName}}, short note')
+
+    def test_send_email_step_applies_spintax_after_merge_tags(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Spintax flow',
+            status='ACTIVE',
+        )
+        account = ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=self.user,
+            email_address='sender-spintax@acme.test',
+            provider='GOOGLE',
+            access_token='token',
+            refresh_token='refresh',
+        )
+        campaign.connected_account = account
+        campaign.save(update_fields=['connected_account'])
+        email_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='{Hi|Hello} {{firstName}}',
+            template_body='{Quick|Short} note for {{company}}',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='spintax@acme.test',
+            first_name='Ari',
+            company='Acme',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=email_step,
+            status='ACTIVE',
+            next_execution_time=timezone.now() - timedelta(minutes=1),
+        )
+
+        with patch('campaigns.spintax.random.choice', side_effect=lambda choices: choices[0]):
+            with patch('campaigns.tasks.send_gmail', return_value='msg-spintax') as mocked_send:
+                send_email_step(campaign_lead.id, email_step.id)
+
+        mocked_send.assert_called_once()
+        _, to_email, subject, body = mocked_send.call_args.args[:4]
+        self.assertEqual(to_email, 'spintax@acme.test')
+        self.assertEqual(subject, 'Hi Ari')
+        self.assertEqual(body, 'Quick note for Acme')
 
     def test_create_campaign_rejects_connected_account_not_owned_by_current_user(self):
         teammate = User.objects.create_user(
