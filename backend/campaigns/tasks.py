@@ -16,6 +16,7 @@ from tenants.models import Organization
 from django.template.loader import render_to_string
 from django.core.mail import EmailMultiAlternatives
 from django.db.models import Count, Q
+from leads.models import BlockedDomain, normalize_domain
 
 logger = logging.getLogger(__name__)
 
