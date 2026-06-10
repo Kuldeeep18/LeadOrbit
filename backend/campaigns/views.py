@@ -49,7 +49,11 @@ class CampaignViewSet(viewsets.ModelViewSet):
         In dev, this works without a separate Celery worker when eager mode is enabled.
         """
         from django.conf import settings as django_settings
-        from .tasks import process_active_leads, process_active_leads_once
+        from .tasks import (
+            backfill_campaign_with_existing_leads,
+            process_active_leads,
+            process_active_leads_once,
+        )
 
         campaign = self.get_object()
 
@@ -95,10 +99,25 @@ class CampaignViewSet(viewsets.ModelViewSet):
                 )
 
         enrolled_count = campaign.enrolled_leads.count()
+        auto_enroll_enabled = bool(
+            isinstance(campaign.settings, dict)
+            and isinstance(campaign.settings.get('automation'), dict)
+            and campaign.settings['automation'].get('auto_enroll_new_leads')
+        )
+        backfilled_count = 0
+
+        if enrolled_count == 0 and auto_enroll_enabled:
+            backfilled_count = backfill_campaign_with_existing_leads(campaign)
+            if backfilled_count:
+                enrolled_count = CampaignLead.objects.filter(campaign_id=campaign.id).count()
+
         if enrolled_count == 0:
             return Response(
                 {
-                    "error": "No leads enrolled. Add leads before launching.",
+                    "error": (
+                        "No leads enrolled. Add leads before launching "
+                        "or enable auto-enrollment for nurture campaigns."
+                    ),
                     "campaign_id": str(campaign.id),
                 },
                 status=status.HTTP_400_BAD_REQUEST,
@@ -128,6 +147,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
                 "message": "Campaign launched. Processing queue triggered.",
                 "campaign_id": str(campaign.id),
                 "enrolled_leads": enrolled_count,
+                "auto_enrolled_leads": backfilled_count,
                 "immediate_processed": immediate_processed,
             },
             status=status.HTTP_200_OK,

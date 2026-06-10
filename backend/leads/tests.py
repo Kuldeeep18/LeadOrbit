@@ -2,6 +2,7 @@ from django.db import connection
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from campaigns.models import Campaign, SequenceStep, CampaignLead
 from leads.models import Lead
 from leads.tasks import import_leads_from_csv
 from tenants.models import Organization
@@ -64,6 +65,39 @@ class LeadImportTests(APITestCase):
         self.assertEqual(lead.linkedin_url, 'https://linkedin.com/in/secure')
         self.assertEqual(lead.custom_data['notes'], 'private')
         self.assertEqual(lead.custom_data['source'], 'referral')
+
+    def test_imported_leads_auto_enroll_into_active_nurture_campaigns(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Nurture Loop',
+            status='ACTIVE',
+            settings={
+                'steps': [{'type': 'WAIT', 'delay_value': 1, 'delay_unit': 'days'}],
+                'automation': {'auto_enroll_new_leads': True},
+            },
+        )
+        SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='WAIT',
+            delay_minutes=1440,
+        )
+
+        csv_data = (
+            "Email,First Name,Company\n"
+            "nurture@example.com,Nora,Acme\n"
+        )
+
+        import_leads_from_csv(csv_data, str(self.organization.id))
+
+        lead = Lead.objects.get(organization=self.organization, email='nurture@example.com')
+        self.assertTrue(
+            CampaignLead.objects.filter(
+                campaign=campaign,
+                lead=lead,
+            ).exists()
+        )
 
 
 class LeadIsolationAPITests(APITestCase):

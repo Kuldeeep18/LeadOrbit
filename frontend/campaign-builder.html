@@ -1068,6 +1068,7 @@
         let activeTab = 'sequence';
         let availableLeads = [];
         let selectedLeadIds = new Set();
+        let autoEnrollNewLeads = false;
         let aiComposerStep = null;
         let aiConversation = [];
         let aiLatestDraft = null;
@@ -1341,16 +1342,37 @@
                             </div>
                         </div>
                     </div>
+                    <div class="mt-4 p-3 rounded-3 panel-muted-box">
+                        <div class="form-check form-switch mb-2">
+                            <input class="form-check-input" type="checkbox" id="auto-enroll-new-leads" ${autoEnrollNewLeads ? 'checked' : ''}>
+                            <label class="form-check-label fw-semibold" for="auto-enroll-new-leads">Auto-enroll new leads</label>
+                        </div>
+                        <div class="text-muted small">
+                            Newly imported or created leads in this organization will join this nurture campaign automatically.
+                        </div>
+                    </div>
                     <div class="alert alert-info mt-4 mb-0">
                         Current status toggle: <b>${statusText}</b>. Launch will activate the campaign and trigger processing.
                     </div>
                 </div>
             `;
+
+            const autoEnrollToggle = document.getElementById('auto-enroll-new-leads');
+            if (autoEnrollToggle) {
+                autoEnrollToggle.addEventListener('change', (event) => {
+                    autoEnrollNewLeads = event.target.checked;
+                });
+            }
         }
 
         async function saveCampaign() {
             const name = document.getElementById('campaign-name').value;
-            const settings = { steps: steps.map((s, i) => ({ ...s, step_order: i + 1 })) };
+            const settings = {
+                steps: steps.map((s, i) => ({ ...s, step_order: i + 1 })),
+                automation: {
+                    auto_enroll_new_leads: autoEnrollNewLeads,
+                },
+            };
             const isActive = document.getElementById('status-toggle').classList.contains('on');
             const payload = {
                 name,
@@ -2268,6 +2290,7 @@
                         if (Array.isArray(data.enrolled_lead_ids)) {
                             selectedLeadIds = new Set(data.enrolled_lead_ids);
                         }
+                        autoEnrollNewLeads = Boolean(data.settings?.automation?.auto_enroll_new_leads);
                         // Restore steps from settings
                         if (data.settings && data.settings.steps) {
                             steps = data.settings.steps;
@@ -2283,4 +2306,3 @@
 </body>
 
 </html>
-

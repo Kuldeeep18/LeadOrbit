@@ -933,6 +933,37 @@ class CampaignWorkflowTests(APITestCase):
         self.assertEqual(campaign.status, 'ACTIVE')
         mocked_delay.assert_called_once()
 
+    def test_launch_auto_enrolls_existing_org_leads_for_nurture_campaigns(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Auto nurture launch',
+            status='DRAFT',
+            settings={
+                'steps': [{'type': 'WAIT', 'delay_value': 1, 'delay_unit': 'days'}],
+                'automation': {'auto_enroll_new_leads': True},
+            },
+        )
+        SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='WAIT',
+            delay_minutes=1440,
+        )
+        Lead.objects.create(organization=self.organization, email='lead-one@acme.test')
+        Lead.objects.create(organization=self.organization, email='lead-two@acme.test')
+
+        response = self.client.post(f'/api/v1/campaigns/{campaign.id}/launch/', {}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['auto_enrolled_leads'], 2)
+        self.assertEqual(
+            CampaignLead.objects.filter(campaign=campaign).count(),
+            2,
+        )
+        campaign.refresh_from_db()
+        self.assertEqual(campaign.status, 'ACTIVE')
+
     def test_launch_requires_enrolled_leads(self):
         campaign = Campaign.objects.create(
             organization=self.organization,

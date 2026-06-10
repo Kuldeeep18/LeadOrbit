@@ -1,8 +1,12 @@
+import logging
+
 from rest_framework import viewsets, parsers, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from .models import Lead, Tag
 from .serializers import LeadSerializer, TagSerializer
+
+logger = logging.getLogger(__name__)
 
 class LeadViewSet(viewsets.ModelViewSet):
     serializer_class = LeadSerializer
@@ -13,7 +17,14 @@ class LeadViewSet(viewsets.ModelViewSet):
         return Lead.objects.filter(organization=self.request.user.organization)
 
     def perform_create(self, serializer):
-        serializer.save(organization=self.request.user.organization)
+        lead = serializer.save(organization=self.request.user.organization)
+        try:
+            from campaigns.tasks import auto_enroll_lead_into_active_campaigns
+
+            auto_enroll_lead_into_active_campaigns(lead)
+        except Exception as exc:
+            # Lead creation should still succeed even if campaign automation is unavailable.
+            logger.warning(f"Auto-enroll skipped for lead {lead.email}: {exc}")
 
     @action(detail=False, methods=['delete'], url_path='delete-all')
     def delete_all(self, request):

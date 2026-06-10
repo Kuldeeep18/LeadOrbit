@@ -72,7 +72,7 @@ def import_leads_from_csv(file_contents, organization_id):
                 phone = '+' + phone  # best-effort prefix
 
         # Create or update Lead for this organization
-        _, created = Lead.objects.update_or_create(
+        lead, created = Lead.objects.update_or_create(
             organization=org,
             email=email,
             defaults={
@@ -83,6 +83,12 @@ def import_leads_from_csv(file_contents, organization_id):
                 'phone': phone or None,
             }
         )
+        try:
+            from campaigns.tasks import auto_enroll_lead_into_active_campaigns
+
+            auto_enroll_lead_into_active_campaigns(lead)
+        except Exception as exc:
+            logger.warning(f"Auto-enroll skipped for {email}: {exc}")
         if created:
             leads_created += 1
         else:
