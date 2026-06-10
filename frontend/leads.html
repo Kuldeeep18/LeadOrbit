@@ -68,6 +68,9 @@
                                 <input type="text" id="lead-search" class="form-control" placeholder="Search name, email, company">
                             </div>
                         </div>
+                        <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#historyModal">
+                            <i class="bi bi-clock-history me-1"></i> Import History
+                        </button>
                         <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#uploadModal">
                             <i class="bi bi-upload me-1"></i> Import CSV
                         </button>
@@ -164,11 +167,78 @@
         </div>
     </div>
 
+    <div class="modal fade" id="historyModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content rounded-3 shadow">
+                <div class="modal-header border-0">
+                    <h5 class="modal-title fw-bold">Import History</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body pt-0">
+                    <div class="row g-3">
+                        <div class="col-lg-7">
+                            <div class="table-responsive border rounded-3">
+                                <table class="table table-hover mb-0 align-middle">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>File</th>
+                                            <th>Imported</th>
+                                            <th>Failed</th>
+                                            <th>When</th>
+                                            <th></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="history-table-body">
+                                        <tr>
+                                            <td colspan="5" class="text-center py-4 text-muted">
+                                                Loading import history...
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="d-flex justify-content-between align-items-center gap-2 mt-3">
+                                <small id="history-page-summary" class="text-muted"></small>
+                                <div class="btn-group btn-group-sm">
+                                    <button class="btn btn-outline-secondary" id="history-prev-btn" type="button">
+                                        <i class="bi bi-chevron-left"></i>
+                                    </button>
+                                    <button class="btn btn-outline-secondary" id="history-next-btn" type="button">
+                                        <i class="bi bi-chevron-right"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-lg-5">
+                            <div class="border rounded-3 p-3 h-100 bg-body-tertiary" id="history-detail-pane">
+                                <div class="text-muted text-center py-5">
+                                    Select an import job to inspect its error log.
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script type="module" src="/main.js"></script>
     <script type="module">
         import { fetchWithAuth } from '/api.js';
 
         let allLeads = [];
+        let importJobs = [];
+        let selectedImportJob = null;
+        let importHistoryPage = 1;
+        let importHistoryCount = 0;
+        const importHistoryPageSize = 10;
+
+        const escapeHtml = (value) => String(value ?? '')
+            .replaceAll('&', '&amp;')
+            .replaceAll('<', '&lt;')
+            .replaceAll('>', '&gt;')
+            .replaceAll('"', '&quot;')
+            .replaceAll("'", '&#39;');
 
         function copyToClipboard(text, button) {
             navigator.clipboard.writeText(text).then(() => {
@@ -251,6 +321,137 @@
             document.getElementById('avg-score').textContent = avgScore;
         }
 
+        function formatImportDate(value) {
+            if (!value) return 'Just now';
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return 'Just now';
+            return date.toLocaleString();
+        }
+
+        function renderImportJobDetail() {
+            const pane = document.getElementById('history-detail-pane');
+            if (!selectedImportJob) {
+                pane.innerHTML = '<div class="text-muted text-center py-5">Select an import job to inspect its error log.</div>';
+                return;
+            }
+
+            const errors = Array.isArray(selectedImportJob.error_log) ? selectedImportJob.error_log : [];
+            const errorList = errors.length > 0
+                ? `<div class="list-group list-group-flush">
+                        ${errors.map(item => `
+                            <div class="list-group-item px-0">
+                                <div class="d-flex justify-content-between align-items-start gap-3">
+                                    <div>
+                                        <div class="fw-semibold">Row ${escapeHtml(item.row)}</div>
+                                        <div class="small text-muted">${escapeHtml(item.email || 'No email supplied')}</div>
+                                    </div>
+                                    <span class="badge bg-light text-danger border border-danger">Failed</span>
+                                </div>
+                                <div class="mt-2">${escapeHtml(item.error || 'Unknown import error')}</div>
+                            </div>
+                        `).join('')}
+                    </div>`
+                : '<div class="alert alert-success mb-0">No errors recorded for this import.</div>';
+
+            pane.innerHTML = `
+                <div class="d-flex justify-content-between align-items-start gap-3">
+                    <div>
+                        <h6 class="mb-1">${escapeHtml(selectedImportJob.filename)}</h6>
+                        <div class="text-muted small">${formatImportDate(selectedImportJob.created_at)}</div>
+                    </div>
+                    <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-target="#uploadModal" data-bs-toggle="modal">
+                        <i class="bi bi-upload me-1"></i> Import CSV
+                    </button>
+                </div>
+                <div class="row g-2 mt-3">
+                    <div class="col-4"><div class="border rounded-3 p-2 text-center"><div class="fw-bold">${Number(selectedImportJob.total_rows) || 0}</div><div class="small text-muted">Rows</div></div></div>
+                    <div class="col-4"><div class="border rounded-3 p-2 text-center"><div class="fw-bold text-success">${Number(selectedImportJob.imported_count) || 0}</div><div class="small text-muted">Imported</div></div></div>
+                    <div class="col-4"><div class="border rounded-3 p-2 text-center"><div class="fw-bold text-danger">${Number(selectedImportJob.failed_count) || 0}</div><div class="small text-muted">Failed</div></div></div>
+                </div>
+                <div class="mt-3">
+                    <div class="small text-uppercase text-muted fw-semibold mb-2">Error Log</div>
+                    ${errorList}
+                </div>
+            `;
+        }
+
+        function renderImportHistory() {
+            const tbody = document.getElementById('history-table-body');
+            const summary = document.getElementById('history-page-summary');
+            const prevBtn = document.getElementById('history-prev-btn');
+            const nextBtn = document.getElementById('history-next-btn');
+            const totalPages = Math.max(1, Math.ceil(importHistoryCount / importHistoryPageSize));
+
+            summary.textContent = importHistoryCount
+                ? `Page ${importHistoryPage} of ${totalPages} • ${importHistoryCount} job${importHistoryCount === 1 ? '' : 's'} total`
+                : 'No import jobs yet';
+            prevBtn.disabled = importHistoryPage <= 1;
+            nextBtn.disabled = importHistoryPage >= totalPages;
+
+            if (importJobs.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="text-center py-4 text-muted">
+                            No import history found.
+                        </td>
+                    </tr>`;
+                selectedImportJob = null;
+                renderImportJobDetail();
+                return;
+            }
+
+            if (!selectedImportJob || !importJobs.some(job => String(job.id) === String(selectedImportJob.id))) {
+                selectedImportJob = importJobs[0];
+            }
+
+            tbody.innerHTML = importJobs.map(job => {
+                const isSelected = selectedImportJob && String(selectedImportJob.id) === String(job.id);
+                return `
+                    <tr class="${isSelected ? 'table-primary' : ''}" data-job-id="${job.id}">
+                        <td class="fw-semibold">${escapeHtml(job.filename)}</td>
+                        <td>${Number(job.imported_count) || 0}</td>
+                        <td>${Number(job.failed_count) || 0}</td>
+                        <td class="text-muted small">${formatImportDate(job.created_at)}</td>
+                        <td class="text-end">
+                            <button class="btn btn-sm btn-outline-primary view-import-job-btn" data-job-id="${job.id}" type="button">
+                                View log
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            tbody.querySelectorAll('.view-import-job-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    selectedImportJob = importJobs.find(job => String(job.id) === String(btn.dataset.jobId)) || null;
+                    renderImportHistory();
+                    renderImportJobDetail();
+                });
+            });
+
+            renderImportJobDetail();
+        }
+
+        async function loadImportHistory(page = 1) {
+            const res = await fetchWithAuth(`/lead-import-jobs/?page=${page}`);
+            if (!res.ok) throw new Error('Failed to load import history.');
+
+            const payload = await res.json();
+            importJobs = Array.isArray(payload.results) ? payload.results : (Array.isArray(payload) ? payload : []);
+            importHistoryCount = typeof payload.count === 'number' ? payload.count : importJobs.length;
+            importHistoryPage = page;
+            renderImportHistory();
+        }
+
+        async function loadLeads() {
+            const res = await fetchWithAuth('/leads/');
+            if (!res.ok) throw new Error('Failed to load leads.');
+
+            allLeads = await res.json();
+            renderStats(allLeads);
+            applySearch();
+        }
+
         function applySearch() {
             const q = (document.getElementById('lead-search').value || '').trim().toLowerCase();
             if (!q) {
@@ -266,17 +467,46 @@
 
         document.addEventListener('DOMContentLoaded', async () => {
             try {
-                const res = await fetchWithAuth('/leads/');
-                if (res.ok) {
-                    allLeads = await res.json();
-                    renderStats(allLeads);
-                    renderLeadRows(allLeads);
-                }
+                await loadLeads();
             } catch (e) {
                 console.error('Error fetching leads:', e);
             }
 
             document.getElementById('lead-search').addEventListener('input', applySearch);
+
+            document.getElementById('historyModal').addEventListener('show.bs.modal', async () => {
+                try {
+                    await loadImportHistory(1);
+                } catch (error) {
+                    document.getElementById('history-table-body').innerHTML = `
+                        <tr>
+                            <td colspan="5" class="text-center py-4 text-danger">
+                                ${escapeHtml(error.message || 'Failed to load import history.')}
+                            </td>
+                        </tr>`;
+                }
+            });
+
+            document.getElementById('history-prev-btn').addEventListener('click', async () => {
+                if (importHistoryPage > 1) {
+                    try {
+                        await loadImportHistory(importHistoryPage - 1);
+                    } catch (error) {
+                        console.error(error);
+                    }
+                }
+            });
+
+            document.getElementById('history-next-btn').addEventListener('click', async () => {
+                const totalPages = Math.max(1, Math.ceil(importHistoryCount / importHistoryPageSize));
+                if (importHistoryPage < totalPages) {
+                    try {
+                        await loadImportHistory(importHistoryPage + 1);
+                    } catch (error) {
+                        console.error(error);
+                    }
+                }
+            });
 
             document.getElementById('upload-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
@@ -300,7 +530,9 @@
 
                     if (res.status === 202) {
                         statusEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1"></i>File uploaded. Processing now...</span>';
-                        setTimeout(() => window.location.reload(), 1800);
+                        await loadLeads();
+                        await loadImportHistory(1);
+                        fileInput.value = '';
                     } else {
                         statusEl.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle me-1"></i>Upload failed.</span>';
                     }
