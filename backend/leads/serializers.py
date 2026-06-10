@@ -11,7 +11,7 @@ class LeadSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Lead
-        fields = ['id', 'email', 'first_name', 'last_name', 'company', 'phone', 'linkedin_url', 'custom_data', 'global_unsubscribe', 'score', 'tags', 'created_at']
+        fields = ['id', 'email', 'first_name', 'last_name', 'company', 'phone', 'linkedin_url', 'custom_data', 'custom_variables', 'global_unsubscribe', 'score', 'tags', 'created_at']
         read_only_fields = ['organization', 'score']
 
     def get_tags(self, obj):

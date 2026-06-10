@@ -29,6 +29,40 @@ def _get_field(row, *keys):
     return ''
 
 
+def _to_custom_variable_key(value):
+    value = (value or '').strip().lower()
+    value = re.sub(r'[^a-z0-9]+', '_', value)
+    return value.strip('_')
+
+
+def _collect_custom_variables(raw_row):
+    custom_variables = {}
+    standard_keys = {
+        _normalize_key(alias)
+        for aliases in (
+            ('email', 'work_email', 'email_address'),
+            ('firstName', 'first_name', 'firstname', 'first name'),
+            ('lastName', 'last_name', 'lastname', 'last name'),
+            ('companyName', 'company', 'company_name', 'organization'),
+            ('linkedinUrl', 'linkedin_url', 'linkedin', 'linkedin_profile'),
+            ('phone', 'phoneNumber', 'phone_number', 'mobile', 'phone number'),
+        )
+        for alias in aliases
+    }
+
+    for key, value in raw_row.items():
+        if _normalize_key(key) in standard_keys:
+            continue
+        cleaned_value = (value or '').strip()
+        if not cleaned_value:
+            continue
+        custom_key = _to_custom_variable_key(key)
+        if custom_key:
+            custom_variables[custom_key] = cleaned_value
+
+    return custom_variables
+
+
 @shared_task
 def import_leads_from_csv(file_contents, organization_id):
     org = Organization.objects.get(id=organization_id)
@@ -72,17 +106,20 @@ def import_leads_from_csv(file_contents, organization_id):
                 phone = '+' + phone  # best-effort prefix
 
         # Create or update Lead for this organization
-        _, created = Lead.objects.update_or_create(
+        lead, created = Lead.objects.get_or_create(
             organization=org,
             email=email,
-            defaults={
-                'first_name': first_name,
-                'last_name': last_name,
-                'company': company,
-                'linkedin_url': linkedin_url or None,
-                'phone': phone or None,
-            }
         )
+        lead.first_name = first_name
+        lead.last_name = last_name
+        lead.company = company
+        lead.linkedin_url = linkedin_url or None
+        lead.phone = phone or None
+        incoming_custom_variables = _collect_custom_variables(row)
+        existing_custom_variables = lead.custom_variables if isinstance(lead.custom_variables, dict) else {}
+        if incoming_custom_variables or existing_custom_variables:
+            lead.custom_variables = {**existing_custom_variables, **incoming_custom_variables}
+        lead.save()
         if created:
             leads_created += 1
         else:

@@ -11,6 +11,7 @@ class Lead(TenantModel):
     phone = models.CharField(max_length=50, blank=True, null=True)
     linkedin_url = models.URLField(max_length=255, blank=True, null=True)
     custom_data = models.JSONField(default=dict, blank=True)
+    custom_variables = models.JSONField(default=dict, blank=True)
     global_unsubscribe = models.BooleanField(default=False)
     score = models.IntegerField(default=0)
 

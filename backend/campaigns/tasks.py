@@ -323,6 +323,10 @@ def _personalize_text(template, lead):
         '{{email}}': lead.email or '',
         '{{company}}': lead.company or '',
     }
+    custom_variables = getattr(lead, 'custom_variables', None)
+    if isinstance(custom_variables, dict):
+        for key, value in custom_variables.items():
+            replacements[f'{{{{{key}}}}}'] = value or ''
     text = template
     for tag, value in replacements.items():
         text = text.replace(tag, value)
