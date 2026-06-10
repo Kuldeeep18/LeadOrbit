@@ -14,6 +14,9 @@ class Lead(TenantModel):
     custom_data = EncryptedJSONField(default=dict, blank=True)
     global_unsubscribe = models.BooleanField(default=False)
     score = models.IntegerField(default=0)
+    crm_source = models.CharField(max_length=80, blank=True, null=True)
+    crm_external_id = models.CharField(max_length=255, blank=True, null=True)
+    crm_synced_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         unique_together = ('organization', 'email')

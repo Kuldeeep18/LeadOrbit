@@ -161,3 +161,70 @@ class LeadIsolationAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(Lead.objects.filter(id=self.lead_a.id).exists())
         self.assertTrue(Lead.objects.filter(id=self.lead_b.id).exists())
+
+    def test_sync_crm_records_creates_updates_and_keeps_tenant_isolation(self):
+        shared_email = 'sync@example.com'
+        org_a_lead = Lead.objects.create(
+            organization=self.org_a,
+            email=shared_email,
+            first_name='Original',
+            company='Old Co',
+            custom_data={'owner': 'sales'},
+        )
+        org_b_lead = Lead.objects.create(
+            organization=self.org_b,
+            email=shared_email,
+            first_name='Other Org',
+            company='Other Co',
+        )
+
+        self.client.force_authenticate(self.user_a)
+        response = self.client.post(
+            '/api/v1/leads/sync-crm/',
+            {
+                'source': 'hubspot',
+                'records': [
+                    {
+                        'email': shared_email,
+                        'first_name': 'Updated',
+                        'company': 'New Co',
+                        'external_id': 'hubspot-123',
+                        'custom_data': {'lifecycle_stage': 'lead'},
+                    },
+                    {
+                        'email': 'new-sync@example.com',
+                        'first_name': 'New',
+                        'last_name': 'Lead',
+                        'phone': '9876543210',
+                        'global_unsubscribe': False,
+                        'external_id': 'hubspot-456',
+                    },
+                    {
+                        'first_name': 'Missing Email',
+                    },
+                ],
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['created'], 1)
+        self.assertEqual(response.data['updated'], 1)
+        self.assertEqual(response.data['skipped'], 1)
+        self.assertEqual(len(response.data['errors']), 1)
+        self.assertEqual(response.data['errors'][0]['index'], 2)
+
+        org_a_lead.refresh_from_db()
+        org_b_lead.refresh_from_db()
+
+        self.assertEqual(org_a_lead.first_name, 'Updated')
+        self.assertEqual(org_a_lead.company, 'New Co')
+        self.assertEqual(org_a_lead.crm_source, 'hubspot')
+        self.assertEqual(org_a_lead.crm_external_id, 'hubspot-123')
+        self.assertIsNotNone(org_a_lead.crm_synced_at)
+        self.assertEqual(org_a_lead.custom_data['owner'], 'sales')
+        self.assertEqual(org_a_lead.custom_data['lifecycle_stage'], 'lead')
+
+        self.assertEqual(org_b_lead.first_name, 'Other Org')
+        self.assertEqual(org_b_lead.company, 'Other Co')
+        self.assertIsNone(org_b_lead.crm_source)
