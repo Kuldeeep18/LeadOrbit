@@ -306,6 +306,18 @@ class DashboardAnalyticsView(APIView):
         replied = all_cls.filter(status='REPLIED').count()
         clicked = all_cls.filter(last_clicked_at__isnull=False).count()
         bounced = all_cls.filter(status='BOUNCED').count()
+        tracked_leads = all_cls.filter(
+            Q(status__in=sent_statuses)
+            | Q(last_opened_at__isnull=False)
+            | Q(last_clicked_at__isnull=False)
+            | Q(last_replied_at__isnull=False)
+        ).values('lead_id').distinct().count()
+        engaged_leads = all_cls.filter(
+            Q(status='REPLIED')
+            | Q(last_opened_at__isnull=False)
+            | Q(last_clicked_at__isnull=False)
+            | Q(last_replied_at__isnull=False)
+        ).values('lead_id').distinct().count()
 
         total_leads = Lead.objects.filter(organization=org).count()
         active_campaigns = Campaign.objects.filter(organization=org, status='ACTIVE').count()
@@ -394,6 +406,8 @@ class DashboardAnalyticsView(APIView):
             'reply_rate': reply_rate,
             'click_rate': click_rate,
             'bounce_rate': bounce_rate,
+            'tracked_leads': tracked_leads,
+            'engaged_leads': engaged_leads,
             'time_series': {
                 'labels': labels,
                 'sent': sent_series,
