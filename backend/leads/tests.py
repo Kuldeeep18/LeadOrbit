@@ -25,6 +25,26 @@ class LeadImportTests(APITestCase):
         self.assertEqual(lead.company, 'Acme')
         self.assertEqual(lead.linkedin_url, 'https://linkedin.com/in/alice')
         self.assertEqual(lead.phone, '+123456789')
+        self.assertGreater(lead.score, 0)
+
+    def test_scoring_ranks_complete_business_leads_above_sparse_free_email_leads(self):
+        sparse = Lead.objects.create(
+            organization=self.organization,
+            email='unknown@gmail.com',
+        )
+        complete = Lead.objects.create(
+            organization=self.organization,
+            email='alex@acme.com',
+            first_name='Alex',
+            last_name='Morgan',
+            company='Acme',
+            phone='+15551234567',
+            linkedin_url='https://linkedin.com/in/alex',
+            custom_data={'title': 'VP Sales'},
+        )
+
+        self.assertGreater(complete.score, sparse.score)
+        self.assertEqual(complete.score, 100)
 
 
 class LeadIsolationAPITests(APITestCase):
@@ -80,6 +100,7 @@ class LeadIsolationAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_201_CREATED)
         created = Lead.objects.get(email='new-orgb-lead@example.com')
         self.assertEqual(created.organization_id, self.org_b.id)
+        self.assertGreater(response.data['score'], 0)
 
     def test_delete_all_removes_only_current_users_organization_leads(self):
         self.client.force_authenticate(self.user_a)

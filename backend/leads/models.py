@@ -1,6 +1,7 @@
 from django.db import models
 from tenants.models import TenantModel
 import uuid
+from .scoring import calculate_lead_score
 
 class Lead(TenantModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -16,6 +17,12 @@ class Lead(TenantModel):
 
     class Meta:
         unique_together = ('organization', 'email')
+
+    def save(self, *args, **kwargs):
+        self.score = calculate_lead_score(self)
+        if kwargs.get('update_fields') is not None:
+            kwargs['update_fields'] = set(kwargs['update_fields']) | {'score'}
+        super().save(*args, **kwargs)
 
     def __str__(self):
         return f"{self.first_name} {self.last_name} ({self.email})"
