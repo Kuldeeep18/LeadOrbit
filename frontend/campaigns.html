@@ -148,8 +148,10 @@
         };
 
         let allCampaigns = [];
+        let visibleCampaigns = [];
         let activeFilter = 'all';
         let searchQuery = '';
+        let searchDebounceId = null;
 
         const escapeHtml = (value) => String(value ?? '')
             .replaceAll('&', '&amp;')
@@ -226,25 +228,6 @@
             document.getElementById('stat-avg-steps').textContent = avgSteps;
         }
 
-        function getFilteredCampaigns() {
-            const query = searchQuery.trim().toLowerCase();
-
-            return allCampaigns.filter(campaign => {
-                const status = normalizeStatus(campaign.status);
-                if (activeFilter !== 'all' && status !== activeFilter) return false;
-                if (!query) return true;
-
-                const searchable = [
-                    campaign.name,
-                    status,
-                    String(campaign.enrolled_count || 0),
-                    ...getStepPreview(campaign),
-                ].join(' ').toLowerCase();
-
-                return searchable.includes(query);
-            });
-        }
-
         function buildStatusPill(status) {
             const safeStatus = normalizeStatus(status);
             const label = STATUS_DETAILS[safeStatus].label;
@@ -252,7 +235,6 @@
         }
 
         function renderCampaignGrid() {
-            const visibleCampaigns = getFilteredCampaigns();
             const grid = document.getElementById('campaigns-grid');
 
             if (visibleCampaigns.length === 0) {
@@ -356,7 +338,7 @@
                             if (String(campaign.id) !== String(campaignId)) return campaign;
                             return { ...campaign, status: nextStatus };
                         });
-                        renderApp();
+                        await loadCampaigns({ refreshOverview: false });
                     } catch (error) {
                         button.disabled = false;
                         button.innerHTML = originalLabel;
@@ -373,29 +355,61 @@
             renderCampaignGrid();
         }
 
-        async function loadCampaigns() {
-            const res = await fetchWithAuth('/campaigns/');
+        async function loadCampaigns({ refreshOverview = false } = {}) {
+            const params = new URLSearchParams();
+            const trimmedSearch = searchQuery.trim();
+
+            if (trimmedSearch) {
+                params.set('search', trimmedSearch);
+            }
+            if (activeFilter !== 'all') {
+                params.set('status', activeFilter);
+            }
+
+            const queryString = params.toString();
+            const res = await fetchWithAuth(`/campaigns/${queryString ? `?${queryString}` : ''}`);
             if (!res.ok) throw new Error('Failed to load campaigns.');
-            allCampaigns = await res.json();
+            const campaigns = await res.json();
+            visibleCampaigns = campaigns;
+            if (refreshOverview || allCampaigns.length === 0) {
+                allCampaigns = campaigns;
+            }
             renderApp();
+        }
+
+        function scheduleCampaignReload() {
+            clearTimeout(searchDebounceId);
+            searchDebounceId = setTimeout(() => {
+                loadCampaigns({ refreshOverview: false }).catch(error => {
+                    document.getElementById('campaigns-grid').innerHTML = `
+                        <div class="col-12">
+                            <div class="alert alert-danger mb-0">${escapeHtml(error.message || 'Failed to load campaigns.')}</div>
+                        </div>`;
+                });
+            }, 300);
         }
 
         document.addEventListener('DOMContentLoaded', async () => {
             document.querySelectorAll('.filter-chip').forEach(button => {
                 button.addEventListener('click', () => {
                     activeFilter = button.dataset.filter;
-                    renderApp();
+                    loadCampaigns({ refreshOverview: false }).catch(error => {
+                        document.getElementById('campaigns-grid').innerHTML = `
+                            <div class="col-12">
+                                <div class="alert alert-danger mb-0">${escapeHtml(error.message || 'Failed to load campaigns.')}</div>
+                            </div>`;
+                    });
                 });
             });
 
             const searchInput = document.getElementById('campaign-search');
             searchInput.addEventListener('input', () => {
                 searchQuery = searchInput.value || '';
-                renderCampaignGrid();
+                scheduleCampaignReload();
             });
 
             try {
-                await loadCampaigns();
+                await loadCampaigns({ refreshOverview: true });
             } catch (error) {
                 document.getElementById('campaigns-grid').innerHTML = `
                     <div class="col-12">

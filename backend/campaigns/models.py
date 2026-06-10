@@ -88,6 +88,8 @@ class CampaignLead(TenantModel):
     last_opened_at = models.DateTimeField(null=True, blank=True)
     last_clicked_at = models.DateTimeField(null=True, blank=True)
     last_replied_at = models.DateTimeField(null=True, blank=True)
+    bounce_type = models.CharField(max_length=20, null=True, blank=True)
+    bounce_reason = models.TextField(null=True, blank=True)
 
     class Meta:
         unique_together = ('campaign', 'lead')

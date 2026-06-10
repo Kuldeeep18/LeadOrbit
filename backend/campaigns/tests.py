@@ -112,6 +112,34 @@ class CampaignWorkflowTests(APITestCase):
                 self.assertEqual(steps[index].template_subject or '', subject)
                 self.assertEqual(steps[index].template_body or '', body)
 
+    def test_campaign_list_supports_search_and_status_filters(self):
+        Campaign.objects.create(
+            organization=self.organization,
+            name='Launch Alpha',
+            status='ACTIVE',
+        )
+        Campaign.objects.create(
+            organization=self.organization,
+            name='Launch Beta',
+            status='DRAFT',
+        )
+        Campaign.objects.create(
+            organization=self.organization,
+            name='Paused Internal',
+            status='PAUSED',
+        )
+
+        search_response = self.client.get('/api/v1/campaigns/?search=launch')
+        self.assertEqual(search_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(search_response.data), 2)
+        self.assertTrue(all('launch' in c['name'].lower() for c in search_response.data))
+
+        filtered_response = self.client.get('/api/v1/campaigns/?search=launch&status=ACTIVE')
+        self.assertEqual(filtered_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(filtered_response.data), 1)
+        self.assertEqual(filtered_response.data[0]['name'], 'Launch Alpha')
+        self.assertEqual(filtered_response.data[0]['status'], 'ACTIVE')
+
     def test_process_active_leads_advances_all_non_email_step_types(self):
         campaign = Campaign.objects.create(
             organization=self.organization,
@@ -447,6 +475,47 @@ class CampaignWorkflowTests(APITestCase):
         with patch('campaigns.tasks.send_email_step.delay') as mocked_delay:
             process_active_leads()
             mocked_delay.assert_called_once_with(campaign_lead.id, email_step.id)
+
+    def test_webhook_bounce_persists_reason_and_type(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Bounce webhook flow',
+            status='ACTIVE',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='bounce@acme.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='ACTIVE',
+            last_sent_message_id='msg-bounce-1',
+        )
+
+        response = self.client.post(
+            '/api/v1/webhooks/email/',
+            {
+                'event': 'bounce',
+                'email': 'bounce@acme.test',
+                'message_id': 'msg-bounce-1',
+                'bounce': {
+                    'type': 'soft',
+                    'description': 'Mailbox full',
+                    'code': '4.2.2',
+                },
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        campaign_lead.refresh_from_db()
+        self.assertEqual(campaign_lead.status, 'BOUNCED')
+        self.assertIsNone(campaign_lead.current_step)
+        self.assertIsNone(campaign_lead.next_execution_time)
+        self.assertEqual(campaign_lead.bounce_type, 'soft')
+        self.assertEqual(campaign_lead.bounce_reason, 'Mailbox full')
 
     def test_create_campaign_rejects_connected_account_not_owned_by_current_user(self):
         teammate = User.objects.create_user(

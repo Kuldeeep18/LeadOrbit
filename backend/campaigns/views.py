@@ -1,3 +1,5 @@
+import logging
+
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -8,16 +10,33 @@ from leads.models import Lead
 from .models import Campaign, CampaignLead, SequenceStep
 from .serializers import CampaignSerializer, SequenceStepSerializer
 
+logger = logging.getLogger(__name__)
+
 class CampaignViewSet(viewsets.ModelViewSet):
     serializer_class = CampaignSerializer
     queryset = Campaign.objects.all()
 
     def get_queryset(self):
-        return (
+        queryset = (
             Campaign.objects.filter(organization=self.request.user.organization)
             .select_related('connected_account')
             .prefetch_related('steps', 'enrolled_leads')
         )
+        search = (self.request.query_params.get('search') or '').strip()
+        status_filter = (self.request.query_params.get('status') or '').strip().upper()
+
+        if search:
+            from django.db.models import Q
+
+            queryset = queryset.filter(
+                Q(name__icontains=search) | Q(status__icontains=search)
+            )
+
+        valid_statuses = {choice[0] for choice in Campaign.STATUS_CHOICES}
+        if status_filter and status_filter != 'ALL' and status_filter in valid_statuses:
+            queryset = queryset.filter(status=status_filter)
+
+        return queryset
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization)
@@ -211,6 +230,34 @@ class WebhookView(APIView):
     to track opens, clicks, bounces.
     """
     permission_classes = [AllowAny] # Webhooks need to be publicly accessible
+
+    @staticmethod
+    def _extract_bounce_metadata(payload):
+        bounce_data = payload.get('bounce')
+        if not isinstance(bounce_data, dict):
+            bounce_data = {}
+
+        bounce_type = (
+            payload.get('bounce_type')
+            or payload.get('type')
+            or bounce_data.get('type')
+            or bounce_data.get('bounce_type')
+            or ''
+        )
+        bounce_reason = (
+            payload.get('bounce_reason')
+            or payload.get('reason')
+            or payload.get('description')
+            or payload.get('smtp_response')
+            or bounce_data.get('reason')
+            or bounce_data.get('description')
+            or bounce_data.get('smtp_response')
+            or bounce_data.get('status')
+            or bounce_data.get('code')
+            or ''
+        )
+
+        return str(bounce_type).strip().lower(), str(bounce_reason).strip()
     
     def post(self, request, *args, **kwargs):
         event_type = (request.data.get('event') or '').strip().lower()
@@ -239,8 +286,19 @@ class WebhookView(APIView):
 
                 for cl in cleads:
                     if event_type == 'bounce':
+                        bounce_type, bounce_reason = self._extract_bounce_metadata(request.data)
                         cl.status = 'BOUNCED'
-                        cl.save(update_fields=['status'])
+                        cl.current_step = None
+                        cl.next_execution_time = None
+                        cl.bounce_type = bounce_type or None
+                        cl.bounce_reason = bounce_reason or None
+                        cl.save(update_fields=['status', 'current_step', 'next_execution_time', 'bounce_type', 'bounce_reason'])
+                        logger.info(
+                            "Bounce detected for %s | type=%s | reason=%s",
+                            cl.lead.email,
+                            bounce_type or 'unknown',
+                            bounce_reason or 'unspecified',
+                        )
                     elif event_type == 'reply':
                         cl.last_replied_at = now
                         # Only hard-stop if there is no reply-yes branch configured.
