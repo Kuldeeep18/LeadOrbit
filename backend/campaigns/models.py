@@ -22,6 +22,9 @@ class ConnectedEmailAccount(TenantModel):
     access_token = models.TextField()
     refresh_token = models.TextField(blank=True, null=True)
     token_expiry = models.DateTimeField(null=True, blank=True)
+    daily_sending_limit = models.PositiveIntegerField(default=100)
+    current_daily_count = models.PositiveIntegerField(default=0)
+    warmup_enabled = models.BooleanField(default=False)
 
     def __str__(self):
         return f"{self.email_address} ({self.get_provider_display()})"

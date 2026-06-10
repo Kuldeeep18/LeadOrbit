@@ -3,14 +3,19 @@ from datetime import timedelta
 
 from celery import shared_task
 from django.conf import settings as django_settings
+from django.db import transaction
 from django.utils import timezone
 
 from .ai import personalize_email
 from .gmail_service import build_unsubscribe_url, check_for_replies, send_gmail
 from .sms_service import send_sms, initiate_call
-from .models import CampaignLead, SequenceStep
+from .models import CampaignLead, ConnectedEmailAccount, SequenceStep
 
 logger = logging.getLogger(__name__)
+
+WARMUP_DAILY_INCREMENT = 5
+WARMUP_MAX_DAILY_LIMIT = 100
+RATE_LIMIT_RETRY_DELAY = timedelta(days=1)
 
 def _get_campaign_steps(campaign):
     """
@@ -383,6 +388,31 @@ def _execute_call_step(clead, step, now=None):
     _advance_to_next_step(clead, step, now=now)
 
 
+def _consume_connected_email_quota(account_id):
+    """
+    Reserve one send slot for the given connected email account.
+    Returns True when the quota was consumed, False when the daily limit was reached.
+    """
+    with transaction.atomic():
+        account = ConnectedEmailAccount._default_manager.select_for_update().get(id=account_id)
+
+        if account.daily_sending_limit <= 0:
+            return False
+
+        if account.current_daily_count >= account.daily_sending_limit:
+            return False
+
+        account.current_daily_count += 1
+        account.save(update_fields=['current_daily_count'])
+        return True
+
+
+def _reschedule_for_next_send_window(clead, now=None):
+    now = now or timezone.now()
+    clead.next_execution_time = now + RATE_LIMIT_RETRY_DELAY
+    clead.save(update_fields=['next_execution_time'])
+
+
 @shared_task
 def send_email_step(campaign_lead_id, step_id):
     """
@@ -424,6 +454,14 @@ def send_email_step(campaign_lead_id, step_id):
 
         account = clead.campaign.connected_account
         if account:
+            if not _consume_connected_email_quota(account.id):
+                logger.info(
+                    f"Daily send limit reached for {account.email_address}; "
+                    f"deferring {clead.lead.email} for warmup."
+                )
+                _reschedule_for_next_send_window(clead)
+                return
+
             try:
                 message_id = send_gmail(
                     account,
@@ -457,6 +495,42 @@ def process_active_leads():
     """
     processed = process_active_leads_once()
     return f"Triggered execution for {processed} campaign leads."
+
+
+@shared_task
+def refresh_connected_email_account_warmup_limits():
+    """
+    Daily reset for send quotas and warm-up progression.
+    Resets the current-day counter for every account and increases the daily
+    limit for warmup-enabled accounts.
+    """
+    accounts = ConnectedEmailAccount._default_manager.all().only(
+        'id',
+        'current_daily_count',
+        'daily_sending_limit',
+        'warmup_enabled',
+    )
+
+    updated = 0
+    for account in accounts:
+        updated_fields = []
+
+        if account.current_daily_count != 0:
+            account.current_daily_count = 0
+            updated_fields.append('current_daily_count')
+
+        if account.warmup_enabled and account.daily_sending_limit < WARMUP_MAX_DAILY_LIMIT:
+            account.daily_sending_limit = min(
+                account.daily_sending_limit + WARMUP_DAILY_INCREMENT,
+                WARMUP_MAX_DAILY_LIMIT,
+            )
+            updated_fields.append('daily_sending_limit')
+
+        if updated_fields:
+            account.save(update_fields=updated_fields)
+            updated += 1
+
+    return f"Refreshed warm-up limits for {updated} accounts."
 
 
 def process_active_leads_once(now=None):
