@@ -1,3 +1,4 @@
+from django.db import connection
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -25,6 +26,44 @@ class LeadImportTests(APITestCase):
         self.assertEqual(lead.company, 'Acme')
         self.assertEqual(lead.linkedin_url, 'https://linkedin.com/in/alice')
         self.assertEqual(lead.phone, '+123456789')
+
+    def test_sensitive_lead_fields_are_encrypted_at_rest(self):
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='secure@example.com',
+            first_name='Secure',
+            last_name='Lead',
+            company='Acme',
+            phone='+123456789',
+            linkedin_url='https://linkedin.com/in/secure',
+            custom_data={'notes': 'private', 'source': 'referral'},
+        )
+
+        with connection.cursor() as cursor:
+            cursor.execute(
+                f"SELECT first_name, last_name, company, phone, linkedin_url, custom_data FROM {Lead._meta.db_table} WHERE email = %s",
+                [lead.email],
+            )
+            row = cursor.fetchone()
+
+        self.assertIsNotNone(row)
+        raw_first_name, raw_last_name, raw_company, raw_phone, raw_linkedin, raw_custom_data = row
+
+        self.assertNotEqual(raw_first_name, 'Secure')
+        self.assertNotEqual(raw_last_name, 'Lead')
+        self.assertNotEqual(raw_company, 'Acme')
+        self.assertNotEqual(raw_phone, '+123456789')
+        self.assertNotEqual(raw_linkedin, 'https://linkedin.com/in/secure')
+        self.assertNotIn('private', raw_custom_data)
+
+        lead.refresh_from_db()
+        self.assertEqual(lead.first_name, 'Secure')
+        self.assertEqual(lead.last_name, 'Lead')
+        self.assertEqual(lead.company, 'Acme')
+        self.assertEqual(lead.phone, '+123456789')
+        self.assertEqual(lead.linkedin_url, 'https://linkedin.com/in/secure')
+        self.assertEqual(lead.custom_data['notes'], 'private')
+        self.assertEqual(lead.custom_data['source'], 'referral')
 
 
 class LeadIsolationAPITests(APITestCase):
