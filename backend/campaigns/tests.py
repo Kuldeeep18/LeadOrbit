@@ -1,3 +1,5 @@
+import csv
+import io
 from datetime import timedelta
 from unittest.mock import patch
 
@@ -1124,6 +1126,76 @@ class CampaignWorkflowTests(APITestCase):
         self.client.force_authenticate(user=None)
         response = self.client.get('/api/v1/analytics/dashboard/')
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_export_campaign_analytics_returns_csv_for_current_org(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Exported Campaign',
+            status='ACTIVE',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='exported@acme.test',
+        )
+        CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='REPLIED',
+            last_opened_at=timezone.now(),
+            last_replied_at=timezone.now(),
+        )
+
+        other_org = Organization.objects.create(name='Other Export Org')
+        other_campaign = Campaign.objects.create(
+            organization=other_org,
+            name='Other Export Campaign',
+            status='ACTIVE',
+        )
+        other_lead = Lead.objects.create(
+            organization=other_org,
+            email='other-export@acme.test',
+        )
+        CampaignLead.objects.create(
+            organization=other_org,
+            campaign=other_campaign,
+            lead=other_lead,
+            status='BOUNCED',
+        )
+
+        response = self.client.get('/api/v1/analytics/export/?export_format=csv&days=7')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response['Content-Type'], 'text/csv')
+        self.assertIn('attachment; filename="leadorbit-analytics-all-campaigns-7d.csv"', response['Content-Disposition'])
+
+        rows = list(csv.reader(io.StringIO(response.content.decode('utf-8'))))
+        flat_rows = [' | '.join(row) for row in rows if row]
+        self.assertTrue(any('Exported Campaign' in row for row in flat_rows))
+        self.assertFalse(any('Other Export Campaign' in row for row in flat_rows))
+        self.assertTrue(any(row == ['Metric', 'Value'] for row in rows))
+
+    def test_export_campaign_analytics_returns_pdf_for_selected_campaign(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='PDF Campaign',
+            status='ACTIVE',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='pdf@acme.test',
+        )
+        CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='ACTIVE',
+        )
+
+        response = self.client.get(f'/api/v1/analytics/export/?export_format=pdf&campaign_id={campaign.id}&days=7')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response['Content-Type'], 'application/pdf')
+        self.assertIn('attachment; filename="leadorbit-analytics-pdf-campaign-7d.pdf"', response['Content-Disposition'])
+        self.assertTrue(response.content.startswith(b'%PDF'))
 
     def test_unsubscribe_get_shows_confirmation_without_updating_lead(self):
         lead = Lead.objects.create(

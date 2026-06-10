@@ -16,6 +16,7 @@ from campaigns.views import (
     SequenceStepViewSet,
     WebhookView,
     DashboardAnalyticsView,
+    ExportCampaignAnalyticsView,
     AIGenerateView,
     unsubscribe_view
 )
@@ -42,6 +43,7 @@ urlpatterns = [
     path('api/v1/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/v1/webhooks/email/', WebhookView.as_view(), name='email_webhook'),
     path('api/v1/analytics/dashboard/', DashboardAnalyticsView.as_view(), name='dashboard_analytics'),
+    path('api/v1/analytics/export/', ExportCampaignAnalyticsView.as_view(), name='analytics_export'),
     path('api/v1/campaigns/ai-generate/', AIGenerateView.as_view(), name='ai_generate'),
     # Google OAuth
     path('api/v1/auth/google/login', GoogleOAuthLoginView.as_view(), name='google_oauth_login'),
@@ -52,4 +54,3 @@ urlpatterns = [
     path('api/v1/unsubscribe/<uuid:lead_id>/<str:token>/', unsubscribe_view, name='unsubscribe'),
     path('api/v1/', include(router.urls)),
 ]
-
