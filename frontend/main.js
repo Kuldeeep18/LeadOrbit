@@ -104,7 +104,14 @@ if (document.readyState === 'loading') {
     setActiveNavLink();
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
+let appShellInitialized = false;
+
+async function initAppShell() {
+    if (appShellInitialized) {
+        return;
+    }
+    appShellInitialized = true;
+
     initThemeToggle();
     initPasswordVisibilityToggle();
 
@@ -173,7 +180,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             overlay.classList.remove('active');
         });
     }
-});
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initAppShell, { once: true });
+} else {
+    initAppShell();
+}
 
 // ==========================================
 // KEYBOARD SHORTCUTS IMPLEMENTATION (#67)
@@ -326,4 +339,3 @@ if (document.readyState === 'loading') {
 } else {
     initKeyboardShortcuts();
 }
-

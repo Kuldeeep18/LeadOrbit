@@ -773,12 +773,26 @@ body.auth-page {
     font-weight: 700;
     padding: 0.28rem 0.55rem;
 }
+.analytics-empty-state {
+    border: none !important;
+    background: transparent !important;
+}
 
-.empty-state {
+.dashboard-empty-state {
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+}
+/* .empty-state {
     background: var(--panel);
     border: 1px dashed var(--line);
     border-radius: 14px;
     padding: 2rem;
+} */
+ .dashboard-empty-state {
+    border: none;
+    background: transparent;
+    padding: 0;
 }
 
 /* ── Campaign builder dark mode ── */

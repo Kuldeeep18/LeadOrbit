@@ -8,9 +8,29 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+STANDARD_FIELD_ALIASES = {
+    'email': ('email', 'work_email', 'email_address'),
+    'first_name': ('firstName', 'first_name', 'firstname', 'first name'),
+    'last_name': ('lastName', 'last_name', 'lastname', 'last name'),
+    'company': ('companyName', 'company', 'company_name', 'organization'),
+    'linkedin_url': ('linkedinUrl', 'linkedin_url', 'linkedin', 'linkedin_profile'),
+    'phone': ('phone', 'phoneNumber', 'phone_number', 'mobile', 'phone number'),
+}
+
 
 def _normalize_key(value):
     return re.sub(r'[^a-z0-9]', '', (value or '').strip().lower())
+
+
+def _normalize_custom_variable_key(value):
+    return re.sub(r'[^a-z0-9]+', '_', (value or '').strip().lower()).strip('_')
+
+
+STANDARD_CSV_HEADERS = {
+    _normalize_key(alias)
+    for aliases in STANDARD_FIELD_ALIASES.values()
+    for alias in aliases
+}
 
 
 def _normalize_row(row):
@@ -27,6 +47,18 @@ def _get_field(row, *keys):
         if val:
             return val
     return ''
+
+
+def _extract_custom_variables(row):
+    custom_variables = {}
+    for key, value in row.items():
+        if _normalize_key(key) in STANDARD_CSV_HEADERS:
+            continue
+        custom_key = _normalize_custom_variable_key(key)
+        if not custom_key:
+            continue
+        custom_variables[custom_key] = (value or '').strip()
+    return custom_variables
 
 
 @shared_task
@@ -60,6 +92,7 @@ def import_leads_from_csv(file_contents, organization_id):
         company = _get_field(normalized_row, 'companyName', 'company', 'company_name', 'organization')
         linkedin_url = _get_field(normalized_row, 'linkedinUrl', 'linkedin_url', 'linkedin', 'linkedin_profile')
         phone = _get_field(normalized_row, 'phone', 'phoneNumber', 'phone_number', 'mobile', 'phone number')
+        custom_variables = _extract_custom_variables(row)
 
         # Normalize phone to E.164 format (add +91 for 10-digit Indian numbers)
         if phone and not phone.startswith('+'):
@@ -81,6 +114,7 @@ def import_leads_from_csv(file_contents, organization_id):
                 'company': company,
                 'linkedin_url': linkedin_url or None,
                 'phone': phone or None,
+                'custom_variables': custom_variables,
             }
         )
         if created:

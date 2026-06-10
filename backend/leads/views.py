@@ -1,8 +1,8 @@
 from rest_framework import viewsets, parsers, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
-from .models import Lead, Tag
-from .serializers import LeadSerializer, TagSerializer
+from .models import BlockedDomain, Lead, Tag
+from .serializers import BlockedDomainSerializer, LeadSerializer, TagSerializer
 
 class LeadViewSet(viewsets.ModelViewSet):
     serializer_class = LeadSerializer
@@ -44,6 +44,16 @@ class TagViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return Tag.objects.filter(organization=self.request.user.organization)
+
+    def perform_create(self, serializer):
+        serializer.save(organization=self.request.user.organization)
+
+class BlockedDomainViewSet(viewsets.ModelViewSet):
+    serializer_class = BlockedDomainSerializer
+    queryset = BlockedDomain.objects.all()
+
+    def get_queryset(self):
+        return BlockedDomain.objects.filter(organization=self.request.user.organization)
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization)

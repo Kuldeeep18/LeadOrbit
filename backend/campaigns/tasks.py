@@ -5,10 +5,11 @@ from celery import shared_task
 from django.conf import settings as django_settings
 from django.utils import timezone
 
-from .ai import personalize_email
+from .ai import _apply_merge_tags, personalize_email
 from .gmail_service import build_unsubscribe_url, check_for_replies, send_gmail
 from .sms_service import send_sms, initiate_call
 from .models import CampaignLead, SequenceStep
+from leads.models import BlockedDomain, normalize_domain
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +103,7 @@ def _maybe_mark_campaign_completed(campaign):
     if not campaign.enrolled_leads.exists():
         return
 
-    terminal_statuses = ['FINISHED', 'REPLIED', 'BOUNCED']
+    terminal_statuses = ['FINISHED', 'REPLIED', 'BOUNCED', 'SKIPPED']
     has_unfinished = campaign.enrolled_leads.exclude(status__in=terminal_statuses).exists()
     if has_unfinished:
         return
@@ -317,16 +318,42 @@ def _personalize_text(template, lead):
     """Replace merge tags in SMS/call text with lead data."""
     if not template:
         return template
-    replacements = {
-        '{{firstName}}': lead.first_name or '',
-        '{{lastName}}': lead.last_name or '',
-        '{{email}}': lead.email or '',
-        '{{company}}': lead.company or '',
-    }
-    text = template
-    for tag, value in replacements.items():
-        text = text.replace(tag, value)
-    return text
+    return _apply_merge_tags(template, lead)
+
+
+def _domain_lookup_candidates(domain):
+    parts = normalize_domain(domain).split('.')
+    if len(parts) < 2:
+        return []
+    return ['.'.join(parts[index:]) for index in range(len(parts) - 1)]
+
+
+def _lead_domain_is_blocked(lead):
+    email = lead.email or ''
+    if '@' not in email:
+        return False
+
+    candidates = _domain_lookup_candidates(email.rsplit('@', 1)[-1])
+    if not candidates:
+        return False
+
+    return BlockedDomain.objects.filter(
+        organization_id=lead.organization_id,
+        domain__in=candidates,
+    ).exists()
+
+
+def _skip_blocked_domain_lead(clead):
+    if not _lead_domain_is_blocked(clead.lead):
+        return False
+
+    clead.status = 'SKIPPED'
+    clead.current_step = None
+    clead.next_execution_time = None
+    clead.save(update_fields=['status', 'current_step', 'next_execution_time'])
+    logger.info(f"Skipping email send for blocked domain lead {clead.lead.email}.")
+    _maybe_mark_campaign_completed(clead.campaign)
+    return True
 
 
 def _execute_sms_step(clead, step, now=None):
@@ -405,6 +432,9 @@ def send_email_step(campaign_lead_id, step_id):
 
         if step.channel_type != 'EMAIL':
             _execute_non_email_step(clead, step)
+            return
+
+        if _skip_blocked_domain_lead(clead):
             return
 
         # Atomic guard: claim this send by nullifying next_execution_time.
