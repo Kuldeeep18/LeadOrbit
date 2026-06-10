@@ -313,6 +313,9 @@ class GoogleOAuthCallbackView(APIView):
                     refresh_token=refresh_token or '',
                     token_expiry=token_expiry,
                     provider='GOOGLE',
+                    daily_sending_limit=25,
+                    current_daily_count=0,
+                    warmup_enabled=True,
                 )
                 account.save()
                 action = 'connected'
@@ -380,6 +383,9 @@ class ConnectedAccountsListView(APIView):
                 'email': a.email_address,
                 'provider': a.provider,
                 'connected': True,
+                'daily_sending_limit': a.daily_sending_limit,
+                'current_daily_count': a.current_daily_count,
+                'warmup_enabled': a.warmup_enabled,
             }
             for a in deduped
         ]

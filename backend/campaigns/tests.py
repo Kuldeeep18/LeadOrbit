@@ -12,6 +12,7 @@ from campaigns.tasks import (
     poll_gmail_for_replies,
     process_active_leads,
     process_active_leads_once,
+    refresh_connected_email_account_warmup_limits,
     send_email_step,
 )
 from campaigns.utils import generate_unsubscribe_token
@@ -558,6 +559,143 @@ class CampaignWorkflowTests(APITestCase):
         self.assertEqual(campaign_lead.status, 'ACTIVE')
         self.assertIsNone(campaign_lead.last_sent_message_id)
         self.assertGreater(campaign_lead.next_execution_time, timezone.now())
+
+    def test_send_email_step_defers_when_connected_account_hits_daily_limit(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Warmup limit flow',
+            status='ACTIVE',
+        )
+        account = ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=self.user,
+            email_address='limited@acme.test',
+            provider='GOOGLE',
+            access_token='token',
+            refresh_token='refresh',
+            daily_sending_limit=1,
+            current_daily_count=1,
+            warmup_enabled=True,
+        )
+        campaign.connected_account = account
+        campaign.save(update_fields=['connected_account'])
+
+        email_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Warmup',
+            template_body='Hi there',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='warmup-blocked@acme.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=email_step,
+            status='ACTIVE',
+            next_execution_time=timezone.now() - timedelta(minutes=1),
+        )
+
+        with patch('campaigns.tasks.send_gmail') as mocked_send:
+            send_email_step(campaign_lead.id, email_step.id)
+
+        campaign_lead.refresh_from_db()
+        account.refresh_from_db()
+        self.assertEqual(campaign_lead.current_step_id, email_step.id)
+        self.assertEqual(campaign_lead.status, 'ACTIVE')
+        self.assertIsNone(campaign_lead.last_sent_message_id)
+        self.assertGreater(campaign_lead.next_execution_time, timezone.now())
+        self.assertEqual(account.current_daily_count, 1)
+        mocked_send.assert_not_called()
+
+    def test_send_email_step_increments_daily_count_after_successful_send(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Warmup success flow',
+            status='ACTIVE',
+        )
+        account = ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=self.user,
+            email_address='sender@acme.test',
+            provider='GOOGLE',
+            access_token='token',
+            refresh_token='refresh',
+            daily_sending_limit=3,
+            current_daily_count=0,
+            warmup_enabled=True,
+        )
+        campaign.connected_account = account
+        campaign.save(update_fields=['connected_account'])
+
+        email_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Hello',
+            template_body='Hi there',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='warmup-success@acme.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=email_step,
+            status='ACTIVE',
+            next_execution_time=timezone.now() - timedelta(minutes=1),
+        )
+
+        with patch('campaigns.tasks.send_gmail', return_value='msg-abc'):
+            send_email_step(campaign_lead.id, email_step.id)
+
+        campaign_lead.refresh_from_db()
+        account.refresh_from_db()
+        self.assertEqual(campaign_lead.last_sent_message_id, 'msg-abc')
+        self.assertEqual(account.current_daily_count, 1)
+
+    def test_refresh_connected_email_account_warmup_limits_resets_counts_and_increments_limits(self):
+        warmup_account = ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=self.user,
+            email_address='warmup@acme.test',
+            provider='GOOGLE',
+            access_token='token',
+            refresh_token='refresh',
+            daily_sending_limit=25,
+            current_daily_count=7,
+            warmup_enabled=True,
+        )
+        steady_account = ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=self.user,
+            email_address='steady@acme.test',
+            provider='GOOGLE',
+            access_token='token2',
+            refresh_token='refresh2',
+            daily_sending_limit=60,
+            current_daily_count=19,
+            warmup_enabled=False,
+        )
+
+        refresh_connected_email_account_warmup_limits()
+
+        warmup_account.refresh_from_db()
+        steady_account.refresh_from_db()
+        self.assertEqual(warmup_account.current_daily_count, 0)
+        self.assertEqual(warmup_account.daily_sending_limit, 30)
+        self.assertEqual(steady_account.current_daily_count, 0)
+        self.assertEqual(steady_account.daily_sending_limit, 60)
 
     def test_condition_reply_step_stops_sequence_when_reply_detected(self):
         campaign = Campaign.objects.create(

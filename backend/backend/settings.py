@@ -156,6 +156,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'campaigns.tasks.process_active_leads',
         'schedule': 60.0,
     },
+    'refresh-connected-email-account-warmup-limits-daily': {
+        'task': 'campaigns.tasks.refresh_connected_email_account_warmup_limits',
+        'schedule': 86400.0,
+    },
     'poll-gmail-replies-every-5-minutes': {
         'task': 'campaigns.tasks.poll_gmail_for_replies',
         'schedule': 300.0,
