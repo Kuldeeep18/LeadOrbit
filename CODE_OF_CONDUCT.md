@@ -49,7 +49,10 @@ This Code of Conduct applies within all project spaces and also applies when an 
 
 ## Reporting Guidelines
 
-Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the project maintainers.
+
+## Reporting Guidelines
+
+Instances of abusive, harassing, or otherwise unacceptable behavior may be reported to the project maintainer by (https://github.com/Kuldeeep18/LeadOrbit/discussions) or contacting **@Kuldeeep18** directly.
 
 All complaints will be reviewed and investigated promptly and fairly.
 

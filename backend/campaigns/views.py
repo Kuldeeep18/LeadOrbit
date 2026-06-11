@@ -1,3 +1,5 @@
+import logging
+
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -6,8 +8,10 @@ from rest_framework.pagination import PageNumberPagination
 
 from leads.models import Lead
 
-from .models import Campaign, CampaignLead, SequenceStep, ManualTask
-from .serializers import CampaignSerializer, SequenceStepSerializer, ManualTaskSerializer
+from .models import Campaign, CampaignLead, SequenceStep, ManualTask, EmailTemplate
+from .serializers import CampaignSerializer, SequenceStepSerializer, ManualTaskSerializer, EmailTemplateSerializer
+
+logger = logging.getLogger(__name__)
 
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 25
@@ -263,6 +267,16 @@ class ManualTaskViewSet(viewsets.ModelViewSet):
         
         return Response({"status": "task skipped, lead advanced"})
 
+class EmailTemplateViewSet(viewsets.ModelViewSet):
+    permission_classes = [IsAuthenticated]
+    serializer_class = EmailTemplateSerializer
+    queryset = EmailTemplate.objects.all()
+
+    def get_queryset(self):
+        return EmailTemplate.objects.filter(organization=self.request.user.organization)
+
+    def perform_create(self, serializer):
+        serializer.save(organization=self.request.user.organization)
 
 from rest_framework.views import APIView
 from django.utils import timezone
@@ -328,7 +342,12 @@ class WebhookView(APIView):
                         if cl.current_step and cl.current_step.channel_type == 'CONDITION_CLICK':
                             _execute_condition_click_step(cl, cl.current_step, now=now)
             except Exception as e:
-                pass
+                logger.exception(
+                    'Webhook processing error for event=%s email=%s: %s',
+                    event_type,
+                    lead_email,
+                    e,
+                )
                 
         return Response({"status": "received"}, status=status.HTTP_200_OK)
 
