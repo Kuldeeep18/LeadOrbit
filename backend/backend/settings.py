@@ -160,6 +160,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'campaigns.tasks.poll_gmail_for_replies',
         'schedule': 300.0,
     },
+    'warmup-email-accounts-daily': {
+        'task': 'campaigns.tasks.warmup_email_accounts',
+        'schedule': 86400.0,
+    },
 }
 
 # SimpleJWT Configuration

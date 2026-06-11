@@ -3,12 +3,13 @@ from datetime import timedelta
 
 from celery import shared_task
 from django.conf import settings as django_settings
+from django.db.models import F
 from django.utils import timezone
 
 from .ai import _apply_merge_tags, personalize_email
 from .gmail_service import build_unsubscribe_url, check_for_replies, send_gmail
 from .sms_service import send_sms, initiate_call
-from .models import CampaignLead, SequenceStep
+from .models import CampaignLead, ConnectedEmailAccount, SequenceStep
 from leads.models import BlockedDomain, normalize_domain
 
 logger = logging.getLogger(__name__)
@@ -356,6 +357,15 @@ def _skip_blocked_domain_lead(clead):
     return True
 
 
+def _warmup_limit_reached(account):
+    if not account or not account.warmup_enabled:
+        return False
+
+    limit = max(int(account.daily_sending_limit or 0), 0)
+    current = max(int(account.current_daily_count or 0), 0)
+    return current >= limit
+
+
 def _execute_sms_step(clead, step, now=None):
     """Send an SMS to the lead's phone number via Twilio."""
     now = now or timezone.now()
@@ -450,9 +460,20 @@ def send_email_step(campaign_lead_id, step_id):
             )
             return
 
+        account = clead.campaign.connected_account
+        if _warmup_limit_reached(account):
+            logger.info(
+                "Skipping warmup-limited send for %s | count=%s limit=%s",
+                clead.lead.email,
+                account.current_daily_count,
+                account.daily_sending_limit,
+            )
+            clead.next_execution_time = timezone.now() + timedelta(days=1)
+            clead.save(update_fields=['next_execution_time'])
+            return
+
         subject, body = personalize_email(step.template_subject, step.template_body, clead.lead)
 
-        account = clead.campaign.connected_account
         if account:
             try:
                 message_id = send_gmail(
@@ -464,6 +485,10 @@ def send_email_step(campaign_lead_id, step_id):
                 )
                 clead.last_sent_message_id = message_id
                 clead.save(update_fields=['last_sent_message_id'])
+                if account.warmup_enabled:
+                    ConnectedEmailAccount.objects.filter(id=account.id).update(
+                        current_daily_count=F('current_daily_count') + 1
+                    )
                 logger.info(f"Gmail SENT to {clead.lead.email} | msg_id={message_id}")
             except Exception as gmail_err:
                 logger.error(f"Gmail API send failed for {clead.lead.email}: {gmail_err}")
@@ -478,6 +503,19 @@ def send_email_step(campaign_lead_id, step_id):
 
     except Exception as e:
         logger.error(f"Failed to send email step: {e}")
+
+
+@shared_task
+def warmup_email_accounts():
+    """
+    Daily warm-up task that increases the send limit for enabled email accounts.
+    """
+    updated = ConnectedEmailAccount.objects.filter(warmup_enabled=True).update(
+        daily_sending_limit=F('daily_sending_limit') + 5,
+        current_daily_count=0,
+    )
+    logger.info("Warmup task updated %s connected email accounts", updated)
+    return updated
 
 
 @shared_task
