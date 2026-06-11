@@ -91,22 +91,42 @@
             <section class="content-wrap">
                 <div class="kpi-grid mb-4">
                     <div class="kpi-card">
-                        <div class="kpi-label">Total Leads</div>
+                        <div class="kpi-label">
+                        Total Leads
+                        <i class="bi bi-info-circle text-muted ms-1"
+                        data-bs-toggle="tooltip"
+                        data-bs-title="The total number of lead contacts imported into your workspace."></i>
+                    </div>
                         <div class="kpi-value"><div class="skeleton-box skeleton-kpi-value skeleton-kpi"></div><span id="total-leads-count" class="kpi-value-text" style="display: none;">0</span></div>
                         <div class="kpi-sub">Prospects in your workspace</div>
                     </div>
                     <div class="kpi-card">
-                        <div class="kpi-label">Active Campaigns</div>
+                        <div class="kpi-label">
+                            Active Campaigns
+                            <i class="bi bi-info-circle text-muted ms-1"
+                            data-bs-toggle="tooltip"
+                            data-bs-title="Campaigns currently sending emails or processing sequence steps."></i>
+                        </div>
                         <div class="kpi-value"><div class="skeleton-box skeleton-kpi-value skeleton-kpi"></div><span id="active-campaigns-count" class="kpi-value-text" style="display: none;">0</span></div>
                         <div class="kpi-sub">Currently running sequences</div>
                     </div>
                     <div class="kpi-card">
-                        <div class="kpi-label">Emails Sent</div>
+                        <div class="kpi-label">
+                            Emails Sent
+                            <i class="bi bi-info-circle text-muted ms-1"
+                            data-bs-toggle="tooltip"
+                            data-bs-title="Total outbound emails delivered across all campaigns."></i>
+                        </div>
                         <div class="kpi-value"><div class="skeleton-box skeleton-kpi-value skeleton-kpi"></div><span id="emails-sent-count" class="kpi-value-text" style="display: none;">0</span></div>
                         <div class="kpi-sub">Messages delivered by campaigns</div>
                     </div>
                     <div class="kpi-card">
-                        <div class="kpi-label">Reply Rate</div>
+                        <div class="kpi-label">
+                            Reply Rate
+                            <i class="bi bi-info-circle text-muted ms-1"
+                            data-bs-toggle="tooltip"
+                            data-bs-title="Percentage of contacted leads who replied to your outreach."></i>
+                        </div>
                         <div class="kpi-value text-success"><div class="skeleton-box skeleton-kpi-value skeleton-kpi"></div><span id="reply-rate" class="kpi-value-text" style="display: none;">0.0%</span></div>
                         <div class="kpi-sub">Percentage of leads replying</div>
                     </div>
@@ -188,15 +208,56 @@
     <script type="module">
         import { fetchWithAuth } from './api.js';
 
+
+        function animateCountUp(element, targetValue, duration = 1000, isPercent = false) {
+            let start = 0;
+            const startTime = performance.now();
+
+            function update(currentTime) {
+                const progress = Math.min((currentTime - startTime) / duration, 1);
+                const value = start + (targetValue - start) * progress;
+
+                if (isPercent) {
+                    element.textContent = value.toFixed(1) + '%';
+                } else {
+                    element.textContent = Math.floor(value).toLocaleString();
+                }
+
+                if (progress < 1) {
+                    requestAnimationFrame(update);
+                }
+            }
+
+            requestAnimationFrame(update);
+        }
+
+
         document.addEventListener('DOMContentLoaded', async () => {
             try {
                 const res = await fetchWithAuth('/analytics/dashboard/');
                 if (res.ok) {
                     const data = await res.json();
-                    document.getElementById('total-leads-count').textContent = Number(data.total_leads || 0).toLocaleString();
-                    document.getElementById('active-campaigns-count').textContent = Number(data.active_campaigns || 0).toLocaleString();
-                    document.getElementById('emails-sent-count').textContent = Number(data.emails_sent || 0).toLocaleString();
-                    document.getElementById('reply-rate').textContent = `${data.reply_rate || 0}%`;
+                    animateCountUp(
+                        document.getElementById('total-leads-count'),
+                        Number(data.total_leads || 0)
+                    );
+
+                    animateCountUp(
+                        document.getElementById('active-campaigns-count'),
+                        Number(data.active_campaigns || 0)
+                    );
+
+                    animateCountUp(
+                        document.getElementById('emails-sent-count'),
+                        Number(data.emails_sent || 0)
+                    );
+
+                    animateCountUp(
+                        document.getElementById('reply-rate'),
+                        Number(data.reply_rate || 0),
+                        1000,
+                        true
+                    );
 
                     document.querySelectorAll('.skeleton-kpi').forEach(el => el.style.display = 'none');
                     document.querySelectorAll('.kpi-value-text').forEach(el => el.style.display = 'block');
@@ -217,6 +278,12 @@
         });
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+        [...tooltipTriggerList].forEach(el => new bootstrap.Tooltip(el));
+    });
+    </script>
 </body>
 
 </html>

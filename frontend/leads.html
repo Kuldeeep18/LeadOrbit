@@ -256,13 +256,54 @@
             
         }
 
+        function animateCountUp(element, targetValue, duration = 1000, isPercent = false) {
+            let start = 0;
+            const startTime = performance.now();
+
+        function update(currentTime) {
+            const progress = Math.min((currentTime - startTime) / duration, 1);
+            const value = start + (targetValue - start) * progress;
+
+            if (isPercent) {
+                element.textContent = value.toFixed(1) + '%';
+            } else {
+                element.textContent = Math.floor(value).toLocaleString();
+            }
+
+            if (progress < 1) {
+                requestAnimationFrame(update);
+            }
+        }
+
+        requestAnimationFrame(update);
+    }
+
         function renderStats(leads) {
-            document.getElementById('leads-count').textContent = leads.length;
-            const active = leads.filter(l => !l.global_unsubscribe).length;
-            document.getElementById('active-leads-count').textContent = active;
-            document.getElementById('unsubscribed-count').textContent = leads.length - active;
-            const avgScore = leads.length ? (leads.reduce((sum, l) => sum + Number(l.score || 0), 0) / leads.length).toFixed(1) : '0.0';
-            document.getElementById('avg-score').textContent = avgScore;
+            const active = leads.filter(lead => !lead.global_unsubscribe).length;
+
+            const avgScore = leads.length
+                ? leads.reduce((sum, lead) => sum + (lead.score || 0), 0) / leads.length
+                : 0;
+
+            animateCountUp(
+                document.getElementById('leads-count'),
+                leads.length
+            );
+
+            animateCountUp(
+                document.getElementById('active-leads-count'),
+                active
+            );
+
+            animateCountUp(
+                document.getElementById('unsubscribed-count'),
+                leads.length - active
+            );
+
+            animateCountUp(
+                document.getElementById('avg-score'),
+                Number(avgScore)
+            );
         }
 
         function applySearch() {
