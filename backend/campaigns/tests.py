@@ -6,7 +6,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from campaigns.models import Campaign, CampaignLead, ConnectedEmailAccount, SequenceStep
+from campaigns.models import Campaign, CampaignLead, ConnectedEmailAccount, EmailVariant, SequenceStep
 from campaigns.ai import personalize_email
 from campaigns.tasks import (
     _get_campaign_steps,
@@ -68,6 +68,49 @@ class CampaignWorkflowTests(APITestCase):
         self.assertEqual(steps[0].template_subject, 'Hello {{firstName}}')
         self.assertEqual(steps[1].channel_type, 'WAIT')
         self.assertEqual(steps[1].delay_minutes, 2880)
+
+    def test_create_campaign_syncs_email_variants_from_builder_payload(self):
+        payload = {
+            'name': 'Variant campaign',
+            'status': 'DRAFT',
+            'settings': {
+                'steps': [
+                    {
+                        'type': 'EMAIL',
+                        'subject': 'Fallback {{firstName}}',
+                        'body': 'Fallback body',
+                        'variants': [
+                            {
+                                'variant_label': 'A',
+                                'subject': 'Variant A {{firstName}}',
+                                'body': 'Body A',
+                                'weight': 70,
+                            },
+                            {
+                                'label': 'B',
+                                'subject': 'Variant B {{firstName}}',
+                                'body': 'Body B',
+                                'weight': 30,
+                            },
+                        ],
+                    },
+                ],
+            },
+        }
+
+        response = self.client.post('/api/v1/campaigns/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        campaign = Campaign.objects.get(id=response.data['id'])
+        step = campaign.steps.get()
+        variants = list(step.variants.order_by('variant_label'))
+        self.assertEqual(len(variants), 2)
+        self.assertEqual(variants[0].variant_label, 'A')
+        self.assertEqual(variants[0].subject, 'Variant A {{firstName}}')
+        self.assertEqual(variants[0].weight, 70)
+        self.assertEqual(variants[1].variant_label, 'B')
+        self.assertEqual(variants[1].body, 'Body B')
+        self.assertEqual(response.data['steps'][0]['variants'][0]['variant_label'], 'A')
 
     def test_create_campaign_supports_all_step_and_condition_types(self):
         payload = {
@@ -579,6 +622,77 @@ class CampaignWorkflowTests(APITestCase):
         self.assertEqual(campaign_lead.status, 'ACTIVE')
         self.assertIsNone(campaign_lead.last_sent_message_id)
         self.assertGreater(campaign_lead.next_execution_time, timezone.now())
+
+    def test_send_email_step_uses_and_records_selected_email_variant(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Variant send flow',
+            status='ACTIVE',
+        )
+        account = ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=self.user,
+            email_address='sender@acme.test',
+            provider='GOOGLE',
+            access_token='token',
+            refresh_token='refresh',
+        )
+        campaign.connected_account = account
+        campaign.save(update_fields=['connected_account'])
+
+        email_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Fallback {{firstName}}',
+            template_body='Fallback body',
+        )
+        variant_a = EmailVariant.objects.create(
+            organization=self.organization,
+            step=email_step,
+            variant_label='A',
+            subject='Subject A {{firstName}}',
+            body='Body A',
+            weight=20,
+        )
+        variant_b = EmailVariant.objects.create(
+            organization=self.organization,
+            step=email_step,
+            variant_label='B',
+            subject='Subject B {{firstName}}',
+            body='Body B for {{firstName}}',
+            weight=80,
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='variant-lead@acme.test',
+            first_name='Riya',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=email_step,
+            status='ACTIVE',
+            next_execution_time=timezone.now() - timedelta(minutes=1),
+        )
+
+        with patch('campaigns.tasks._select_email_variant', return_value=variant_b), \
+                patch('campaigns.tasks.send_gmail', return_value='msg-variant') as mocked_send:
+            send_email_step(campaign_lead.id, email_step.id)
+
+        mocked_send.assert_called_once()
+        _, to_address, subject, body = mocked_send.call_args.args
+        self.assertEqual(to_address, 'variant-lead@acme.test')
+        self.assertEqual(subject, 'Subject B Riya')
+        self.assertEqual(body, 'Body B for Riya')
+
+        campaign_lead.refresh_from_db()
+        self.assertEqual(campaign_lead.last_sent_message_id, 'msg-variant')
+        self.assertEqual(campaign_lead.last_email_variant_id, variant_b.id)
+        self.assertNotEqual(campaign_lead.last_email_variant_id, variant_a.id)
 
     def test_condition_reply_step_stops_sequence_when_reply_detected(self):
         campaign = Campaign.objects.create(

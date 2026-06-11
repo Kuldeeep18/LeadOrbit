@@ -1,4 +1,5 @@
 import logging
+import random
 from datetime import timedelta
 
 from celery import shared_task
@@ -24,6 +25,26 @@ def _get_campaign_steps(campaign):
             campaign=campaign
         ).order_by("step_order")
     )
+
+
+def _select_email_variant(step):
+    variants = list(step.variants.all())
+    if not variants:
+        return None
+
+    total_weight = sum(max(variant.weight, 0) for variant in variants)
+    if total_weight <= 0:
+        return variants[0]
+
+    threshold = random.uniform(0, total_weight)
+    running_weight = 0
+    for variant in variants:
+        running_weight += max(variant.weight, 0)
+        if threshold <= running_weight:
+            return variant
+
+    return variants[-1]
+
 
 def _get_campaign_raw_steps(campaign):
     settings = campaign.settings if isinstance(campaign.settings, dict) else {}
@@ -450,7 +471,10 @@ def send_email_step(campaign_lead_id, step_id):
             )
             return
 
-        subject, body = personalize_email(step.template_subject, step.template_body, clead.lead)
+        selected_variant = _select_email_variant(step)
+        template_subject = selected_variant.subject if selected_variant else step.template_subject
+        template_body = selected_variant.body if selected_variant else step.template_body
+        subject, body = personalize_email(template_subject, template_body, clead.lead)
 
         account = clead.campaign.connected_account
         if account:
@@ -463,7 +487,8 @@ def send_email_step(campaign_lead_id, step_id):
                     unsubscribe_url=build_unsubscribe_url(clead.lead),
                 )
                 clead.last_sent_message_id = message_id
-                clead.save(update_fields=['last_sent_message_id'])
+                clead.last_email_variant = selected_variant
+                clead.save(update_fields=['last_sent_message_id', 'last_email_variant'])
                 logger.info(f"Gmail SENT to {clead.lead.email} | msg_id={message_id}")
             except Exception as gmail_err:
                 logger.error(f"Gmail API send failed for {clead.lead.email}: {gmail_err}")
