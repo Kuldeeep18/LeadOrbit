@@ -2,46 +2,60 @@
 <html lang="en">
 
 <head>
+        <!-- SEO Meta Tags -->
+    <title>LeadOrbit - Dashboard</title>
+    <meta name="description" content="LeadOrbit - Dashboard. View campaign performance, lead analytics, and key metrics.">
+    <meta name="keywords" content="lead management, outreach, CRM, dashboard, analytics">
+    <meta name="author" content="LeadOrbit Team">
+    <meta property="og:title" content="LeadOrbit - Dashboard">
+    <meta property="og:description" content="Track your campaigns, leads, and engagement metrics in LeadOrbit dashboard.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="LeadOrbit">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="LeadOrbit - Dashboard">
+    <meta name="twitter:description" content="LeadOrbit dashboard - Monitor your campaign performance.">
+    <link rel="icon" type="image/png" href="/favicon.png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="/theme-boot.js"></script>
+    <script src="./theme-boot.js"></script>
     <title>Dashboard - LeadOrbit</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700&display=swap" rel="stylesheet">
-    <link href="/theme.css" rel="stylesheet">
+    <link href="./theme.css" rel="stylesheet">
 </head>
 
 <body>
+    <div id="sidebar-overlay"></div>
     <div class="app-shell">
-        <aside class="sidebar">
+        <aside class="sidebar" role="navigation" aria-label="Main navigation">
             <div class="d-flex align-items-center mb-4 mt-2">
                 <div class="brand">LeadOrbit</div>
             </div>
             <ul class="nav nav-pills flex-column mb-auto">
                 <li class="nav-item mb-2">
-                    <a href="/dashboard.html" class="nav-link active d-flex align-items-center">
-                        <i class="bi bi-grid-1x2 me-2"></i> Dashboard
+                    <a href="/dashboard.html" class="nav-link d-flex align-items-center" aria-current="page">
+                        <i class="bi bi-grid-1x2 me-2" aria-hidden="true"></i> Dashboard
                     </a>
                 </li>
                 <li class="nav-item mb-2">
                     <a href="/leads.html" class="nav-link d-flex align-items-center">
-                        <i class="bi bi-people me-2"></i> Leads
+                        <i class="bi bi-people me-2" aria-hidden="true"></i> Leads
                     </a>
                 </li>
                 <li class="nav-item mb-2">
                     <a href="/campaigns.html" class="nav-link d-flex align-items-center">
-                        <i class="bi bi-megaphone me-2"></i> Campaigns
+                        <i class="bi bi-megaphone me-2" aria-hidden="true"></i> Campaigns
                     </a>
                 </li>
                 <li class="nav-item mb-2">
                     <a href="/analytics.html" class="nav-link d-flex align-items-center">
-                        <i class="bi bi-bar-chart-line me-2"></i> Analytics
+                        <i class="bi bi-bar-chart-line me-2" aria-hidden="true"></i> Analytics
                     </a>
                 </li>
                 <li class="nav-item mb-2">
                     <a href="/settings.html" class="nav-link d-flex align-items-center">
-                        <i class="bi bi-gear me-2"></i> Settings
+                        <i class="bi bi-gear me-2" aria-hidden="true"></i> Settings
                     </a>
                 </li>
             </ul>
@@ -53,50 +67,109 @@
         <main class="main-area">
             <header class="top-header">
                 <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                    <button id="hamburger-btn" class="btn d-lg-none p-1" aria-label="Toggle menu">
+                        <i class="bi bi-list fs-4" aria-hidden="true"></i>
+                    </button>
                     <div>
                         <div class="page-title">Dashboard Overview</div>
                         <div class="title-meta">Track lead growth, campaign activity, and replies in one place.</div>
                     </div>
                     <div class="d-flex align-items-center gap-2">
                         <a href="/campaign-builder.html" class="btn btn-sm btn-primary px-3">
-                            <i class="bi bi-plus-lg me-1"></i> New Campaign
+                            <i class="bi bi-plus-lg me-1" aria-hidden="true"></i> New Campaign
                         </a>
-                        <button id="logout-btn" class="btn btn-sm btn-logout">Logout</button>
+                        <button id="logout-btn" class="btn btn-sm btn-logout" aria-label="Log out">Logout</button>
                     </div>
                 </div>
             </header>
-
+            <!-- Breadcrumb Navigation -->
+<nav aria-label="breadcrumb" class="container mt-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item active" aria-current="page">Dashboard</li>
+    </ol>
+</nav>
             <section class="content-wrap">
                 <div class="kpi-grid mb-4">
                     <div class="kpi-card">
                         <div class="kpi-label">Total Leads</div>
-                        <div class="kpi-value" id="total-leads-count">0</div>
+                        <div class="kpi-value"><div class="skeleton-box skeleton-kpi-value skeleton-kpi"></div><span id="total-leads-count" class="kpi-value-text" style="display: none;">0</span></div>
                         <div class="kpi-sub">Prospects in your workspace</div>
                     </div>
                     <div class="kpi-card">
                         <div class="kpi-label">Active Campaigns</div>
-                        <div class="kpi-value" id="active-campaigns-count">0</div>
+                        <div class="kpi-value"><div class="skeleton-box skeleton-kpi-value skeleton-kpi"></div><span id="active-campaigns-count" class="kpi-value-text" style="display: none;">0</span></div>
                         <div class="kpi-sub">Currently running sequences</div>
                     </div>
                     <div class="kpi-card">
                         <div class="kpi-label">Emails Sent</div>
-                        <div class="kpi-value" id="emails-sent-count">0</div>
+                        <div class="kpi-value"><div class="skeleton-box skeleton-kpi-value skeleton-kpi"></div><span id="emails-sent-count" class="kpi-value-text" style="display: none;">0</span></div>
                         <div class="kpi-sub">Messages delivered by campaigns</div>
                     </div>
                     <div class="kpi-card">
                         <div class="kpi-label">Reply Rate</div>
-                        <div class="kpi-value text-success" id="reply-rate">0.0%</div>
+                        <div class="kpi-value text-success"><div class="skeleton-box skeleton-kpi-value skeleton-kpi"></div><span id="reply-rate" class="kpi-value-text" style="display: none;">0.0%</span></div>
                         <div class="kpi-sub">Percentage of leads replying</div>
                     </div>
                 </div>
 
+                <div class="glass-card p-3 p-md-4 mb-4">
+                    <div class="section-title">Performance Chart</div>
+                    <div id="chart-skeleton" class="skeleton-box" style="width: 100%; height: 250px; border-radius: 12px;"></div>
+                   <div id="chart-content"
+    style="display: none; height: 250px; align-items: center; justify-content: center; border: 1px dashed var(--line); border-radius: 12px;">
+
+    <div class="dashboard-empty-state text-center">
+        <i class="bi bi-bar-chart-line display-5 text-muted" aria-hidden="true"></i>
+
+        <h5 class="mt-3 mb-2">
+            Welcome!
+        </h5>
+
+        <p class="text-muted mb-3">
+            Import leads and launch a campaign to see stats here.
+        </p>
+
+        <a href="/leads.html" class="btn btn-primary">
+            <i class="bi bi-rocket-takeoff me-1" aria-hidden="true"></i>
+            Get Started
+        </a>
+    </div>
+
+</div>
+                </div>
+
                 <div class="glass-card p-3 p-md-4">
                     <div class="section-title">Recent Activity</div>
-                    <ul class="list-group list-group-flush" id="activity-list">
+                    <div id="activity-skeletons">
+                        <ul class="list-group list-group-flush">
+                            <li class="list-group-item border-0 px-0 py-3 d-flex align-items-center">
+                                <div class="skeleton-box skeleton-avatar me-3"></div>
+                                <div class="w-100">
+                                    <div class="skeleton-box skeleton-text"></div>
+                                    <div class="skeleton-box skeleton-text short"></div>
+                                </div>
+                            </li>
+                            <li class="list-group-item border-0 px-0 py-3 d-flex align-items-center">
+                                <div class="skeleton-box skeleton-avatar me-3"></div>
+                                <div class="w-100">
+                                    <div class="skeleton-box skeleton-text"></div>
+                                    <div class="skeleton-box skeleton-text short"></div>
+                                </div>
+                            </li>
+                            <li class="list-group-item border-0 px-0 py-3 d-flex align-items-center">
+                                <div class="skeleton-box skeleton-avatar me-3"></div>
+                                <div class="w-100">
+                                    <div class="skeleton-box skeleton-text"></div>
+                                    <div class="skeleton-box skeleton-text short"></div>
+                                </div>
+                            </li>
+                        </ul>
+                    </div>
+                    <ul class="list-group list-group-flush" id="activity-list" style="display: none;">
                         <li class="list-group-item border-0 px-0 py-3 d-flex justify-content-between align-items-center">
                             <div class="d-flex align-items-center">
                                 <div class="activity-icon rounded-circle d-flex align-items-center justify-content-center me-3">
-                                    <i class="bi bi-stars"></i>
+                                    <i class="bi bi-stars" aria-hidden="true"></i>
                                 </div>
                                 <div>
                                     <div class="fw-semibold">Workspace ready</div>
@@ -111,9 +184,9 @@
         </main>
     </div>
 
-    <script type="module" src="/main.js"></script>
+    <script type="module" src="./main.js"></script>
     <script type="module">
-        import { fetchWithAuth } from '/api.js';
+        import { fetchWithAuth } from './api.js';
 
         document.addEventListener('DOMContentLoaded', async () => {
             try {
@@ -124,6 +197,19 @@
                     document.getElementById('active-campaigns-count').textContent = Number(data.active_campaigns || 0).toLocaleString();
                     document.getElementById('emails-sent-count').textContent = Number(data.emails_sent || 0).toLocaleString();
                     document.getElementById('reply-rate').textContent = `${data.reply_rate || 0}%`;
+
+                    document.querySelectorAll('.skeleton-kpi').forEach(el => el.style.display = 'none');
+                    document.querySelectorAll('.kpi-value-text').forEach(el => el.style.display = 'block');
+                    
+                    const chartSkeleton = document.getElementById('chart-skeleton');
+                    if (chartSkeleton) chartSkeleton.style.display = 'none';
+                    const chartContent = document.getElementById('chart-content');
+                    if (chartContent) chartContent.style.display = 'flex';
+
+                    const actSkeletons = document.getElementById('activity-skeletons');
+                    if (actSkeletons) actSkeletons.style.display = 'none';
+                    const actList = document.getElementById('activity-list');
+                    if (actList) actList.style.display = 'block';
                 }
             } catch (e) {
                 console.error('Dashboard fetch error', e);

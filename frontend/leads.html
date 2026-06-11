@@ -2,46 +2,60 @@
 <html lang="en">
 
 <head>
+        <!-- SEO Meta Tags -->
+    <title>LeadOrbit - Lead Management</title>
+    <meta name="description" content="LeadOrbit - Lead Management. Import, manage, and track your leads and engagement.">
+    <meta name="keywords" content="lead management, CRM, import leads, track leads">
+    <meta name="author" content="LeadOrbit Team">
+    <meta property="og:title" content="LeadOrbit - Lead Management">
+    <meta property="og:description" content="Manage your leads, import CSV, and track engagement in LeadOrbit.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="LeadOrbit">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="LeadOrbit - Lead Management">
+    <meta name="twitter:description" content="LeadOrbit lead management - Import, organize, and track leads.">
+    <link rel="icon" type="image/png" href="/favicon.png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="/theme-boot.js"></script>
+    <script src="./theme-boot.js"></script>
     <title>Leads - LeadOrbit</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700&display=swap" rel="stylesheet">
-    <link href="/theme.css" rel="stylesheet">
+    <link href="./theme.css" rel="stylesheet">
 </head>
 
 <body>
+    <div id="sidebar-overlay"></div>
     <div class="app-shell">
-        <aside class="sidebar">
+        <aside class="sidebar" role="navigation" aria-label="Main navigation">
             <div class="d-flex align-items-center mb-4 mt-2">
                 <div class="brand">LeadOrbit</div>
             </div>
             <ul class="nav nav-pills flex-column mb-auto">
                 <li class="nav-item mb-2">
                     <a href="/dashboard.html" class="nav-link d-flex align-items-center">
-                        <i class="bi bi-grid-1x2 me-2"></i> Dashboard
+                        <i class="bi bi-grid-1x2 me-2" aria-hidden="true"></i> Dashboard
                     </a>
                 </li>
                 <li class="nav-item mb-2">
-                    <a href="/leads.html" class="nav-link active d-flex align-items-center">
-                        <i class="bi bi-people me-2"></i> Leads
+                    <a href="/leads.html" class="nav-link d-flex align-items-center" aria-current="page">
+                        <i class="bi bi-people me-2" aria-hidden="true"></i> Leads
                     </a>
                 </li>
                 <li class="nav-item mb-2">
                     <a href="/campaigns.html" class="nav-link d-flex align-items-center">
-                        <i class="bi bi-megaphone me-2"></i> Campaigns
+                        <i class="bi bi-megaphone me-2" aria-hidden="true"></i> Campaigns
                     </a>
                 </li>
                 <li class="nav-item mb-2">
                     <a href="/analytics.html" class="nav-link d-flex align-items-center">
-                        <i class="bi bi-bar-chart-line me-2"></i> Analytics
+                        <i class="bi bi-bar-chart-line me-2" aria-hidden="true"></i> Analytics
                     </a>
                 </li>
                 <li class="nav-item mb-2">
                     <a href="/settings.html" class="nav-link d-flex align-items-center">
-                        <i class="bi bi-gear me-2"></i> Settings
+                        <i class="bi bi-gear me-2" aria-hidden="true"></i> Settings
                     </a>
                 </li>
             </ul>
@@ -53,6 +67,9 @@
         <main class="main-area">
             <header class="top-header">
                 <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                    <button id="hamburger-btn" class="btn d-lg-none p-1" aria-label="Toggle menu">
+                        <i class="bi bi-list fs-4" aria-hidden="true"></i>
+                    </button>
                     <div>
                         <div class="page-title">Lead Workspace</div>
                         <div class="title-meta">Upload, review, and segment leads for campaign enrollment.</div>
@@ -60,18 +77,24 @@
                     <div class="d-flex align-items-center gap-2">
                         <div class="search-wrap">
                             <div class="input-group input-group-sm">
-                                <span class="input-group-text"><i class="bi bi-search"></i></span>
-                                <input type="text" id="lead-search" class="form-control" placeholder="Search name, email, company">
+                                <span class="input-group-text"><i class="bi bi-search" aria-hidden="true"></i></span>
+                                <input type="text" id="lead-search" class="form-control" placeholder="Search name, email, company" aria-label="Search leads">
                             </div>
                         </div>
                         <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#uploadModal">
-                            <i class="bi bi-upload me-1"></i> Import CSV
+                            <i class="bi bi-upload me-1" aria-hidden="true"></i> Import CSV
                         </button>
-                        <button id="logout-btn" class="btn btn-sm btn-logout">Logout</button>
+                        <button id="logout-btn" class="btn btn-sm btn-logout" aria-label="Log out">Logout</button>
                     </div>
                 </div>
             </header>
-
+           <!-- Breadcrumb Navigation -->
+<nav aria-label="breadcrumb" class="container mt-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/dashboard.html">Home</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Leads</li>
+    </ol>
+</nav>
             <section class="content-wrap">
                 <div class="kpi-grid mb-4">
                     <div class="kpi-card">
@@ -112,7 +135,7 @@
                             <tbody id="leads-table-body">
                                 <tr>
                                     <td colspan="6" class="text-center py-4 text-muted">
-                                        <div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>
+                                        <div class="spinner-border spinner-border-sm text-primary me-2" role="status" aria-label="Loading leads"></div>
                                         Loading leads...
                                     </td>
                                 </tr>
@@ -129,23 +152,23 @@
             <div class="modal-content rounded-3 shadow">
                 <div class="modal-header border-0">
                     <h5 class="modal-title fw-bold">Import Leads via CSV</h5>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
                     <div class="alert alert-info small mb-3">
-                        <i class="bi bi-info-circle me-1"></i>
+                        <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
                         CSV must include an <strong>email</strong> column.
                         Optional fields: <strong>firstName/first_name</strong>, <strong>lastName/last_name</strong>,
                         <strong>companyName/company</strong>, <strong>linkedinUrl/linkedin_url</strong>,
                         <strong>phone</strong>.
                     </div>
-                    <form id="upload-form">
+                    <form id="upload-form" aria-label="CSV upload form">
                         <div class="mb-3">
-                            <label class="form-label">Select CSV file</label>
+                            <label for="csv-file" class="form-label">Select CSV file</label>
                             <input type="file" class="form-control" id="csv-file" accept=".csv" required>
                         </div>
                         <button type="submit" class="btn btn-primary w-100" id="upload-btn">
-                            <i class="bi bi-cloud-upload me-1"></i> Upload and Process
+                            <i class="bi bi-cloud-upload me-1" aria-hidden="true"></i> Upload and Process
                         </button>
                         <div id="upload-status" class="mt-2 text-center small"></div>
                     </form>
@@ -154,26 +177,68 @@
         </div>
     </div>
 
-    <script type="module" src="/main.js"></script>
+    <script type="module" src="./main.js"></script>
     <script type="module">
-        import { fetchWithAuth } from '/api.js';
+        import { fetchWithAuth } from './api.js';
 
         let allLeads = [];
+
+        function copyToClipboard(text, button) {
+            navigator.clipboard.writeText(text).then(() => {
+                const icon = button.querySelector('i');
+
+                icon.classList.remove('bi-clipboard');
+                icon.classList.add('bi-check');
+
+                setTimeout(() => {
+                    icon.classList.remove('bi-check');
+                    icon.classList.add('bi-clipboard');
+                }, 2000);
+            });
+        }
 
         function renderLeadRows(leads) {
             const tbody = document.getElementById('leads-table-body');
             if (leads.length === 0) {
-                tbody.innerHTML = `<tr><td colspan="6" class="text-center py-5 text-muted">
-                    <i class="bi bi-people" style="font-size: 2rem;"></i>
-                    <p class="mt-2 mb-0">No leads found in this account.</p>
-                </td></tr>`;
+             tbody.innerHTML = `
+<tr>
+    <td colspan="6" class="text-center py-5">
+        <div class="empty-state">
+            <i class="bi bi-people display-4 text-secondary" aria-hidden="true" ></i>
+
+            <h5 class="mt-3 mb-2">
+                No leads yet
+            </h5>
+
+            <p class="text-muted mb-3">
+                Import your first CSV to get started!
+            </p>
+
+            <button
+                class="btn btn-primary btn-sm"
+                data-bs-toggle="modal"
+                data-bs-target="#uploadModal">
+                <i class="bi bi-upload me-1" aria-hidden="true" ></i>
+                Import CSV
+            </button>
+        </div>
+    </td>
+</tr>`;
                 return;
             }
 
             tbody.innerHTML = leads.map(lead => `
                 <tr>
                     <td class="fw-semibold">${lead.first_name || ''} ${lead.last_name || ''}</td>
-                    <td>${lead.email}</td>
+                    <td>
+                        <span>${lead.email}</span>
+                        <button
+                            class="btn btn-sm btn-outline-secondary copy-email-btn"
+                            data-email="${lead.email}"
+                            aria-label="Copy email address" >
+                            <i class="bi bi-clipboard" aria-hidden="true" ></i>
+                        </button>
+                    </td>
                     <td>${lead.phone || '<span class="text-muted">-</span>'}</td>
                     <td>${lead.company || '<span class="text-muted">-</span>'}</td>
                     <td><span class="chip" style="background:#e0f2fe;color:#0369a1;">${lead.score}</span></td>
@@ -182,6 +247,13 @@
                         : '<span class="chip" style="background:#dcfce7;color:#166534;">Active</span>'}</td>
                 </tr>
             `).join('');
+
+            document.querySelectorAll('.copy-email-btn').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    copyToClipboard(btn.dataset.email, btn);
+                });
+            });
+            
         }
 
         function renderStats(leads) {
@@ -229,8 +301,7 @@
                 const statusEl = document.getElementById('upload-status');
 
                 btn.disabled = true;
-                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Uploading...';
-
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span> Uploading...';
                 const formData = new FormData();
                 formData.append('file', fileInput.files[0]);
 
@@ -241,16 +312,16 @@
                     });
 
                     if (res.status === 202) {
-                        statusEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1"></i>File uploaded. Processing now...</span>';
+                        statusEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1" aria-hidden="true" ></i>File uploaded. Processing now...</span>';
                         setTimeout(() => window.location.reload(), 1800);
                     } else {
-                        statusEl.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle me-1"></i>Upload failed.</span>';
+                        statusEl.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle me-1" aria-hidden="true" ></i>Upload failed.</span>';
                     }
                 } catch (err) {
                     statusEl.innerHTML = `<span class="text-danger">Error: ${err.message}</span>`;
                 } finally {
                     btn.disabled = false;
-                    btn.innerHTML = '<i class="bi bi-cloud-upload me-1"></i> Upload and Process';
+                    btn.innerHTML = '<i class="bi bi-cloud-upload me-1" aria-hidden="true"></i> Upload and Process';
                 }
             });
         });

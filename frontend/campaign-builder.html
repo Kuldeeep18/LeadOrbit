@@ -1,13 +1,26 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
+        <!-- SEO Meta Tags -->
+    <title>LeadOrbit - Campaign Builder</title>
+    <meta name="description" content="LeadOrbit - Campaign Builder. Design multi-step outreach sequences with email, SMS, calls.">
+    <meta name="keywords" content="campaign builder, sequence builder, outreach workflow, automation">
+    <meta name="author" content="LeadOrbit Team">
+    <meta property="og:title" content="LeadOrbit - Campaign Builder">
+    <meta property="og:description" content="Design powerful outreach sequences in LeadOrbit campaign builder.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="LeadOrbit">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="LeadOrbit - Campaign Builder">
+    <meta name="twitter:description" content="LeadOrbit campaign builder - Create multi-step sequences.">
+    <link rel="icon" type="image/png" href="/favicon.png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="/theme-boot.js"></script>
+    <script src="./theme-boot.js"></script>
     <title>Campaign Builder - LeadOrbit</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="/theme.css" rel="stylesheet">
+    <link href="./theme.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <style>
@@ -21,7 +34,7 @@
             background: #eef3f8;
         }
 
-        /* â”€â”€ Top Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+        /* ── Top Bar ─────────────────────── */
         .top-bar {
             height: 56px;
             background: #fff;
@@ -32,7 +45,6 @@
             padding: 0 20px;
             z-index: 10;
         }
-
         .top-bar .campaign-name {
             border: none;
             background: transparent;
@@ -113,7 +125,7 @@
             left: 22px;
         }
 
-        /* â”€â”€ Main Layout: Canvas + Editor Panel â”€â”€ */
+        /* ── Main Layout: Canvas + Editor Panel ── */
         .main-layout {
             display: flex;
             height: calc(100vh - 56px);
@@ -142,7 +154,7 @@
             display: none;
         }
 
-        /* â”€â”€ Flow Nodes â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+        /* ── Flow Nodes ──────────────────── */
         .flow-node {
             background: #fff;
             border: 1.5px solid #e2e8f0;
@@ -233,7 +245,7 @@
             font-weight: 500;
         }
 
-        /* â”€â”€ Connectors & Add Buttons â”€â”€â”€â”€ */
+        /* ── Connectors & Add Buttons ──── */
         .connector {
             display: flex;
             flex-direction: column;
@@ -267,7 +279,7 @@
             background: #eff6ff;
         }
 
-        /* â”€â”€ Branching â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+        /* ── Branching ───────────────────── */
         .branch-container {
             display: flex;
             gap: 80px;
@@ -310,7 +322,7 @@
             color: #ef4444;
         }
 
-        /* â”€â”€ Add Step Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+        /* ── Add Step Modal ──────────────── */
         .step-picker {
             position: fixed;
             inset: 0;
@@ -325,6 +337,10 @@
             display: none;
         }
 
+        .template-library-modal.hidden {
+            display: none;
+        }
+
         .step-picker-card {
             background: #fff;
             border-radius: 14px;
@@ -333,6 +349,66 @@
             max-height: 75vh;
             overflow-y: auto;
             box-shadow: 0 20px 60px rgba(0, 0, 0, .15);
+        }
+
+        .template-library-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 23, 42, 0.5);
+            z-index: 110;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .template-library-modal.hidden {
+            display: none;
+        }
+
+        .template-library-card {
+            background: #fff;
+            border-radius: 18px;
+            width: min(960px, 100%);
+            max-height: 80vh;
+            overflow-y: auto;
+            box-shadow: 0 24px 80px rgba(15, 23, 42, 0.2);
+            padding: 24px;
+        }
+
+        .template-library-card h5 {
+            margin-bottom: 10px;
+            font-weight: 700;
+        }
+
+        .template-list {
+            display: grid;
+            gap: 12px;
+        }
+
+        .template-item {
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            padding: 16px;
+            background: #f8fafc;
+        }
+
+        .template-item .template-item-name {
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+
+        .template-item .template-item-meta {
+            font-size: 0.78rem;
+            color: #64748b;
+            margin-bottom: 10px;
+        }
+
+        .template-item .template-item-body {
+            font-size: 0.9rem;
+            white-space: pre-wrap;
+            color: #1e293b;
+            margin-bottom: 12px;
         }
 
         .step-picker-card h5 {
@@ -398,7 +474,7 @@
             color: #fff;
         }
 
-        /* â”€â”€ Editor Panel Styles â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ */
+        /* ── Editor Panel Styles ─────────── */
         .ep-title {
             font-weight: 700;
             font-size: 1.1rem;
@@ -840,33 +916,74 @@
                 grid-template-columns: 1fr;
             }
         }
+
+        @media (max-width: 767px) {
+            .top-bar {
+                height: auto;
+                flex-wrap: wrap;
+                gap: 8px;
+                padding: 10px 12px;
+            }
+
+            .top-bar .campaign-name {
+                width: 160px;
+                font-size: 0.9rem;
+            }
+
+            .tab-pills .tab {
+                padding: 5px 10px;
+                font-size: 0.78rem;
+            }
+
+            .main-layout {
+                flex-direction: column;
+                height: auto;
+            }
+
+            .editor-panel {
+                width: 100% !important;
+                border-left: none;
+                border-top: 1px solid #e2e8f0;
+            }
+
+            .canvas-area {
+                min-height: 50vh;
+            }
+        }
     </style>
 </head>
-
+<!-- Breadcrumb Navigation -->
+<nav aria-label="breadcrumb" class="container mt-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/dashboard.html">Home</a></li>
+        <li class="breadcrumb-item"><a href="/campaigns.html">Campaigns</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Builder</li>
+    </ol>
+</nav>
 <body class="builder-page">
-    <!-- â”€â”€â”€ Top Bar â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+    <!-- ─── Top Bar ─────────────────────────── -->
     <div class="top-bar">
         <div class="d-flex align-items-center gap-3">
             <a href="/campaigns.html" style="color:#64748b; text-decoration:none; font-size:1.2rem;"><i
-                    class="bi bi-x-lg"></i></a>
-            <i class="bi bi-diagram-3" style="color:#94a3b8;"></i>
-            <input type="text" class="campaign-name" id="campaign-name" value="New Campaign">
-            <button class="status-toggle off" id="status-toggle" title="Toggle Active/Inactive"></button>
-            <i class="bi bi-gear" style="color:#94a3b8; cursor:pointer;" id="settings-icon"></i>
+                    class="bi bi-x-lg" aria-hidden="true"></i></a>
+            <i class="bi bi-diagram-3" style="color:#94a3b8;" aria-hidden="true"></i>
+            <input type="text" class="campaign-name" id="campaign-name" value="New Campaign" aria-label="Campaign name">
+            <button class="status-toggle off" id="status-toggle" title="Toggle Active/Inactive" aria-label="Toggle campaign status" ></button>
+            <i class="bi bi-gear" style="color:#94a3b8; cursor:pointer;" id="settings-icon" aria-hidden="true"></i>
         </div>
         <div class="d-flex align-items-center gap-3">
             <div class="tab-pills">
-                <div class="tab active" data-tab="sequence"><i class="bi bi-diagram-3 me-1"></i> Sequence</div>
-                <div class="tab" data-tab="leads"><i class="bi bi-people me-1"></i> Lead list</div>
-                <div class="tab" data-tab="launch"><i class="bi bi-rocket me-1"></i> Launch</div>
+                <div class="tab active" data-tab="sequence"><i class="bi bi-diagram-3 me-1" aria-hidden="true"></i> Sequence</div>
+                <div class="tab" data-tab="leads"><i class="bi bi-people me-1" aria-hidden="true"></i> Lead list</div>
+                <div class="tab" data-tab="launch"><i class="bi bi-rocket me-1" aria-hidden="true"></i> Launch</div>
             </div>
             <button class="btn btn-primary btn-sm px-3 fw-semibold" id="next-step-btn">
-                Next step <i class="bi bi-chevron-right ms-1"></i>
+                Next step <i class="bi bi-chevron-right ms-1" aria-hidden="true"></i>
             </button>
         </div>
     </div>
 
-    <!-- â”€â”€â”€ Main Layout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+    <!-- ─── Main Layout ─────────────────────── -->
     <div class="main-layout">
         <!-- Canvas -->
         <div class="canvas-area" id="canvas">
@@ -884,7 +1001,7 @@
         </div>
     </div>
 
-    <!-- â”€â”€â”€ Add Step Modal â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+    <!-- ─── Add Step Modal ──────────────────── -->
     <div class="step-picker hidden" id="step-picker">
         <div class="step-picker-card">
             <div class="d-flex justify-content-between align-items-center mb-3">
@@ -974,6 +1091,19 @@
         </div>
     </div>
 
+    <div class="template-library-modal hidden" id="template-library-modal">
+        <div class="template-library-card">
+            <div class="d-flex align-items-start justify-content-between gap-3 mb-3">
+                <div>
+                    <h5>Saved email templates</h5>
+                    <p class="text-muted small mb-0">Insert a saved template into the current email step, or save the current draft as a new template.</p>
+                </div>
+                <button class="btn btn-sm btn-outline-secondary" id="close-template-library" title="Close templates"><i class="bi bi-x-lg"></i></button>
+            </div>
+            <div id="template-library-content"></div>
+        </div>
+    </div>
+
     <div class="ai-composer hidden" id="ai-composer">
         <div class="ai-composer-card">
             <div class="ai-composer-sidebar">
@@ -1014,17 +1144,81 @@
         </div>
     </div>
 
+    <script type="module" src="./main.js"></script>
+    <!-- Campaign Settings Modal -->
+<div class="modal fade" id="campaignSettingsModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <h5 class="modal-title">Campaign Settings</h5>
+        <button type="button"
+                class="btn-close"
+                data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input"
+                 type="checkbox"
+                 id="setting-stop-reply"
+                 checked>
+          <label class="form-check-label">
+            Stop on Reply
+          </label>
+        </div>
+
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input"
+                 type="checkbox"
+                 id="setting-track-opens"
+                 checked>
+          <label class="form-check-label">
+            Track Email Opens
+          </label>
+        </div>
+
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input"
+                 type="checkbox"
+                 id="setting-track-clicks"
+                 checked>
+          <label class="form-check-label">
+            Track Link Clicks
+          </label>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">
+            Daily Sending Limit
+          </label>
+
+          <input type="number"
+                 class="form-control"
+                 id="setting-daily-limit"
+                 value="100">
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+</div>
+
     <script type="module" src="/main.js"></script>
     <script type="module">
-        import { fetchWithAuth } from '/api.js?v=20260311b';
+        import { fetchWithAuth } from './api.js';
 
-        // â”€â”€â”€ STATE â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ─── STATE ──────────────────────────
         let campaignId = null;
         let selectedNodeIndex = null;
         let addInsertIndex = null; // where the "+" was clicked
         let addBranchTarget = null; // optional { parentIndex, branch }
         let connectedAccounts = [];
         let selectedConnectedAccountId = null;
+        let emailTemplates = [];
+        let emailTemplatesLoaded = false;
         let activeTab = 'sequence';
         let availableLeads = [];
         let selectedLeadIds = new Set();
@@ -1042,7 +1236,7 @@
         const params = new URLSearchParams(window.location.search);
         const editId = params.get('id');
 
-        // â”€â”€â”€ ICONS MAP â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ─── ICONS MAP ──────────────────────
         const ICONS = {
             EMAIL: { icon: 'bi-envelope-fill', cls: 'email', label: 'Email', meta: 'Send automatic email' },
             WAIT: { icon: 'bi-clock-fill', cls: 'wait', label: 'Delay', meta: 'Wait before next step' },
@@ -1088,6 +1282,146 @@
             const value = String(text).trim();
             if (value.length <= limit) return value;
             return `${value.slice(0, limit)}...`;
+        }
+
+        async function loadEmailTemplates() {
+            try {
+                const res = await fetchWithAuth('/email-templates/');
+                if (!res.ok) {
+                    throw new Error('Unable to load templates');
+                }
+                emailTemplates = await res.json();
+                emailTemplatesLoaded = true;
+            } catch (error) {
+                console.error(error);
+                emailTemplates = [];
+                emailTemplatesLoaded = true;
+            }
+        }
+
+        function renderTemplateLibrary() {
+            const library = document.getElementById('template-library-content');
+            if (!library) return;
+
+            if (!emailTemplatesLoaded) {
+                library.innerHTML = '<div class="text-center py-5">Loading templates...</div>';
+                return;
+            }
+
+            if (emailTemplates.length === 0) {
+                library.innerHTML = `
+                    <div class="p-4 text-center text-muted">
+                        <p class="mb-2">No saved templates yet.</p>
+                        <p>Create one from the current email step using <strong>Save as Template</strong>.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            library.innerHTML = `
+                <div class="template-list">
+                    ${emailTemplates.map(template => `
+                        <div class="template-item">
+                            <div class="template-item-name">${escapeHtml(template.name)}</div>
+                            <div class="template-item-meta">
+                                ${template.category ? `<span class="badge rounded-pill bg-secondary me-1">${escapeHtml(template.category)}</span>` : ''}
+                                Used ${template.usage_count || 0} times
+                            </div>
+                            <div class="template-item-body">${escapeHtml(template.subject)}\n\n${escapeHtml(template.body)}</div>
+                            <button class="btn btn-sm btn-primary" data-insert-template="${template.id}">Insert into step</button>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+
+            library.querySelectorAll('[data-insert-template]').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const templateId = btn.dataset.insertTemplate;
+                    const template = emailTemplates.find(item => item.id === templateId);
+                    if (!template) return;
+                    applyTemplateToCurrentEmail(template);
+                    await incrementTemplateUsage(templateId);
+                    closeTemplateLibrary();
+                });
+            });
+        }
+
+        async function openTemplateLibrary() {
+            if (!emailTemplatesLoaded) {
+                await loadEmailTemplates();
+            }
+            renderTemplateLibrary();
+            document.getElementById('template-library-modal').classList.remove('hidden');
+        }
+
+        function closeTemplateLibrary() {
+            document.getElementById('template-library-modal').classList.add('hidden');
+        }
+
+        function applyTemplateToCurrentEmail(template) {
+            if (selectedNodeIndex === null || !steps[selectedNodeIndex] || steps[selectedNodeIndex].type !== 'EMAIL') {
+                alert('Select an email step first.');
+                return;
+            }
+            const step = steps[selectedNodeIndex];
+            step.subject = template.subject || '';
+            step.body = template.body || '';
+            renderCanvas();
+            renderEditor();
+        }
+
+        async function saveCurrentStepAsTemplate(step) {
+            if (!step || step.type !== 'EMAIL') {
+                alert('Please select an email step to save as a template.');
+                return;
+            }
+
+            const name = window.prompt('Template name', step.subject ? step.subject.slice(0, 40) : 'New template');
+            if (!name) return;
+
+            const payload = {
+                name: name.trim(),
+                subject: step.subject || '',
+                body: step.body || '',
+                category: 'general',
+            };
+
+            try {
+                const res = await fetchWithAuth('/email-templates/', {
+                    method: 'POST',
+                    body: JSON.stringify(payload),
+                    timeoutMs: 20000,
+                });
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.detail || 'Unable to save template.');
+                }
+                const template = await res.json();
+                emailTemplates.push(template);
+                emailTemplatesLoaded = true;
+                alert('Template saved successfully.');
+            } catch (error) {
+                console.error(error);
+                alert(error.message || 'Failed to save template.');
+            }
+        }
+
+        async function incrementTemplateUsage(templateId) {
+            try {
+                const template = emailTemplates.find(item => item.id === templateId);
+                if (!template) return;
+                const res = await fetchWithAuth(`/email-templates/${templateId}/`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ usage_count: (template.usage_count || 0) + 1 }),
+                    timeoutMs: 15000,
+                });
+                if (res.ok) {
+                    const updated = await res.json();
+                    template.usage_count = updated.usage_count;
+                }
+            } catch (error) {
+                console.warn('Could not update template usage count.', error);
+            }
         }
 
         const SEQUENCE_TEMPLATES = [
@@ -1238,7 +1572,20 @@
                                     <th>Company</th>
                                 </tr>
                             </thead>
-                            <tbody>${rows || '<tr><td colspan="5" class="text-muted py-4 text-center">No leads found. Import leads first.</td></tr>'}</tbody>
+                            <tbody>
+${rows || `
+<tr>
+    <td colspan="5" class="text-muted py-5 text-center">
+        <p class="mb-3">No leads found in your organization.</p>
+        <a href="/leads.html" class="btn btn-primary btn-sm d-inline-flex align-items-center gap-2">
+            <i class="bi bi-upload"></i>
+            <span>Go to Import Leads</span>
+        </a>
+    </td>
+</tr>
+`}
+</tbody>
+                           
                         </table>
                     </div>
                 </div>
@@ -1310,7 +1657,22 @@
 
         async function saveCampaign() {
             const name = document.getElementById('campaign-name').value;
-            const settings = { steps: steps.map((s, i) => ({ ...s, step_order: i + 1 })) };
+            // const settings = { steps: steps.map((s, i) => ({ ...s, step_order: i + 1 })) };
+            const settings = {
+    steps: steps.map((s, i) => ({ ...s, step_order: i + 1 })),
+
+    stop_on_reply:
+        document.getElementById('setting-stop-reply').checked,
+
+    track_opens:
+        document.getElementById('setting-track-opens').checked,
+
+    track_clicks:
+        document.getElementById('setting-track-clicks').checked,
+
+    daily_limit:
+        parseInt(document.getElementById('setting-daily-limit').value) || 100
+};
             const isActive = document.getElementById('status-toggle').classList.contains('on');
             const payload = {
                 name,
@@ -1373,7 +1735,7 @@
             return res.json();
         }
 
-        // â”€â”€â”€ RENDER CANVAS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ─── RENDER CANVAS ──────────────────
         function renderCanvas() {
             const canvas = document.getElementById('canvas');
             let html = '';
@@ -1576,7 +1938,7 @@
             });
         }
 
-        // â”€â”€â”€ RENDER EDITOR PANEL â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ─── RENDER EDITOR PANEL ────────────
         function renderEditor() {
             const panel = document.getElementById('editor-content');
 
@@ -1648,9 +2010,13 @@
                 <div class="mb-3">
                     <div class="d-flex justify-content-between align-items-center">
                         <div class="ep-label">Content</div>
-                        <button class="ai-btn" id="ai-generate-btn">
-                            <i class="bi bi-stars"></i> Ask AI
-                        </button>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-outline-secondary" id="open-template-library-btn"><i class="bi bi-card-text me-1"></i> Templates</button>
+                            <button class="btn btn-sm btn-outline-secondary" id="save-template-btn"><i class="bi bi-save me-1"></i> Save as Template</button>
+                            <button class="ai-btn" id="ai-generate-btn">
+                                <i class="bi bi-stars"></i> Ask AI
+                            </button>
+                        </div>
                     </div>
                 </div>
                 <div class="mb-3">
@@ -1708,6 +2074,9 @@
                     textarea.selectionStart = textarea.selectionEnd = pos + tagText.length;
                 });
             });
+
+            document.getElementById('open-template-library-btn').addEventListener('click', openTemplateLibrary);
+            document.getElementById('save-template-btn').addEventListener('click', () => saveCurrentStepAsTemplate(step));
 
             // AI Generate button
             document.getElementById('ai-generate-btn').addEventListener('click', () => openAIComposer(step));
@@ -1896,7 +2265,7 @@
                 renderCanvas();
             });
         }
-        // â”€â”€â”€ AI CONTENT GENERATION â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ─── AI CONTENT GENERATION ──────────
         function openAIComposer(step) {
             aiComposerStep = step;
             aiConversation = [];
@@ -2069,7 +2438,7 @@
             }
         }
 
-        // â”€â”€â”€ STEP PICKER â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ─── STEP PICKER ────────────────────
         document.querySelectorAll('.step-type').forEach(el => {
             el.addEventListener('click', () => {
                 const type = el.dataset.type;
@@ -2133,6 +2502,13 @@
             }
         });
 
+        document.getElementById('close-template-library').addEventListener('click', closeTemplateLibrary);
+        document.getElementById('template-library-modal').addEventListener('click', (event) => {
+            if (event.target.id === 'template-library-modal') {
+                closeTemplateLibrary();
+            }
+        });
+
         // Picker tabs
         document.querySelectorAll('.picker-tabs .ptab').forEach(tab => {
             tab.addEventListener('click', () => {
@@ -2143,7 +2519,7 @@
             });
         });
 
-        // â”€â”€â”€ TOP BAR TABS â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ─── TOP BAR TABS ───────────────────
         document.querySelectorAll('.tab-pills .tab').forEach(tab => {
             tab.addEventListener('click', async () => {
                 try {
@@ -2167,7 +2543,7 @@
             if (activeTab === 'launch') renderLaunchTab();
         });
 
-        // â”€â”€â”€ SAVE / NEXT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ─── SAVE / NEXT ────────────────────
         document.getElementById('next-step-btn').addEventListener('click', async () => {
             const btn = document.getElementById('next-step-btn');
             btn.disabled = true;
@@ -2197,8 +2573,14 @@
             }
         });
 
-        // â”€â”€â”€ INIT â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+        // ─── INIT ───────────────────────────
         document.addEventListener('DOMContentLoaded', async () => {
+            document.getElementById('settings-icon').addEventListener('click', () => {
+    const modal = new bootstrap.Modal(
+        document.getElementById('campaignSettingsModal')
+    );
+    modal.show();
+});
             // Load connected accounts
             try {
                 const res = await fetchWithAuth('/connected-accounts/');
@@ -2232,6 +2614,20 @@
                         if (data.settings && data.settings.steps) {
                             steps = data.settings.steps;
                         }
+
+                        const settings = data.settings || {};
+
+document.getElementById('setting-stop-reply').checked =
+    settings.stop_on_reply ?? true;
+
+document.getElementById('setting-track-opens').checked =
+    settings.track_opens ?? true;
+
+document.getElementById('setting-track-clicks').checked =
+    settings.track_clicks ?? true;
+
+document.getElementById('setting-daily-limit').value =
+    settings.daily_limit ?? 100;
                     }
                 } catch (e) { console.error(e); }
             }

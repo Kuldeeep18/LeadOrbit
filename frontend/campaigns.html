@@ -2,46 +2,60 @@
 <html lang="en">
 
 <head>
+        <!-- SEO Meta Tags -->
+    <title>LeadOrbit - Campaigns</title>
+    <meta name="description" content="LeadOrbit - Campaigns. Create, launch, and manage multi-channel outreach campaigns.">
+    <meta name="keywords" content="campaign management, outreach, email campaigns, SMS, calls">
+    <meta name="author" content="LeadOrbit Team">
+    <meta property="og:title" content="LeadOrbit - Campaigns">
+    <meta property="og:description" content="Create and manage your outreach campaigns in LeadOrbit.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="LeadOrbit">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="LeadOrbit - Campaigns">
+    <meta name="twitter:description" content="LeadOrbit campaign management - Build sequences, launch campaigns.">
+    <link rel="icon" type="image/png" href="/favicon.png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="/theme-boot.js"></script>
+    <script src="./theme-boot.js"></script>
     <title>Campaigns - LeadOrbit</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700&display=swap" rel="stylesheet">
-    <link href="/theme.css" rel="stylesheet">
+    <link href="./theme.css" rel="stylesheet">
 </head>
 
 <body>
+    <div id="sidebar-overlay"></div>
     <div class="app-shell">
-        <aside class="sidebar p-3 d-flex flex-column">
+        <aside class="sidebar p-3 d-flex flex-column" role="navigation" aria-label="Main navigation">
             <div class="d-flex align-items-center mb-4 mt-2">
                 <div class="brand">LeadOrbit</div>
             </div>
             <ul class="nav nav-pills flex-column mb-auto">
                 <li class="nav-item mb-2">
                     <a href="/dashboard.html" class="nav-link d-flex align-items-center">
-                        <i class="bi bi-grid-1x2 me-2"></i> Dashboard
+                        <i class="bi bi-grid-1x2 me-2" aria-hidden="true"></i> Dashboard
                     </a>
                 </li>
                 <li class="nav-item mb-2">
                     <a href="/leads.html" class="nav-link d-flex align-items-center">
-                        <i class="bi bi-people me-2"></i> Leads
+                        <i class="bi bi-people me-2" aria-hidden="true"></i> Leads
                     </a>
                 </li>
                 <li class="nav-item mb-2">
-                    <a href="/campaigns.html" class="nav-link active d-flex align-items-center">
-                        <i class="bi bi-megaphone me-2"></i> Campaigns
+                    <a href="/campaigns.html" class="nav-link d-flex align-items-center" aria-current="page">
+                        <i class="bi bi-megaphone me-2" aria-hidden="true"></i> Campaigns
                     </a>
                 </li>
                 <li class="nav-item mb-2">
                     <a href="/analytics.html" class="nav-link d-flex align-items-center">
-                        <i class="bi bi-bar-chart-line me-2"></i> Analytics
+                        <i class="bi bi-bar-chart-line me-2" aria-hidden="true"></i> Analytics
                     </a>
                 </li>
                 <li class="nav-item mb-2">
                     <a href="/settings.html" class="nav-link d-flex align-items-center">
-                        <i class="bi bi-gear me-2"></i> Settings
+                        <i class="bi bi-gear me-2" aria-hidden="true"></i> Settings
                     </a>
                 </li>
             </ul>
@@ -53,6 +67,9 @@
         <main class="main-area">
             <header class="top-header p-3">
                 <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                    <button id="hamburger-btn" class="btn d-lg-none p-1" aria-label="Toggle menu">
+                        <i class="bi bi-list fs-4" aria-hidden="true"></i>
+                    </button>
                     <div>
                         <div class="page-title">Campaign Command Center</div>
                         <div class="title-meta">Build, monitor, and launch outreach sequences faster.</div>
@@ -60,18 +77,24 @@
                     <div class="d-flex flex-wrap align-items-center gap-2">
                         <div class="search-wrap">
                             <div class="input-group input-group-sm">
-                                <span class="input-group-text"><i class="bi bi-search"></i></span>
-                                <input type="text" id="campaign-search" class="form-control" placeholder="Search campaign name or status">
+                                <span class="input-group-text"><i class="bi bi-search" aria-hidden="true"></i></span>
+                                <input type="text" id="campaign-search" class="form-control" placeholder="Search campaign name or status" aria-label="Search campaigns">
                             </div>
                         </div>
                         <a href="/campaign-builder.html" class="btn btn-sm btn-primary px-3">
-                            <i class="bi bi-plus-lg me-1"></i> New Campaign
+                           <i class="bi bi-plus-lg me-1" aria-hidden="true"></i> New Campaign
                         </a>
-                        <button id="logout-btn" class="btn btn-sm btn-logout">Logout</button>
+                        <button id="logout-btn" class="btn btn-sm btn-logout" aria-label="Log out">Logout</button>
                     </div>
                 </div>
             </header>
-
+            <!-- Breadcrumb Navigation -->
+<nav aria-label="breadcrumb" class="container mt-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/dashboard.html">Home</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Campaigns</li>
+    </ol>
+</nav>
             <section class="content-wrap">
                 <div class="overview-grid">
                     <div class="overview-card">
@@ -106,7 +129,7 @@
 
                 <div class="row g-3" id="campaigns-grid">
                     <div class="col-12 text-center py-5">
-                        <div class="spinner-border text-primary" role="status"></div>
+                        <div class="spinner-border text-primary" role="status" aria-label="Loading campaigns"></div>
                         <p class="text-muted mt-2 mb-0">Loading campaigns...</p>
                     </div>
                 </div>
@@ -114,9 +137,9 @@
         </main>
     </div>
 
-    <script type="module" src="/main.js"></script>
+    <script type="module" src="./main.js"></script>
     <script type="module">
-        import { fetchWithAuth } from '/api.js';
+        import { fetchWithAuth } from './api.js';
 
         const STEP_LABELS = {
             EMAIL: 'Email',
@@ -249,11 +272,12 @@
                 grid.innerHTML = `
                     <div class="col-12">
                         <div class="empty-state text-center">
-                            <i class="bi bi-megaphone display-6 text-muted"></i>
+                           <i class="bi bi-megaphone display-6 text-muted" aria-hidden="true"></i>
                             <h5 class="mt-3 mb-2">No campaigns found</h5>
-                            <p class="text-muted mb-3">Try another filter or create a brand new sequence.</p>
+
+                            <p class="text-muted mb-3">Build your first outreach sequence!</p>
                             <a href="/campaign-builder.html" class="btn btn-primary">
-                                <i class="bi bi-plus-lg me-1"></i> Create Campaign
+                                <i class="bi bi-plus-lg me-1" aria-hidden="true"></i> Create Campaign
                             </a>
                         </div>
                     </div>`;
@@ -265,12 +289,21 @@
                 const stepCount = getStepCount(campaign);
                 const previewSteps = getStepPreview(campaign);
                 const previewHtml = previewSteps.length > 0
-                    ? previewSteps.map(label => `<span class="step-chip"><i class="bi bi-dot"></i>${escapeHtml(label)}</span>`).join('')
+                    ? previewSteps.map(label => `<span class="step-chip"><i class="bi bi-dot" aria-hidden="true"></i>${escapeHtml(label)}</span>`).join('')
                     : '<span class="text-muted small">No sequence steps configured</span>';
 
-                const toggleTarget = status === 'ACTIVE' ? 'PAUSED' : 'ACTIVE';
-                const toggleLabel = status === 'ACTIVE' ? 'Pause' : 'Activate';
-                const toggleIcon = status === 'ACTIVE' ? 'bi-pause-circle' : 'bi-play-circle';
+                const actionDetails = {
+                    ACTIVE: { endpoint: 'pause', nextStatus: 'PAUSED', label: 'Pause', icon: 'bi-pause-circle' },
+                    PAUSED: { endpoint: 'resume', nextStatus: 'ACTIVE', label: 'Resume', icon: 'bi-play-circle' },
+                    DRAFT: { endpoint: 'launch', nextStatus: 'ACTIVE', label: 'Launch', icon: 'bi-rocket-takeoff' },
+                }[status];
+                const actionButton = actionDetails ? `
+                                    <button class="btn btn-sm btn-outline-success"
+                                        data-action-id="${campaign.id}"
+                                        data-action-endpoint="${actionDetails.endpoint}"
+                                        data-next-status="${actionDetails.nextStatus}">
+                                        <i class="bi ${actionDetails.icon} me-1" aria-hidden="true"></i>${actionDetails.label}
+                                    </button>` : '';
 
                 return `
                     <div class="col-12 col-md-6 col-xl-4">
@@ -304,33 +337,28 @@
 
                                 <div class="d-flex gap-2">
                                     <a href="/campaign-builder.html?id=${campaign.id}" class="btn btn-sm btn-outline-primary flex-grow-1">
-                                        <i class="bi bi-pencil me-1"></i> Edit
+                                       <i class="bi bi-pencil me-1" aria-hidden="true"></i> Edit
                                     </a>
-                                    <button class="btn btn-sm btn-outline-success"
-                                        data-toggle-id="${campaign.id}"
-                                        data-current-status="${status}"
-                                        data-toggle-target="${toggleTarget}">
-                                        <i class="bi ${toggleIcon} me-1"></i>${toggleLabel}
-                                    </button>
+                                    ${actionButton}
                                 </div>
                             </div>
                         </div>
                     </div>`;
             }).join('');
 
-            grid.querySelectorAll('[data-toggle-id]').forEach(button => {
+            grid.querySelectorAll('[data-action-id]').forEach(button => {
                 button.addEventListener('click', async () => {
-                    const campaignId = button.dataset.toggleId;
-                    const nextStatus = button.dataset.toggleTarget;
+                    const campaignId = button.dataset.actionId;
+                    const endpoint = button.dataset.actionEndpoint;
+                    const nextStatus = button.dataset.nextStatus;
                     const originalLabel = button.innerHTML;
 
                     button.disabled = true;
-                    button.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Updating';
+                    button.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Updating';
 
                     try {
-                        const res = await fetchWithAuth(`/campaigns/${campaignId}/`, {
-                            method: 'PATCH',
-                            body: JSON.stringify({ status: nextStatus }),
+                        const res = await fetchWithAuth(`/campaigns/${campaignId}/${endpoint}/`, {
+                            method: 'POST',
                         });
 
                         if (!res.ok) {

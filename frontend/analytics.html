@@ -2,14 +2,27 @@
 <html lang="en">
 
 <head>
+        <!-- SEO Meta Tags -->
+    <title>LeadOrbit - Analytics</title>
+    <meta name="description" content="LeadOrbit - Analytics. Track campaign performance, open rates, click rates, and engagement metrics.">
+    <meta name="keywords" content="analytics, campaign metrics, open rate, click rate, engagement tracking">
+    <meta name="author" content="LeadOrbit Team">
+    <meta property="og:title" content="LeadOrbit - Analytics">
+    <meta property="og:description" content="Track your campaign performance and engagement metrics in LeadOrbit.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="LeadOrbit">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="LeadOrbit - Analytics">
+    <meta name="twitter:description" content="LeadOrbit analytics - Monitor campaign performance and ROI.">
+    <link rel="icon" type="image/png" href="/favicon.png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="/theme-boot.js"></script>
+    <script src="./theme-boot.js"></script>
     <title>Analytics - LeadOrbit</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700&display=swap" rel="stylesheet">
-    <link href="/theme.css" rel="stylesheet">
+    <link href="./theme.css" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <style>
         .chart-card {
@@ -23,35 +36,36 @@
 </head>
 
 <body>
+    <div id="sidebar-overlay"></div>
     <div class="app-shell">
-        <aside class="sidebar">
+        <aside class="sidebar" role="navigation" aria-label="Main navigation">
             <div class="d-flex align-items-center mb-4 mt-2">
                 <div class="brand">LeadOrbit</div>
             </div>
             <ul class="nav nav-pills flex-column mb-auto">
                 <li class="nav-item mb-2">
                     <a href="/dashboard.html" class="nav-link d-flex align-items-center">
-                        <i class="bi bi-grid-1x2 me-2"></i> Dashboard
+                        <i class="bi bi-grid-1x2 me-2" aria-hidden="true"></i> Dashboard
                     </a>
                 </li>
                 <li class="nav-item mb-2">
                     <a href="/leads.html" class="nav-link d-flex align-items-center">
-                        <i class="bi bi-people me-2"></i> Leads
+                        <i class="bi bi-people me-2" aria-hidden="true"></i> Leads
                     </a>
                 </li>
                 <li class="nav-item mb-2">
                     <a href="/campaigns.html" class="nav-link d-flex align-items-center">
-                        <i class="bi bi-megaphone me-2"></i> Campaigns
+                        <i class="bi bi-megaphone me-2" aria-hidden="true"></i> Campaigns
                     </a>
                 </li>
                 <li class="nav-item mb-2">
-                    <a href="/analytics.html" class="nav-link active d-flex align-items-center">
-                        <i class="bi bi-bar-chart-line me-2"></i> Analytics
+                    <a href="/analytics.html" class="nav-link d-flex align-items-center" aria-current="page">
+                        <i class="bi bi-bar-chart-line me-2" aria-hidden="true"></i> Analytics
                     </a>
                 </li>
                 <li class="nav-item mb-2">
                     <a href="/settings.html" class="nav-link d-flex align-items-center">
-                        <i class="bi bi-gear me-2"></i> Settings
+                        <i class="bi bi-gear me-2" aria-hidden="true"></i> Settings
                     </a>
                 </li>
             </ul>
@@ -63,21 +77,30 @@
         <main class="main-area">
             <header class="top-header">
                 <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                    <button id="hamburger-btn" class="btn d-lg-none p-1" aria-label="Toggle menu">
+                        <i class="bi bi-list fs-4" aria-hidden="true"></i>
+                    </button>
                     <div>
                         <div class="page-title">Analytics Console</div>
                         <div class="title-meta">Monitor sends, opens, replies, and campaign quality trends.</div>
                     </div>
                     <div class="d-flex align-items-center gap-2">
-                        <select class="form-select form-select-sm" id="time-range" style="width:auto;">
+                        <select class="form-select form-select-sm" id="time-range" style="width:auto;" aria-label="Select time range">
                             <option value="7">Last 7 days</option>
                             <option value="30" selected>Last 30 days</option>
                             <option value="90">Last 90 days</option>
                         </select>
-                        <button id="logout-btn" class="btn btn-sm btn-logout">Logout</button>
+                        <button id="logout-btn" class="btn btn-sm btn-logout" aria-label="Log out">Logout</button>
                     </div>
                 </div>
             </header>
-
+     <!-- Breadcrumb Navigation -->
+<nav aria-label="breadcrumb" class="container mt-3">
+    <ol class="breadcrumb">
+        <li class="breadcrumb-item"><a href="/dashboard.html">Home</a></li>
+        <li class="breadcrumb-item active" aria-current="page">Analytics</li>
+    </ol>
+</nav>
             <section class="content-wrap">
                 <div class="kpi-grid mb-4">
                     <div class="kpi-card">
@@ -109,7 +132,7 @@
                             <div class="title-meta">Pick a campaign and generate a focused analysis.</div>
                         </div>
                         <div class="d-flex flex-wrap align-items-center gap-2">
-                            <select class="form-select form-select-sm" id="campaign-select">
+                            <select class="form-select form-select-sm" id="campaign-select" aria-label="Select campaign">
                                 <option value="">Loading campaigns...</option>
                             </select>
                             <button class="btn btn-sm btn-primary" id="analyze-campaign-btn">
@@ -117,6 +140,24 @@
                             </button>
                         </div>
                     </div>
+                    <!-- <div id="analytics-empty-state" class="empty-state text-center d-none mt-3"> -->
+                        <div id="analytics-empty-state"
+     class="empty-state analytics-empty-state text-center d-none mt-3">
+    <i class="bi bi-bar-chart-line display-5 text-muted" aria-hidden="true"></i>
+
+    <h5 class="mt-3 mb-2">
+        No campaign data yet
+    </h5>
+
+    <p class="text-muted mb-3">
+        Launch a campaign to start tracking.
+    </p>
+
+    <a href="/campaigns.html" class="btn btn-primary">
+        <i class="bi bi-megaphone me-1" aria-hidden="true"></i>
+        View Campaigns
+    </a>
+</div>
                     <div class="row g-3 mt-2">
                         <div class="col-lg-6">
                             <div class="p-3 rounded-3 panel-muted-box h-100">
@@ -168,9 +209,9 @@
         </main>
     </div>
 
-    <script type="module" src="/main.js"></script>
+    <script type="module" src="./main.js"></script>
     <script type="module">
-        import { fetchWithAuth } from '/api.js';
+        import { fetchWithAuth } from './api.js';
 
         document.addEventListener('DOMContentLoaded', async () => {
             const timeRangeSelect = document.getElementById('time-range');
@@ -360,30 +401,45 @@
                     },
                 });
             };
-
             const renderCampaignSelector = (campaignList) => {
-                campaignSelect.innerHTML = '';
-                if (!campaignList.length) {
-                    const opt = document.createElement('option');
-                    opt.value = '';
-                    opt.textContent = 'No campaigns found';
-                    campaignSelect.appendChild(opt);
-                    analyzeBtn.disabled = true;
-                    return;
-                }
-                analyzeBtn.disabled = false;
-                const placeholder = document.createElement('option');
-                placeholder.value = '';
-                placeholder.textContent = 'Select a campaign';
-                campaignSelect.appendChild(placeholder);
-                campaignList.forEach(c => {
-                    const opt = document.createElement('option');
-                    opt.value = c.id;
-                    opt.textContent = c.name;
-                    campaignSelect.appendChild(opt);
-                });
-            };
 
+    campaignSelect.innerHTML = '';
+
+    if (!campaignList.length) {
+
+        const emptyState = document.getElementById('analytics-empty-state');
+        if (emptyState) {
+            emptyState.classList.remove('d-none');
+        }
+
+        const inspectorContent = document.querySelector('.campaign-inspector .row');
+        if (inspectorContent) {
+            inspectorContent.classList.add('d-none');
+        }
+
+        const opt = document.createElement('option');
+        opt.value = '';
+        opt.textContent = 'No campaigns found';
+        campaignSelect.appendChild(opt);
+
+        analyzeBtn.disabled = true;
+        return;
+    }
+
+    analyzeBtn.disabled = false;
+
+    const placeholder = document.createElement('option');
+    placeholder.value = '';
+    placeholder.textContent = 'Select a campaign';
+    campaignSelect.appendChild(placeholder);
+
+    campaignList.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.name;
+        campaignSelect.appendChild(opt);
+    });
+};
             const renderCampaignAnalysis = (campaign) => {
                 if (!campaign) {
                     summaryEl.textContent = 'Select a campaign to see details.';

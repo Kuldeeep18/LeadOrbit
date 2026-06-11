@@ -11,13 +11,56 @@ export const setTokens = (access, refresh) => {
 };
 
 export const getAccessToken = () => localStorage.getItem('access_token');
+export const getRefreshToken = () => localStorage.getItem('refresh_token');
 export const clearTokens = () => {
     localStorage.removeItem('access_token');
     localStorage.removeItem('refresh_token');
 };
 
-export const fetchWithAuth = async (endpoint, options = {}) => {
-    const token = getAccessToken();
+let refreshPromise = null;
+
+const redirectToLogin = () => {
+    clearTokens();
+    window.location.href = '/login.html';
+};
+
+const refreshAccessToken = async () => {
+    const refresh = getRefreshToken();
+    if (!refresh) {
+        throw new Error('Missing refresh token');
+    }
+
+    if (!refreshPromise) {
+        refreshPromise = fetch(`${API_BASE}/token/refresh/`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refresh }),
+        })
+            .then(async (res) => {
+                if (!res.ok) {
+                    throw new Error('Refresh failed');
+                }
+
+                const data = await res.json();
+                if (!data.access) {
+                    throw new Error('Refresh response missing access token');
+                }
+
+                localStorage.setItem('access_token', data.access);
+                if (data.refresh) {
+                    localStorage.setItem('refresh_token', data.refresh);
+                }
+                return data.access;
+            })
+            .finally(() => {
+                refreshPromise = null;
+            });
+    }
+
+    return refreshPromise;
+};
+
+const buildRequestHeaders = (options, token = getAccessToken()) => {
     const headers = {
         'Content-Type': 'application/json',
         ...options.headers,
@@ -25,6 +68,8 @@ export const fetchWithAuth = async (endpoint, options = {}) => {
 
     if (token) {
         headers['Authorization'] = `Bearer ${token}`;
+    } else {
+        delete headers['Authorization'];
     }
 
     // Don't set content-type for FormData (like CSV uploads)
@@ -32,13 +77,17 @@ export const fetchWithAuth = async (endpoint, options = {}) => {
         delete headers['Content-Type'];
     }
 
+    return headers;
+};
+
+const sendApiRequest = async (endpoint, options = {}, token = getAccessToken()) => {
+    const headers = buildRequestHeaders(options, token);
     const timeoutMs = Number(options.timeoutMs) > 0 ? Number(options.timeoutMs) : 20000;
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
 
-    let response;
     try {
-        response = await fetch(`${API_BASE}${endpoint}`, {
+        return await fetch(`${API_BASE}${endpoint}`, {
             ...options,
             headers,
             signal: options.signal || controller.signal,
@@ -54,12 +103,25 @@ export const fetchWithAuth = async (endpoint, options = {}) => {
     } finally {
         clearTimeout(timeoutId);
     }
+};
+
+export const fetchWithAuth = async (endpoint, options = {}) => {
+    const token = getAccessToken();
+    let response = await sendApiRequest(endpoint, options, token);
 
     if (response.status === 401) {
-        // Handle token refresh logic here in production
-        clearTokens();
-        window.location.href = '/login.html';
-        throw new Error("Unauthorized");
+        try {
+            const refreshedToken = await refreshAccessToken();
+            response = await sendApiRequest(endpoint, options, refreshedToken);
+        } catch {
+            redirectToLogin();
+            throw new Error("Unauthorized");
+        }
+
+        if (response.status === 401) {
+            redirectToLogin();
+            throw new Error("Unauthorized");
+        }
     }
 
     return response;

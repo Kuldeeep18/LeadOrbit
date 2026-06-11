@@ -36,10 +36,100 @@ function initThemeToggle() {
     });
 }
 
+function initPasswordVisibilityToggle() {
+  const toggles = [
+    { inputId: 'floatingPassword', toggleId: 'floatingPasswordToggle' },
+    { inputId: 'password', toggleId: 'passwordToggle' }
+  ];
+
+  toggles.forEach(({ inputId, toggleId }) => {
+    const input = document.getElementById(inputId);
+    const toggle = document.getElementById(toggleId);
+
+    if (!input || !toggle) {
+      return;
+    }
+
+    const updateToggleState = () => {
+      const isPasswordVisible = input.type === 'text';
+
+      toggle.innerHTML = isPasswordVisible
+        ? '<i class="bi bi-eye-slash" aria-hidden="true"></i>'
+        : '<i class="bi bi-eye" aria-hidden="true"></i>';
+
+      toggle.setAttribute(
+        'aria-label',
+        isPasswordVisible ? 'Hide password' : 'Show password'
+      );
+
+      toggle.setAttribute('aria-pressed', String(isPasswordVisible));
+    };
+
+    updateToggleState();
+
+    toggle.addEventListener('click', () => {
+      input.type = input.type === 'password' ? 'text' : 'password';
+      updateToggleState();
+    });
+  });
+}
+
 applyTheme(getTheme());
 
-document.addEventListener('DOMContentLoaded', async () => {
+function setActiveNavLink() {
+    const pathname = window.location.pathname;
+    const navLinks = document.querySelectorAll('.nav-link');
+    
+    // Skip if no nav links found (e.g., on login/register pages)
+    if (navLinks.length === 0) return;
+    
+    // Remove active class from all links
+    navLinks.forEach(link => link.classList.remove('active'));
+    
+    // Determine which nav link should be active based on current page
+    let activeHref = '/dashboard.html'; // default
+    
+    // Use regex to match page names more precisely
+    if (/campaign-builder\.html/i.test(pathname)) {
+        // Campaign builder should highlight Campaigns link
+        activeHref = '/campaigns.html';
+    } else if (/dashboard\.html/i.test(pathname)) {
+        activeHref = '/dashboard.html';
+    } else if (/leads\.html/i.test(pathname)) {
+        activeHref = '/leads.html';
+    } else if (/campaigns\.html/i.test(pathname)) {
+        activeHref = '/campaigns.html';
+    } else if (/analytics\.html/i.test(pathname)) {
+        activeHref = '/analytics.html';
+    } else if (/settings\.html/i.test(pathname)) {
+        activeHref = '/settings.html';
+    }
+    
+    // Find and highlight the matching nav link
+    const activeLink = document.querySelector(`a.nav-link[href="${activeHref}"]`);
+    if (activeLink) {
+        activeLink.classList.add('active');
+    }
+}
+
+// Set active link when page loads
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', setActiveNavLink);
+} else {
+    // DOM is already loaded (for dynamic navigation)
+    setActiveNavLink();
+}
+
+let appShellInitialized = false;
+
+async function initAppShell() {
+    if (appShellInitialized) {
+        return;
+    }
+    appShellInitialized = true;
+
     initThemeToggle();
+    initPasswordVisibilityToggle();
 
     if (window.location.pathname.includes('login.html') || window.location.pathname.includes('register.html')) {
         return;
@@ -90,7 +180,29 @@ document.addEventListener('DOMContentLoaded', async () => {
             window.location.href = '/login.html';
         });
     }
-});
+    // Responsive sidebar toggle
+    const hamburgerBtn = document.getElementById('hamburger-btn');
+    const sidebar = document.querySelector('.sidebar');
+    const overlay = document.getElementById('sidebar-overlay');
+
+    if (hamburgerBtn && sidebar && overlay) {
+        hamburgerBtn.addEventListener('click', () => {
+            sidebar.classList.toggle('sidebar-open');
+            overlay.classList.toggle('active');
+        });
+
+        overlay.addEventListener('click', () => {
+            sidebar.classList.remove('sidebar-open');
+            overlay.classList.remove('active');
+        });
+    }
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initAppShell, { once: true });
+} else {
+    initAppShell();
+}
 
 // ==========================================
 // KEYBOARD SHORTCUTS IMPLEMENTATION (#67)
@@ -243,4 +355,3 @@ if (document.readyState === 'loading') {
 } else {
     initKeyboardShortcuts();
 }
-
