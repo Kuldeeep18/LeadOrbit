@@ -1284,6 +1284,27 @@
             return `${value.slice(0, limit)}...`;
         }
 
+        const MERGE_TAGS = [
+            { label: '{{firstName}}', value: '{{firstName}}' },
+            { label: '{{lastName}}', value: '{{lastName}}' },
+            { label: '{{email}}', value: '{{email}}' },
+            { label: '{{company}}', value: '{{company}}' },
+            { label: '{{icebreaker}}', value: '{{icebreaker}}' },
+        ];
+
+        function insertTextAtCursor(field, text) {
+            if (!field || !text) return;
+            const start = typeof field.selectionStart === 'number' ? field.selectionStart : field.value.length;
+            const end = typeof field.selectionEnd === 'number' ? field.selectionEnd : field.value.length;
+            const currentValue = field.value || '';
+            field.value = currentValue.slice(0, start) + text + currentValue.slice(end);
+            field.dispatchEvent(new Event('input', { bubbles: true }));
+            field.focus();
+            const nextPos = start + text.length;
+            field.selectionStart = nextPos;
+            field.selectionEnd = nextPos;
+        }
+
         async function loadEmailTemplates() {
             try {
                 const res = await fetchWithAuth('/email-templates/');
@@ -2024,6 +2045,18 @@ ${rows || `
                     <input type="text" class="ep-input" id="ep-subject" placeholder="Subject" value="${step.subject || ''}">
                 </div>
                 <div class="mb-3">
+                    <div class="ep-label">Insert Tag</div>
+                    <div class="d-flex gap-2 align-items-center">
+                        <select class="form-select form-select-sm" id="merge-tag-select" style="min-width: 0;">
+                            <option value="">Choose a merge tag</option>
+                            ${MERGE_TAGS.map(tag => `<option value="${tag.value}">${tag.label}</option>`).join('')}
+                        </select>
+                        <button type="button" class="btn btn-sm btn-outline-secondary text-nowrap" id="insert-merge-tag-btn">
+                            Insert
+                        </button>
+                    </div>
+                </div>
+                <div class="mb-3">
                     <div class="ep-label">Body</div>
                     <textarea class="ep-textarea" id="ep-body" placeholder="Write your email content...">${step.body || ''}</textarea>
                 </div>
@@ -2052,8 +2085,20 @@ ${rows || `
             `;
 
             // Bind inputs
-            document.getElementById('ep-subject').addEventListener('input', (e) => { step.subject = e.target.value; });
-            document.getElementById('ep-body').addEventListener('input', (e) => { step.body = e.target.value; });
+            const subjectInput = document.getElementById('ep-subject');
+            const bodyInput = document.getElementById('ep-body');
+            let activeEmailField = bodyInput;
+
+            subjectInput.addEventListener('focus', () => { activeEmailField = subjectInput; });
+            subjectInput.addEventListener('click', () => { activeEmailField = subjectInput; });
+            subjectInput.addEventListener('input', (e) => { step.subject = e.target.value; });
+
+            bodyInput.addEventListener('focus', () => { activeEmailField = bodyInput; });
+            bodyInput.addEventListener('click', () => { activeEmailField = bodyInput; });
+            bodyInput.addEventListener('input', (e) => { step.body = e.target.value; });
+
+            const mergeTagSelect = document.getElementById('merge-tag-select');
+            const insertMergeTagBtn = document.getElementById('insert-merge-tag-btn');
             const senderSelect = document.getElementById('sender-account-select');
             if (senderSelect) {
                 senderSelect.addEventListener('change', (e) => {
@@ -2061,17 +2106,21 @@ ${rows || `
                 });
             }
 
+            if (insertMergeTagBtn && mergeTagSelect) {
+                insertMergeTagBtn.addEventListener('click', () => {
+                    const tagText = mergeTagSelect.value;
+                    if (!tagText) {
+                        return;
+                    }
+                    insertTextAtCursor(activeEmailField || bodyInput, tagText);
+                    mergeTagSelect.value = '';
+                });
+            }
+
             // Merge tags
             panel.querySelectorAll('.merge-tag').forEach(tag => {
                 tag.addEventListener('click', () => {
-                    const textarea = document.getElementById('ep-body');
-                    const pos = textarea.selectionStart;
-                    const text = textarea.value;
-                    const tagText = tag.dataset.tag;
-                    textarea.value = text.substring(0, pos) + tagText + text.substring(pos);
-                    step.body = textarea.value;
-                    textarea.focus();
-                    textarea.selectionStart = textarea.selectionEnd = pos + tagText.length;
+                    insertTextAtCursor(activeEmailField || bodyInput, tag.dataset.tag);
                 });
             });
 
@@ -2639,4 +2688,3 @@ document.getElementById('setting-daily-limit').value =
 </body>
 
 </html>
-
