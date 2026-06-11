@@ -4,8 +4,8 @@ from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django.http import StreamingHttpResponse
 import csv
-from .models import Lead, Tag
-from .serializers import LeadSerializer, TagSerializer
+from .models import BlockedDomain, Lead, Tag
+from .serializers import BlockedDomainSerializer, LeadSerializer, TagSerializer
 
 class Echo:
     """An object that implements just the write method of the file-like interface."""
@@ -109,6 +109,16 @@ class TagViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return Tag.objects.filter(organization=self.request.user.organization)
+
+    def perform_create(self, serializer):
+        serializer.save(organization=self.request.user.organization)
+
+class BlockedDomainViewSet(viewsets.ModelViewSet):
+    serializer_class = BlockedDomainSerializer
+    queryset = BlockedDomain.objects.all()
+
+    def get_queryset(self):
+        return BlockedDomain.objects.filter(organization=self.request.user.organization)
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization)
