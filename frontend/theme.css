@@ -536,33 +536,6 @@ body.auth-page {
     color: var(--link-color) !important;
 }
 
-.password-toggle-wrapper {
-    position: relative;
-}
-
-.password-toggle-wrapper .form-control {
-    padding-right: 2.8rem;
-}
-
-.password-toggle-btn {
-    position: absolute;
-    top: 50%;
-    right: 0.75rem;
-    transform: translateY(-50%);
-    border: none;
-    background: transparent;
-    color: currentColor;
-    padding: 0;
-    margin: 0;
-    line-height: 1;
-    cursor: pointer;
-    font-size: 1.05rem;
-    width: 1.75rem;
-    height: 1.75rem;
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-}
 
 .password-toggle-btn:focus-visible {
     outline: 2px solid rgba(13, 110, 253, 0.35);
@@ -1221,4 +1194,65 @@ body.auth-page {
     height: 40px;
     border-radius: 50%;
     flex-shrink: 0;
+}
+
+.password-toggle-wrapper {
+  position: relative;
+  display: block;
+}
+
+.password-toggle-wrapper .form-control {
+  padding-right: 3rem;
+  background-color: rgba(15, 23, 42, 0.55);
+  color: #ffffff;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.password-toggle-wrapper .form-control::placeholder {
+  color: rgba(148, 163, 184, 0.8);
+}
+
+.password-toggle-wrapper .form-control:focus {
+  background-color: rgba(15, 23, 42, 0.75);
+  color: #ffffff;
+  border-color: rgba(0, 180, 219, 0.65);
+  box-shadow: 0 0 0 0.2rem rgba(0, 180, 219, 0.15);
+}
+
+.password-toggle-btn {
+  position: absolute;
+  top: 50%;
+  right: 0.85rem;
+  transform: translateY(-50%);
+  z-index: 5;
+
+  width: 1.75rem;
+  height: 1.75rem;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border: none;
+  background: transparent;
+  color: rgba(226, 232, 240, 0.75);
+
+  padding: 0;
+  margin: 0;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.password-toggle-btn:hover {
+  color: #ffffff;
+}
+
+.password-toggle-btn:focus-visible {
+  outline: 2px solid rgba(0, 180, 219, 0.6);
+  outline-offset: 2px;
+  border-radius: 999px;
+}
+
+.password-toggle-btn i {
+  pointer-events: none;
 }

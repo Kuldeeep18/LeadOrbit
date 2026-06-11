@@ -2,8 +2,8 @@ from rest_framework import viewsets, parsers, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
-from .models import Lead, Tag
-from .serializers import LeadSerializer, TagSerializer
+from .models import BlockedDomain, Lead, Tag
+from .serializers import BlockedDomainSerializer, LeadSerializer, TagSerializer
 
 class StandardResultsSetPagination(PageNumberPagination):
     page_size = 25
@@ -67,6 +67,16 @@ class TagViewSet(viewsets.ModelViewSet):
 
     def get_queryset(self):
         return Tag.objects.filter(organization=self.request.user.organization)
+
+    def perform_create(self, serializer):
+        serializer.save(organization=self.request.user.organization)
+
+class BlockedDomainViewSet(viewsets.ModelViewSet):
+    serializer_class = BlockedDomainSerializer
+    queryset = BlockedDomain.objects.all()
+
+    def get_queryset(self):
+        return BlockedDomain.objects.filter(organization=self.request.user.organization)
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization)
