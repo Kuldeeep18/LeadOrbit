@@ -1,7 +1,7 @@
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from leads.models import Lead
+from leads.models import BlockedDomain, Lead
 from leads.tasks import import_leads_from_csv
 from tenants.models import Organization
 from users.models import User
@@ -25,6 +25,24 @@ class LeadImportTests(APITestCase):
         self.assertEqual(lead.company, 'Acme')
         self.assertEqual(lead.linkedin_url, 'https://linkedin.com/in/alice')
         self.assertEqual(lead.phone, '+123456789')
+
+    def test_import_stores_non_standard_headers_as_custom_variables(self):
+        csv_data = (
+            "email,first_name,Industry,Meeting Time,Lead Source\n"
+            "bob@example.com,Bob,SaaS,10:30 AM,Referral\n"
+        )
+
+        import_leads_from_csv(csv_data, str(self.organization.id))
+
+        lead = Lead.objects.get(organization=self.organization, email='bob@example.com')
+        self.assertEqual(
+            lead.custom_variables,
+            {
+                'industry': 'SaaS',
+                'meeting_time': '10:30 AM',
+                'lead_source': 'Referral',
+            },
+        )
 
 
 class LeadIsolationAPITests(APITestCase):
@@ -88,3 +106,27 @@ class LeadIsolationAPITests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(Lead.objects.filter(id=self.lead_a.id).exists())
         self.assertTrue(Lead.objects.filter(id=self.lead_b.id).exists())
+
+    def test_blocked_domain_create_normalizes_domain_for_current_organization(self):
+        self.client.force_authenticate(self.user_a)
+
+        response = self.client.post(
+            '/api/v1/blocked-domains/',
+            {'domain': 'HTTPS://Competitor.COM/path'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        blocked_domain = BlockedDomain.objects.get(organization=self.org_a)
+        self.assertEqual(blocked_domain.domain, 'competitor.com')
+
+    def test_blocked_domain_list_is_scoped_to_current_organization(self):
+        BlockedDomain.objects.create(organization=self.org_a, domain='orga.test')
+        BlockedDomain.objects.create(organization=self.org_b, domain='orgb.test')
+        self.client.force_authenticate(self.user_a)
+
+        response = self.client.get('/api/v1/blocked-domains/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        domains = {item['domain'] for item in response.data}
+        self.assertEqual(domains, {'orga.test'})

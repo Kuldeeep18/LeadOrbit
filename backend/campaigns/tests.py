@@ -7,6 +7,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from campaigns.models import Campaign, CampaignLead, ConnectedEmailAccount, SequenceStep
+from campaigns.ai import personalize_email
 from campaigns.tasks import (
     _get_campaign_steps,
     poll_gmail_for_replies,
@@ -15,7 +16,7 @@ from campaigns.tasks import (
     send_email_step,
 )
 from campaigns.utils import generate_unsubscribe_token
-from leads.models import Lead
+from leads.models import BlockedDomain, Lead
 from tenants.models import Organization
 from users.models import User
 
@@ -111,6 +112,26 @@ class CampaignWorkflowTests(APITestCase):
                 self.assertEqual(steps[index].delay_minutes, delay_minutes)
                 self.assertEqual(steps[index].template_subject or '', subject)
                 self.assertEqual(steps[index].template_body or '', body)
+
+    def test_personalize_email_replaces_custom_variables(self):
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='custom-vars@acme.test',
+            first_name='Casey',
+            custom_variables={
+                'industry': 'SaaS',
+                'meeting_time': '10:30 AM',
+            },
+        )
+
+        subject, body = personalize_email(
+            'Hello {{firstName}} from {{industry}}',
+            'Can we talk at {{meeting_time}}?',
+            lead,
+        )
+
+        self.assertEqual(subject, 'Hello Casey from SaaS')
+        self.assertEqual(body, 'Can we talk at 10:30 AM?')
 
     def test_process_active_leads_advances_all_non_email_step_types(self):
         campaign = Campaign.objects.create(
@@ -1079,6 +1100,20 @@ class CampaignWorkflowTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
 
+    def test_email_webhook_logs_processing_errors(self):
+        with patch('campaigns.views.CampaignLead.objects.filter', side_effect=RuntimeError('boom')):
+            with self.assertLogs('campaigns.views', level='ERROR') as logs:
+                response = self.client.post(
+                    '/api/v1/webhooks/email/',
+                    {'event': 'open', 'email': 'lead@acme.test'},
+                    format='json',
+                )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(
+            any('Webhook processing error for event=open email=lead@acme.test' in entry for entry in logs.output)
+        )
+
     def test_dashboard_analytics_isolates_data_by_tenant(self):
         org2 = Organization.objects.create(name='Other Corp')
         other_user = User.objects.create_user(
@@ -1200,3 +1235,55 @@ class CampaignWorkflowTests(APITestCase):
         self.assertEqual(campaign_lead.status, 'FINISHED')
         self.assertIsNone(campaign_lead.current_step)
         self.assertIsNone(campaign_lead.next_execution_time)
+
+    def test_send_email_step_skips_blocked_domain_leads(self):
+        BlockedDomain.objects.create(
+            organization=self.organization,
+            domain='blocked.test',
+        )
+        account = ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=self.user,
+            email_address='sender@acme.test',
+            provider='GOOGLE',
+            access_token='token',
+            refresh_token='refresh',
+        )
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Blocked domain skip test',
+            status='ACTIVE',
+            connected_account=account,
+        )
+        email_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Hello',
+            template_body='Hi there',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='lead@sub.blocked.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=email_step,
+            status='ACTIVE',
+            next_execution_time=timezone.now() - timedelta(minutes=1),
+        )
+
+        with patch('campaigns.tasks.send_gmail') as mocked_send:
+            send_email_step(campaign_lead.id, email_step.id)
+
+        campaign_lead.refresh_from_db()
+        campaign.refresh_from_db()
+        self.assertEqual(campaign_lead.status, 'SKIPPED')
+        self.assertIsNone(campaign_lead.current_step)
+        self.assertIsNone(campaign_lead.next_execution_time)
+        self.assertEqual(campaign.status, 'COMPLETED')
+        mocked_send.assert_not_called()

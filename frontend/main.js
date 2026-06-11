@@ -37,25 +37,41 @@ function initThemeToggle() {
 }
 
 function initPasswordVisibilityToggle() {
-    const toggles = [
-        { inputId: 'floatingPassword', toggleId: 'floatingPasswordToggle' },
-        { inputId: 'password', toggleId: 'passwordToggle' }
-    ];
+  const toggles = [
+    { inputId: 'floatingPassword', toggleId: 'floatingPasswordToggle' },
+    { inputId: 'password', toggleId: 'passwordToggle' }
+  ];
 
-    toggles.forEach(({ inputId, toggleId }) => {
-        const input = document.getElementById(inputId);
-        const toggle = document.getElementById(toggleId);
-        if (!input || !toggle) {
-            return;
-        }
+  toggles.forEach(({ inputId, toggleId }) => {
+    const input = document.getElementById(inputId);
+    const toggle = document.getElementById(toggleId);
 
-        toggle.addEventListener('click', () => {
-            const show = input.type === 'password';
-            input.type = show ? 'text' : 'password';
-            toggle.textContent = show ? '🙈' : '👁';
-            toggle.setAttribute('aria-label', show ? 'Hide password' : 'Show password');
-        });
+    if (!input || !toggle) {
+      return;
+    }
+
+    const updateToggleState = () => {
+      const isPasswordVisible = input.type === 'text';
+
+      toggle.innerHTML = isPasswordVisible
+        ? '<i class="bi bi-eye-slash" aria-hidden="true"></i>'
+        : '<i class="bi bi-eye" aria-hidden="true"></i>';
+
+      toggle.setAttribute(
+        'aria-label',
+        isPasswordVisible ? 'Hide password' : 'Show password'
+      );
+
+      toggle.setAttribute('aria-pressed', String(isPasswordVisible));
+    };
+
+    updateToggleState();
+
+    toggle.addEventListener('click', () => {
+      input.type = input.type === 'password' ? 'text' : 'password';
+      updateToggleState();
     });
+  });
 }
 
 applyTheme(getTheme());
@@ -104,7 +120,14 @@ if (document.readyState === 'loading') {
     setActiveNavLink();
 }
 
-document.addEventListener('DOMContentLoaded', async () => {
+let appShellInitialized = false;
+
+async function initAppShell() {
+    if (appShellInitialized) {
+        return;
+    }
+    appShellInitialized = true;
+
     initThemeToggle();
     initPasswordVisibilityToggle();
 
@@ -173,7 +196,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             overlay.classList.remove('active');
         });
     }
-});
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initAppShell, { once: true });
+} else {
+    initAppShell();
+}
 
 // ==========================================
 // KEYBOARD SHORTCUTS IMPLEMENTATION (#67)
@@ -326,4 +355,3 @@ if (document.readyState === 'loading') {
 } else {
     initKeyboardShortcuts();
 }
-

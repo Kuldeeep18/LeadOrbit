@@ -6,6 +6,7 @@ import requests
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
+MERGE_TAG_PATTERN = re.compile(r'{{\s*([a-zA-Z0-9_]+)\s*}}')
 
 
 def _get_gemini_api_key():
@@ -182,19 +183,34 @@ def _apply_merge_tags(text, lead):
     last_name = lead.last_name or ""
     company = lead.company or ""
     email = lead.email or ""
+    custom_variables = getattr(lead, 'custom_variables', {})
 
-    replacements = {
-        "{{first_name}}": first_name,
-        "{{firstName}}": first_name,
-        "{{last_name}}": last_name,
-        "{{lastName}}": last_name,
-        "{{company}}": company,
-        "{{email}}": email,
+    standard_replacements = {
+        "first_name": first_name,
+        "firstName": first_name,
+        "last_name": last_name,
+        "lastName": last_name,
+        "company": company,
+        "email": email,
     }
+    custom_replacements = {}
+    if isinstance(custom_variables, dict):
+        for key, value in custom_variables.items():
+            normalized_key = re.sub(r'[^a-z0-9]+', '_', str(key or '').strip().lower()).strip('_')
+            if not normalized_key:
+                continue
+            custom_replacements[normalized_key] = '' if value is None else str(value)
 
-    for token, value in replacements.items():
-        base = base.replace(token, value)
-    return base
+    def replace_match(match):
+        token = match.group(1)
+        if token in standard_replacements:
+            return standard_replacements[token]
+        normalized_token = re.sub(r'[^a-z0-9]+', '_', token.strip().lower()).strip('_')
+        if normalized_token in custom_replacements:
+            return custom_replacements[normalized_token]
+        return match.group(0)
+
+    return MERGE_TAG_PATTERN.sub(replace_match, base)
 
 
 def personalize_email(template_subject, template_body, lead):
@@ -202,11 +218,10 @@ def personalize_email(template_subject, template_body, lead):
     Uses Gemini to personalize the given email template for a specific lead.
     """
     api_key = _get_gemini_api_key()
+    merged_subject = _apply_merge_tags(template_subject, lead)
+    merged_body = _apply_merge_tags(template_body, lead)
     if not api_key or not template_body:
-        # Fallback to simple formatting if no real key is set
-        subject = _apply_merge_tags(template_subject, lead)
-        body = _apply_merge_tags(template_body, lead)
-        return subject, body
+        return merged_subject, merged_body
         
     prompt = f"""
 You are an expert sales representative. Personalize the following email template for a lead.
@@ -214,9 +229,9 @@ Lead details:
 Name: {lead.first_name} {lead.last_name}
 Company: {lead.company}
 
-Original Subject: {template_subject}
+Original Subject: {merged_subject}
 Original Body:
-{template_body}
+{merged_body}
 
 Requirements:
 - Keep the core message intact.
@@ -250,10 +265,9 @@ Requirements:
             text = text[7:-3]
         
         result = json.loads(text)
-        return result.get("subject", template_subject), result.get("body", template_body)
+        subject = _apply_merge_tags(result.get("subject", merged_subject), lead)
+        body = _apply_merge_tags(result.get("body", merged_body), lead)
+        return subject, body
     except Exception as e:
         logger.error(f"Gemini Personalization Error: {e}")
-        # Fallback to standard merge tags
-        subject = _apply_merge_tags(template_subject, lead)
-        body = _apply_merge_tags(template_body, lead)
-        return subject, body
+        return merged_subject, merged_body
