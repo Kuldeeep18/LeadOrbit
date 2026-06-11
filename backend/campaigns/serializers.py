@@ -144,25 +144,117 @@ class CampaignSerializer(serializers.ModelSerializer):
         return value
 
     def _sync_sequence_steps(self, campaign, raw_steps):
-        SequenceStep.objects.filter(campaign=campaign).delete()
+        """
+        Synchronise SequenceStep rows for a campaign using an upsert-by-step-order
+        strategy instead of a blind delete + bulk_create.
 
-        step_objects = []
+        Why this matters
+        ----------------
+        ``SequenceStep`` rows are referenced by ``CampaignLead.current_step``
+        (FK with ``on_delete=SET_NULL``).  The old implementation deleted every
+        step unconditionally before re-creating them, which silently set
+        ``current_step`` to NULL for every active lead.  On the next scheduler
+        run those leads were detected as having no step and were reset back to
+        step 1 — causing duplicate outreach.
+
+        New strategy
+        ------------
+        1. Load existing steps keyed by ``step_order``.
+        2. For each incoming step, update the existing row (same PK → no FK
+           breakage) or create a new one.
+        3. Delete only the steps whose ``step_order`` no longer appears in the
+           new payload.
+        4. Remap any ``CampaignLead`` whose ``current_step`` was just deleted to
+           the nearest surviving step at or below its old order so active leads
+           keep their approximate position in the sequence.
+        """
+        # ── 1. Index existing steps by step_order ──────────────────────────
+        existing_by_order = {
+            s.step_order: s
+            for s in SequenceStep.objects.filter(campaign=campaign)
+        }
+
+        new_orders = set()
+        steps_to_update = []
+        steps_to_create = []
+
         for index, raw_step in enumerate(raw_steps):
+            order = index + 1
+            new_orders.add(order)
             normalized = self._normalize_step(raw_step, index)
-            step_objects.append(
-                SequenceStep(
-                    organization=campaign.organization,
-                    campaign=campaign,
-                    step_order=index + 1,
-                    channel_type=normalized['channel_type'],
-                    delay_minutes=normalized['delay_minutes'],
-                    template_subject=normalized['template_subject'],
-                    template_body=normalized['template_body'],
+
+            if order in existing_by_order:
+                # Update in-place — preserves the PK so FK refs stay valid.
+                existing = existing_by_order[order]
+                existing.channel_type = normalized['channel_type']
+                existing.delay_minutes = normalized['delay_minutes']
+                existing.template_subject = normalized['template_subject']
+                existing.template_body = normalized['template_body']
+                steps_to_update.append(existing)
+            else:
+                steps_to_create.append(
+                    SequenceStep(
+                        organization=campaign.organization,
+                        campaign=campaign,
+                        step_order=order,
+                        channel_type=normalized['channel_type'],
+                        delay_minutes=normalized['delay_minutes'],
+                        template_subject=normalized['template_subject'],
+                        template_body=normalized['template_body'],
+                    )
                 )
+
+        # ── 2. Persist updates and new rows ────────────────────────────────
+        if steps_to_update:
+            SequenceStep.objects.bulk_update(
+                steps_to_update,
+                ['channel_type', 'delay_minutes', 'template_subject', 'template_body'],
             )
 
-        if step_objects:
-            SequenceStep.objects.bulk_create(step_objects)
+        if steps_to_create:
+            SequenceStep.objects.bulk_create(steps_to_create)
+
+        # ── 3. Identify and delete obsolete steps ──────────────────────────
+        obsolete_orders = set(existing_by_order.keys()) - new_orders
+        if not obsolete_orders:
+            return  # Nothing was removed — no FK repair needed.
+
+        obsolete_steps = [existing_by_order[o] for o in obsolete_orders]
+        obsolete_ids = [s.id for s in obsolete_steps]
+
+        # ── 4. Remap active leads pointing at an about-to-be-deleted step ──
+        # Fetch the surviving step IDs ordered so we can find the nearest one.
+        surviving_steps = list(
+            SequenceStep.objects.filter(campaign=campaign)
+            .exclude(id__in=obsolete_ids)
+            .order_by('step_order')
+        )
+
+        affected_leads = CampaignLead.objects.filter(
+            campaign=campaign,
+            current_step_id__in=obsolete_ids,
+        ).select_related('current_step')
+
+        leads_to_update = []
+        for clead in affected_leads:
+            old_order = clead.current_step.step_order if clead.current_step else 0
+            # Find the closest surviving step at or below the lead's old position.
+            replacement = None
+            for step in reversed(surviving_steps):
+                if step.step_order <= old_order:
+                    replacement = step
+                    break
+            # If nothing is at or below, fall back to the first surviving step.
+            if replacement is None and surviving_steps:
+                replacement = surviving_steps[0]
+            clead.current_step = replacement
+            leads_to_update.append(clead)
+
+        if leads_to_update:
+            CampaignLead.objects.bulk_update(leads_to_update, ['current_step'])
+
+        # ── 5. Now it's safe to delete the obsolete steps ──────────────────
+        SequenceStep.objects.filter(id__in=obsolete_ids).delete()
 
     def _normalize_step(self, raw_step, index):
         if not isinstance(raw_step, dict):

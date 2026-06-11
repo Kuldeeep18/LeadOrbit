@@ -1287,3 +1287,166 @@ class CampaignWorkflowTests(APITestCase):
         self.assertIsNone(campaign_lead.next_execution_time)
         self.assertEqual(campaign.status, 'COMPLETED')
         mocked_send.assert_not_called()
+
+    # -----------------------------------------------------------------------
+    # Regression tests for: Fix campaign updates resetting active leads
+    # https://github.com/Kuldeeep18/LeadOrbit/issues  (LO-XXX)
+    # -----------------------------------------------------------------------
+
+    def test_updating_campaign_preserves_step_pks_and_does_not_null_active_lead_step(self):
+        """
+        Regression: _sync_sequence_steps used to delete all steps and bulk-create
+        new ones.  The cascade SET_NULL would silently set CampaignLead.current_step
+        to NULL for every active lead; on the next scheduler pass those leads were
+        reset back to step 1 and re-sent the first email.
+
+        After the fix, existing steps are updated in-place (same PK) so no FK
+        breakage occurs.
+        """
+        # ── Setup: campaign with 3 steps, lead parked on step 2 ────────────
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Preserve step PKs test',
+            status='ACTIVE',
+            settings={
+                'steps': [
+                    {'type': 'EMAIL', 'subject': 'Step 1', 'body': 'Body 1'},
+                    {'type': 'EMAIL', 'subject': 'Step 2', 'body': 'Body 2'},
+                    {'type': 'WAIT',  'delay_value': 1, 'delay_unit': 'days'},
+                ],
+            },
+        )
+        step1 = SequenceStep.objects.create(
+            organization=self.organization, campaign=campaign,
+            step_order=1, channel_type='EMAIL',
+            template_subject='Step 1', template_body='Body 1', delay_minutes=0,
+        )
+        step2 = SequenceStep.objects.create(
+            organization=self.organization, campaign=campaign,
+            step_order=2, channel_type='EMAIL',
+            template_subject='Step 2', template_body='Body 2', delay_minutes=0,
+        )
+        step3 = SequenceStep.objects.create(
+            organization=self.organization, campaign=campaign,
+            step_order=3, channel_type='WAIT',
+            delay_minutes=1440,
+        )
+        lead = Lead.objects.create(organization=self.organization, email='preserve-pk@acme.test')
+        clead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=step2,
+            status='ACTIVE',
+            next_execution_time=timezone.now() + timedelta(minutes=30),
+        )
+
+        original_step_pks = {step1.id, step2.id, step3.id}
+
+        # ── Act: edit the campaign (change step 2 subject, same 3 steps) ───
+        response = self.client.patch(
+            f'/api/v1/campaigns/{campaign.id}/',
+            {
+                'settings': {
+                    'steps': [
+                        {'type': 'EMAIL', 'subject': 'Step 1 updated', 'body': 'Body 1'},
+                        {'type': 'EMAIL', 'subject': 'Step 2 updated', 'body': 'Body 2'},
+                        {'type': 'WAIT',  'delay_value': 1, 'delay_unit': 'days'},
+                    ],
+                },
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+
+        # ── Assert: existing PKs must be reused, not deleted & recreated ───
+        surviving_pks = set(
+            SequenceStep.objects.filter(campaign=campaign).values_list('id', flat=True)
+        )
+        self.assertEqual(surviving_pks, original_step_pks,
+                         "Step PKs changed — old implementation deleted and recreated rows.")
+
+        # Active lead must still be on step 2 (same object, same PK)
+        clead.refresh_from_db()
+        self.assertIsNotNone(clead.current_step,
+                             "current_step was set to NULL — lead would have restarted from step 1.")
+        self.assertEqual(clead.current_step_id, step2.id,
+                         "Lead was moved away from step 2 after a non-structural update.")
+
+        # Content was updated
+        step2.refresh_from_db()
+        self.assertEqual(step2.template_subject, 'Step 2 updated')
+
+    def test_updating_campaign_remaps_active_lead_when_its_step_is_removed(self):
+        """
+        When a step that an active lead is currently parked on is removed from
+        the sequence during an update, the lead must be remapped to the nearest
+        surviving step at or below its old position — NOT reset to step 1 and
+        NOT left with a NULL current_step.
+        """
+        # ── Setup: 4-step campaign; lead is on step 3 ──────────────────────
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Remap lead on step delete',
+            status='ACTIVE',
+            settings={'steps': []},
+        )
+        step1 = SequenceStep.objects.create(
+            organization=self.organization, campaign=campaign,
+            step_order=1, channel_type='EMAIL',
+            template_subject='S1', template_body='b1', delay_minutes=0,
+        )
+        step2 = SequenceStep.objects.create(
+            organization=self.organization, campaign=campaign,
+            step_order=2, channel_type='WAIT', delay_minutes=0,
+        )
+        step3 = SequenceStep.objects.create(
+            organization=self.organization, campaign=campaign,
+            step_order=3, channel_type='EMAIL',
+            template_subject='S3', template_body='b3', delay_minutes=0,
+        )
+        step4 = SequenceStep.objects.create(
+            organization=self.organization, campaign=campaign,
+            step_order=4, channel_type='WAIT', delay_minutes=60,
+        )
+        lead = Lead.objects.create(organization=self.organization, email='remap-step@acme.test')
+        clead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=step3,        # Lead is currently on step 3
+            status='ACTIVE',
+            next_execution_time=timezone.now() + timedelta(minutes=5),
+        )
+
+        # ── Act: remove step 3 from the sequence (keep steps 1, 2, 4→3) ───
+        response = self.client.patch(
+            f'/api/v1/campaigns/{campaign.id}/',
+            {
+                'settings': {
+                    'steps': [
+                        {'type': 'EMAIL', 'subject': 'S1', 'body': 'b1'},
+                        {'type': 'WAIT'},
+                        # step 3 is gone
+                        {'type': 'WAIT', 'delay_value': 60, 'delay_unit': 'minutes'},
+                    ],
+                },
+            },
+            format='json',
+        )
+        self.assertEqual(response.status_code, 200)
+
+        clead.refresh_from_db()
+
+        # The lead must not be NULL — that would cause a step-1 reset.
+        self.assertIsNotNone(clead.current_step,
+                             "current_step is NULL after step removal — lead will restart from step 1.")
+
+        # The nearest surviving step at or below old position 3 is now step 2.
+        surviving_at_order_2 = SequenceStep.objects.get(campaign=campaign, step_order=2)
+        self.assertEqual(
+            clead.current_step_id,
+            surviving_at_order_2.id,
+            "Lead was not remapped to the nearest surviving step below its old position.",
+        )
+
