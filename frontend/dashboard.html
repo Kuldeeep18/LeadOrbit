@@ -208,15 +208,56 @@
     <script type="module">
         import { fetchWithAuth } from './api.js';
 
+
+        function animateCountUp(element, targetValue, duration = 1000, isPercent = false) {
+            let start = 0;
+            const startTime = performance.now();
+
+            function update(currentTime) {
+                const progress = Math.min((currentTime - startTime) / duration, 1);
+                const value = start + (targetValue - start) * progress;
+
+                if (isPercent) {
+                    element.textContent = value.toFixed(1) + '%';
+                } else {
+                    element.textContent = Math.floor(value).toLocaleString();
+                }
+
+                if (progress < 1) {
+                    requestAnimationFrame(update);
+                }
+            }
+
+            requestAnimationFrame(update);
+        }
+
+
         document.addEventListener('DOMContentLoaded', async () => {
             try {
                 const res = await fetchWithAuth('/analytics/dashboard/');
                 if (res.ok) {
                     const data = await res.json();
-                    document.getElementById('total-leads-count').textContent = Number(data.total_leads || 0).toLocaleString();
-                    document.getElementById('active-campaigns-count').textContent = Number(data.active_campaigns || 0).toLocaleString();
-                    document.getElementById('emails-sent-count').textContent = Number(data.emails_sent || 0).toLocaleString();
-                    document.getElementById('reply-rate').textContent = `${data.reply_rate || 0}%`;
+                    animateCountUp(
+                        document.getElementById('total-leads-count'),
+                        Number(data.total_leads || 0)
+                    );
+
+                    animateCountUp(
+                        document.getElementById('active-campaigns-count'),
+                        Number(data.active_campaigns || 0)
+                    );
+
+                    animateCountUp(
+                        document.getElementById('emails-sent-count'),
+                        Number(data.emails_sent || 0)
+                    );
+
+                    animateCountUp(
+                        document.getElementById('reply-rate'),
+                        Number(data.reply_rate || 0),
+                        1000,
+                        true
+                    );
 
                     document.querySelectorAll('.skeleton-kpi').forEach(el => el.style.display = 'none');
                     document.querySelectorAll('.kpi-value-text').forEach(el => el.style.display = 'block');
