@@ -24,28 +24,13 @@ export function setTheme(theme) {
     }, 300);
 }
 
-function syncThemeToggle() {
-    const themeToggle = document.getElementById('theme-toggle');
-    if (!themeToggle) {
-        return;
-    }
-
-    themeToggle.checked = getTheme() === 'dark';
-}
-
 function initThemeToggle() {
     const themeToggle = document.getElementById('theme-toggle');
     if (!themeToggle) {
         return;
     }
 
-    syncThemeToggle();
-
-    if (themeToggle.dataset.themeToggleBound === 'true') {
-        return;
-    }
-
-    themeToggle.dataset.themeToggleBound = 'true';
+    themeToggle.checked = getTheme() === 'dark';
     themeToggle.addEventListener('change', () => {
         setTheme(themeToggle.checked ? 'dark' : 'light');
     });
@@ -74,18 +59,6 @@ function initPasswordVisibilityToggle() {
 }
 
 applyTheme(getTheme());
-
-window.addEventListener('pageshow', () => {
-    applyTheme(getTheme());
-    syncThemeToggle();
-});
-
-window.addEventListener('storage', (event) => {
-    if (event.key === THEME_STORAGE_KEY) {
-        applyTheme(getTheme());
-        syncThemeToggle();
-    }
-});
 
 function setActiveNavLink() {
     const pathname = window.location.pathname;
