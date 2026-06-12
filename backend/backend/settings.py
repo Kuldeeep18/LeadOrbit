@@ -156,6 +156,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'campaigns.tasks.process_active_leads',
         'schedule': 60.0,
     },
+    'check-imap-bounces-every-5-minutes': {
+        'task': 'campaigns.tasks.check_imap_bounces',
+        'schedule': 300.0,
+    },
     'poll-gmail-replies-every-5-minutes': {
         'task': 'campaigns.tasks.poll_gmail_for_replies',
         'schedule': 300.0,
@@ -185,6 +189,10 @@ OPENROUTER_APP_NAME = os.getenv('OPENROUTER_APP_NAME', _read_local_env_value('OP
 ENABLE_AUTO_REPLY_DETECTION = os.getenv(
     'ENABLE_AUTO_REPLY_DETECTION',
     'false',
+).lower() in ('true', '1', 'yes')
+ENABLE_AUTO_BOUNCE_DETECTION = os.getenv(
+    'ENABLE_AUTO_BOUNCE_DETECTION',
+    'true',
 ).lower() in ('true', '1', 'yes')
 
 # Limit synchronous processing inside launch API calls to keep requests responsive.

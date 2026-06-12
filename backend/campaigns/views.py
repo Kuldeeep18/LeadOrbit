@@ -235,10 +235,14 @@ class WebhookView(APIView):
         # Simple MVP tracking
         if event_type and lead_email:
             try:
+                tracked_statuses = ['ACTIVE', 'ENROLLED']
+                if event_type in {'bounce', 'reply'}:
+                    tracked_statuses.append('FINISHED')
+
                 # Find active campaign lead matching this email
                 base_qs = CampaignLead.objects.filter(
                     lead__email=lead_email,
-                    status__in=['ACTIVE', 'ENROLLED'],
+                    status__in=tracked_statuses,
                 )
                 if message_id:
                     base_qs = base_qs.filter(last_sent_message_id=message_id)
@@ -250,12 +254,12 @@ class WebhookView(APIView):
                     _execute_condition_click_step,
                     _execute_condition_open_step,
                     _execute_condition_reply_step,
+                    _mark_campaign_lead_bounced,
                 )
 
                 for cl in cleads:
                     if event_type == 'bounce':
-                        cl.status = 'BOUNCED'
-                        cl.save(update_fields=['status'])
+                        _mark_campaign_lead_bounced(cl, now=now)
                     elif event_type == 'reply':
                         cl.last_replied_at = now
                         # Only hard-stop if there is no reply-yes branch configured.

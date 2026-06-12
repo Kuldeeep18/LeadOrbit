@@ -9,6 +9,7 @@ from rest_framework.test import APITestCase
 from campaigns.models import Campaign, CampaignLead, ConnectedEmailAccount, SequenceStep
 from campaigns.ai import personalize_email
 from campaigns.tasks import (
+    check_imap_bounces,
     _get_campaign_steps,
     poll_gmail_for_replies,
     process_active_leads,
@@ -928,6 +929,113 @@ class CampaignWorkflowTests(APITestCase):
         campaign_lead.refresh_from_db()
         self.assertEqual(campaign_lead.status, 'REPLIED')
 
+    @override_settings(ENABLE_AUTO_BOUNCE_DETECTION=True)
+    def test_check_imap_bounces_marks_matching_campaign_lead_bounced(self):
+        account = ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=self.user,
+            email_address='sender-bounce@acme.test',
+            provider='GOOGLE',
+            access_token='token',
+            refresh_token='refresh',
+        )
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Bounce polling flow',
+            status='ACTIVE',
+            connected_account=account,
+        )
+        step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Hello',
+            template_body='World',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='bounced-lead@acme.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=step,
+            status='ACTIVE',
+            next_execution_time=timezone.now() + timedelta(minutes=10),
+            last_sent_message_id='sent-mid-1',
+        )
+
+        with patch(
+            'campaigns.tasks.find_gmail_bounce_candidates',
+            return_value=[{'message_id': 'bounce-1', 'failed_recipients': ['bounced-lead@acme.test']}],
+        ) as mocked_find:
+            with patch('campaigns.tasks.mark_gmail_message_as_read') as mocked_mark_read:
+                with patch('campaigns.tasks.notify_email_bounced') as mocked_notify:
+                    result = check_imap_bounces()
+
+        campaign_lead.refresh_from_db()
+        self.assertEqual(campaign_lead.status, 'BOUNCED')
+        self.assertIsNone(campaign_lead.current_step)
+        self.assertIsNone(campaign_lead.next_execution_time)
+        self.assertIn('marked 1 campaign leads as BOUNCED', result)
+        mocked_find.assert_called_once_with(account)
+        mocked_mark_read.assert_called_once_with(account, 'bounce-1')
+        mocked_notify.assert_called_once_with(self.organization.id, 'bounced-lead@acme.test')
+
+    @override_settings(ENABLE_AUTO_BOUNCE_DETECTION=True)
+    def test_check_imap_bounces_marks_unmatched_message_as_read(self):
+        account = ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=self.user,
+            email_address='sender-unmatched@acme.test',
+            provider='GOOGLE',
+            access_token='token',
+            refresh_token='refresh',
+        )
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Bounce unmatched flow',
+            status='ACTIVE',
+            connected_account=account,
+        )
+        SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Hello',
+            template_body='World',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='safe-lead@acme.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='ACTIVE',
+            last_sent_message_id='sent-mid-2',
+        )
+
+        with patch(
+            'campaigns.tasks.find_gmail_bounce_candidates',
+            return_value=[{'message_id': 'bounce-404', 'failed_recipients': ['missing@acme.test']}],
+        ):
+            with patch('campaigns.tasks.mark_gmail_message_as_read') as mocked_mark_read:
+                with patch('campaigns.tasks.notify_email_bounced') as mocked_notify:
+                    result = check_imap_bounces()
+
+        campaign_lead.refresh_from_db()
+        self.assertEqual(campaign_lead.status, 'ACTIVE')
+        self.assertIn('marked 0 campaign leads as BOUNCED', result)
+        mocked_mark_read.assert_called_once_with(account, 'bounce-404')
+        mocked_notify.assert_not_called()
+
     @override_settings(CELERY_TASK_ALWAYS_EAGER=False)
     def test_launch_action_activates_campaign_and_triggers_processing(self):
         campaign = Campaign.objects.create(
@@ -1113,6 +1221,48 @@ class CampaignWorkflowTests(APITestCase):
         self.assertTrue(
             any('Webhook processing error for event=open email=lead@acme.test' in entry for entry in logs.output)
         )
+
+    def test_email_webhook_bounce_marks_lead_bounced_and_stops_sequence(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Webhook bounce flow',
+            status='ACTIVE',
+        )
+        step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Hi',
+            template_body='Body',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='webhook-bounce@acme.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=step,
+            status='ACTIVE',
+            next_execution_time=timezone.now() + timedelta(minutes=5),
+        )
+
+        with patch('campaigns.tasks.notify_email_bounced') as mocked_notify:
+            response = self.client.post(
+                '/api/v1/webhooks/email/',
+                {'event': 'bounce', 'email': 'webhook-bounce@acme.test'},
+                format='json',
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        campaign_lead.refresh_from_db()
+        self.assertEqual(campaign_lead.status, 'BOUNCED')
+        self.assertIsNone(campaign_lead.current_step)
+        self.assertIsNone(campaign_lead.next_execution_time)
+        mocked_notify.assert_called_once_with(self.organization.id, 'webhook-bounce@acme.test')
 
     def test_dashboard_analytics_isolates_data_by_tenant(self):
         org2 = Organization.objects.create(name='Other Corp')
