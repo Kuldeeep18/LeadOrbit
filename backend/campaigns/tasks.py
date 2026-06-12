@@ -14,6 +14,11 @@ from .gmail_service import (
     mark_gmail_message_as_read,
     send_gmail,
 )
+from .mailbox_service import (
+    find_imap_bounce_candidates,
+    mark_imap_message_as_read,
+    send_smtp_email,
+)
 from .notifications import notify_email_bounced
 from .sms_service import initiate_call, send_sms
 from .models import CampaignLead, ConnectedEmailAccount, SequenceStep
@@ -476,11 +481,11 @@ def _execute_call_step(clead, step, now=None):
 @shared_task
 def send_email_step(campaign_lead_id, step_id):
     """
-    Dispatches an email through the connected Gmail account (or falls back to mock logging).
+    Dispatch an email through the selected connected account or fall back to mock logging.
     """
     
     try:
-        clead = CampaignLead.objects.select_related('lead', 'campaign').get(id=campaign_lead_id)
+        clead = CampaignLead.objects.select_related('lead', 'campaign__connected_account').get(id=campaign_lead_id)
         step = SequenceStep.objects.get(id=step_id)
 
         if clead.lead.global_unsubscribe:
@@ -518,18 +523,30 @@ def send_email_step(campaign_lead_id, step_id):
         account = clead.campaign.connected_account
         if account:
             try:
-                message_id = send_gmail(
-                    account,
-                    clead.lead.email,
-                    subject,
-                    body,
-                    unsubscribe_url=build_unsubscribe_url(clead.lead),
-                )
+                if account.provider == 'GOOGLE':
+                    message_id = send_gmail(
+                        account,
+                        clead.lead.email,
+                        subject,
+                        body,
+                        unsubscribe_url=build_unsubscribe_url(clead.lead),
+                    )
+                    logger.info(f"Gmail SENT to {clead.lead.email} | msg_id={message_id}")
+                elif account.provider == 'CUSTOM':
+                    message_id = send_smtp_email(
+                        account,
+                        clead.lead.email,
+                        subject,
+                        body,
+                        unsubscribe_url=build_unsubscribe_url(clead.lead),
+                    )
+                    logger.info(f"SMTP SENT to {clead.lead.email} | msg_id={message_id}")
+                else:
+                    raise RuntimeError(f"Unsupported email provider: {account.provider}")
                 clead.last_sent_message_id = message_id
                 clead.save(update_fields=['last_sent_message_id'])
-                logger.info(f"Gmail SENT to {clead.lead.email} | msg_id={message_id}")
-            except Exception as gmail_err:
-                logger.error(f"Gmail API send failed for {clead.lead.email}: {gmail_err}")
+            except Exception as send_err:
+                logger.error(f"Email send failed for {clead.lead.email}: {send_err}")
                 # Restore next_execution_time so the lead can be retried later.
                 clead.next_execution_time = timezone.now() + timedelta(minutes=15)
                 clead.save(update_fields=['next_execution_time'])
@@ -729,14 +746,16 @@ def check_imap_bounces():
     total_bounced = 0
     scanned_messages = 0
     for account in accounts:
-        if account.provider != 'GOOGLE':
-            logger.info(
-                f"Skipping bounce polling for {account.email_address}: provider {account.provider} is not supported yet."
-            )
-            continue
-
         try:
-            candidates = find_gmail_bounce_candidates(account)
+            if account.provider == 'GOOGLE':
+                candidates = find_gmail_bounce_candidates(account)
+            elif account.provider == 'CUSTOM':
+                candidates = find_imap_bounce_candidates(account)
+            else:
+                logger.info(
+                    f"Skipping bounce polling for {account.email_address}: provider {account.provider} is not supported yet."
+                )
+                continue
         except Exception as exc:
             logger.error(f"Failed to poll bounces for {account.email_address}: {exc}")
             continue
@@ -759,7 +778,10 @@ def check_imap_bounces():
                     )
             finally:
                 try:
-                    mark_gmail_message_as_read(account, message_id)
+                    if account.provider == 'GOOGLE':
+                        mark_gmail_message_as_read(account, message_id)
+                    elif account.provider == 'CUSTOM':
+                        mark_imap_message_as_read(account, message_id)
                 except Exception as exc:
                     logger.error(
                         f"Failed to mark bounce email {message_id} as read for {account.email_address}: {exc}"

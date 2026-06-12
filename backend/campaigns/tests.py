@@ -70,6 +70,34 @@ class CampaignWorkflowTests(APITestCase):
         self.assertEqual(steps[1].channel_type, 'WAIT')
         self.assertEqual(steps[1].delay_minutes, 2880)
 
+    def test_create_custom_connected_account_from_settings(self):
+        payload = {
+            'email_address': 'custom-sender@acme.test',
+            'smtp_host': 'smtp.acme.test',
+            'smtp_port': 587,
+            'smtp_username': 'smtp-user',
+            'smtp_password': 'smtp-pass',
+            'smtp_use_tls': True,
+            'smtp_use_ssl': False,
+            'imap_host': 'imap.acme.test',
+            'imap_port': 993,
+            'imap_username': 'imap-user',
+            'imap_password': 'imap-pass',
+            'imap_use_ssl': True,
+        }
+
+        response = self.client.post('/api/v1/connected-accounts/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['provider'], 'CUSTOM')
+        self.assertTrue(response.data['supports_smtp'])
+        self.assertTrue(response.data['supports_imap'])
+
+        account = ConnectedEmailAccount.objects.get(email_address='custom-sender@acme.test')
+        self.assertEqual(account.provider, 'CUSTOM')
+        self.assertEqual(account.smtp_host, 'smtp.acme.test')
+        self.assertEqual(account.imap_host, 'imap.acme.test')
+        self.assertEqual(account.connected_by, self.user)
+
     def test_create_campaign_supports_all_step_and_condition_types(self):
         payload = {
             'name': 'All step types',
@@ -1036,6 +1064,68 @@ class CampaignWorkflowTests(APITestCase):
         mocked_mark_read.assert_called_once_with(account, 'bounce-404')
         mocked_notify.assert_not_called()
 
+    @override_settings(ENABLE_AUTO_BOUNCE_DETECTION=True)
+    def test_check_imap_bounces_supports_custom_imap_accounts(self):
+        account = ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=self.user,
+            email_address='custom-bounce@acme.test',
+            provider='CUSTOM',
+            smtp_host='smtp.acme.test',
+            smtp_port=587,
+            smtp_username='smtp-user',
+            smtp_password='smtp-pass',
+            smtp_use_tls=True,
+            smtp_use_ssl=False,
+            imap_host='imap.acme.test',
+            imap_port=993,
+            imap_username='imap-user',
+            imap_password='imap-pass',
+            imap_use_ssl=True,
+        )
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Custom bounce polling flow',
+            status='ACTIVE',
+            connected_account=account,
+        )
+        step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Hello',
+            template_body='World',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='custom-bounced@acme.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=step,
+            status='ACTIVE',
+            next_execution_time=timezone.now() + timedelta(minutes=10),
+            last_sent_message_id='custom-mid-1',
+        )
+
+        with patch(
+            'campaigns.tasks.find_imap_bounce_candidates',
+            return_value=[{'message_id': 'imap-bounce-1', 'failed_recipients': ['custom-bounced@acme.test']}],
+        ) as mocked_find:
+            with patch('campaigns.tasks.mark_imap_message_as_read') as mocked_mark_read:
+                result = check_imap_bounces()
+
+        campaign_lead.refresh_from_db()
+        self.assertEqual(campaign_lead.status, 'BOUNCED')
+        self.assertIsNone(campaign_lead.current_step)
+        self.assertIn('marked 1 campaign leads as BOUNCED', result)
+        mocked_find.assert_called_once_with(account)
+        mocked_mark_read.assert_called_once_with(account, 'imap-bounce-1')
+
     @override_settings(CELERY_TASK_ALWAYS_EAGER=False)
     def test_launch_action_activates_campaign_and_triggers_processing(self):
         campaign = Campaign.objects.create(
@@ -1385,6 +1475,60 @@ class CampaignWorkflowTests(APITestCase):
         self.assertEqual(campaign_lead.status, 'FINISHED')
         self.assertIsNone(campaign_lead.current_step)
         self.assertIsNone(campaign_lead.next_execution_time)
+
+    def test_send_email_step_uses_custom_smtp_account(self):
+        account = ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=self.user,
+            email_address='custom-mailbox@acme.test',
+            provider='CUSTOM',
+            smtp_host='smtp.acme.test',
+            smtp_port=587,
+            smtp_username='smtp-user',
+            smtp_password='smtp-pass',
+            smtp_use_tls=True,
+            smtp_use_ssl=False,
+            imap_host='imap.acme.test',
+            imap_port=993,
+            imap_username='imap-user',
+            imap_password='imap-pass',
+            imap_use_ssl=True,
+        )
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Custom SMTP flow',
+            status='ACTIVE',
+            connected_account=account,
+        )
+        email_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Hello',
+            template_body='Hi there',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='custom-recipient@acme.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=email_step,
+            status='ACTIVE',
+            next_execution_time=timezone.now() - timedelta(minutes=1),
+        )
+
+        with patch('campaigns.tasks.send_smtp_email', return_value='smtp-msg-1') as mocked_send:
+            send_email_step(campaign_lead.id, email_step.id)
+
+        campaign_lead.refresh_from_db()
+        self.assertEqual(campaign_lead.last_sent_message_id, 'smtp-msg-1')
+        self.assertEqual(campaign_lead.status, 'FINISHED')
+        mocked_send.assert_called_once()
 
     def test_send_email_step_skips_blocked_domain_leads(self):
         BlockedDomain.objects.create(

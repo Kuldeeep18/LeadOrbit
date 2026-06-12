@@ -21,7 +21,7 @@ from datetime import timedelta
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import serializers, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
 from .models import ConnectedEmailAccount
@@ -63,6 +63,55 @@ def _frontend_settings_redirect(request, preferred_frontend_base: str = '', **pa
         frontend_base = f"{request.scheme}://{request.get_host()}"
     query_string = urlencode(params)
     return redirect(f"{frontend_base}/settings.html?{query_string}")
+
+
+def _serialize_connected_account(account):
+    return {
+        'id': str(account.id),
+        'email': account.email_address,
+        'provider': account.provider,
+        'provider_display': account.get_provider_display(),
+        'connected': True,
+        'supports_smtp': bool(account.smtp_host and account.smtp_port),
+        'supports_imap': bool(account.imap_host and account.imap_port),
+    }
+
+
+class CustomMailboxAccountSerializer(serializers.Serializer):
+    email_address = serializers.EmailField()
+    smtp_host = serializers.CharField(max_length=255)
+    smtp_port = serializers.IntegerField(min_value=1, max_value=65535)
+    smtp_username = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    smtp_password = serializers.CharField(required=False, allow_blank=True, write_only=True)
+    smtp_use_tls = serializers.BooleanField(required=False, default=True)
+    smtp_use_ssl = serializers.BooleanField(required=False, default=False)
+    imap_host = serializers.CharField(max_length=255)
+    imap_port = serializers.IntegerField(min_value=1, max_value=65535)
+    imap_username = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    imap_password = serializers.CharField(required=False, allow_blank=True, write_only=True)
+    imap_use_ssl = serializers.BooleanField(required=False, default=True)
+
+    def validate(self, attrs):
+        if attrs.get('smtp_use_ssl') and attrs.get('smtp_use_tls'):
+            raise serializers.ValidationError(
+                {'smtp_use_tls': 'Choose either SMTP SSL or STARTTLS, not both.'}
+            )
+
+        email_address = attrs.get('email_address')
+        attrs['smtp_username'] = (attrs.get('smtp_username') or email_address).strip()
+        attrs['imap_username'] = (attrs.get('imap_username') or email_address).strip()
+
+        smtp_password = (attrs.get('smtp_password') or '').strip()
+        imap_password = (attrs.get('imap_password') or '').strip()
+        if not smtp_password:
+            raise serializers.ValidationError({'smtp_password': 'SMTP password is required.'})
+        if not imap_password:
+            raise serializers.ValidationError({'imap_password': 'IMAP password is required.'})
+
+        attrs['smtp_password'] = smtp_password
+        attrs['imap_password'] = imap_password
+        attrs['email_address'] = email_address.strip().lower()
+        return attrs
 
 
 class GoogleOAuthLoginView(APIView):
@@ -343,6 +392,9 @@ class ConnectedAccountsListView(APIView):
     """
     GET /api/v1/connected-accounts/
     Returns the list of connected email accounts for the current user's org.
+
+    POST /api/v1/connected-accounts/
+    Creates or updates a custom SMTP/IMAP mailbox for the current user.
     """
     permission_classes = [IsAuthenticated]
 
@@ -374,13 +426,85 @@ class ConnectedAccountsListView(APIView):
 
         logger.info(f"[ConnectedAccounts] Found {len(deduped)} unique accounts for org {org.name}")
 
-        data = [
-            {
-                'id': str(a.id),
-                'email': a.email_address,
-                'provider': a.provider,
-                'connected': True,
-            }
-            for a in deduped
-        ]
+        data = [_serialize_connected_account(a) for a in deduped]
         return Response(data)
+
+    def post(self, request):
+        org = request.user.organization
+        if not org:
+            return Response(
+                {'detail': 'Organization context is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = CustomMailboxAccountSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+
+        account = (
+            ConnectedEmailAccount._default_manager
+            .filter(
+                organization=org,
+                connected_by=request.user,
+                provider='CUSTOM',
+                email_address__iexact=payload['email_address'],
+            )
+            .first()
+        )
+        created = account is None
+
+        if account is None:
+            account = ConnectedEmailAccount(
+                organization=org,
+                connected_by=request.user,
+                provider='CUSTOM',
+                email_address=payload['email_address'],
+            )
+
+        account.access_token = ''
+        account.refresh_token = None
+        account.token_expiry = None
+        account.smtp_host = payload['smtp_host'].strip()
+        account.smtp_port = payload['smtp_port']
+        account.smtp_username = payload['smtp_username']
+        account.smtp_password = payload['smtp_password']
+        account.smtp_use_tls = payload.get('smtp_use_tls', True)
+        account.smtp_use_ssl = payload.get('smtp_use_ssl', False)
+        account.imap_host = payload['imap_host'].strip()
+        account.imap_port = payload['imap_port']
+        account.imap_username = payload['imap_username']
+        account.imap_password = payload['imap_password']
+        account.imap_use_ssl = payload.get('imap_use_ssl', True)
+        account.save()
+
+        return Response(
+            _serialize_connected_account(account),
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+
+class ConnectedAccountDetailView(APIView):
+    """
+    DELETE /api/v1/connected-accounts/<uuid:account_id>/
+    Removes a connected email account owned by the current user.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, account_id):
+        account = (
+            ConnectedEmailAccount._default_manager
+            .filter(
+                id=account_id,
+                organization=request.user.organization,
+            )
+            .filter(
+                Q(connected_by=request.user)
+                | Q(connected_by__isnull=True, email_address__iexact=request.user.email)
+            )
+            .first()
+        )
+        if not account:
+            return Response({'detail': 'Connected account not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        account.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

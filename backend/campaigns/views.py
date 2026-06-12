@@ -65,7 +65,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
             except ConnectedEmailAccount.DoesNotExist:
                 return Response(
                     {
-                        "error": "Connected email account not found. Please reconnect your Gmail account in Settings.",
+                        "error": "Connected email account not found. Please reconnect your sender account in Settings.",
                         "campaign_id": str(campaign.id),
                     },
                     status=status.HTTP_400_BAD_REQUEST,
@@ -92,7 +92,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
                 return Response(
                     {
                         "error": "Selected sender account belongs to another user. "
-                                 "Choose your own connected Gmail account before launch.",
+                                 "Choose your own connected email account before launch.",
                         "campaign_id": str(campaign.id),
                     },
                     status=status.HTTP_400_BAD_REQUEST,
