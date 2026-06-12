@@ -1145,6 +1145,8 @@ class CampaignWorkflowTests(APITestCase):
         self.assertEqual(response.data['active_campaigns'], 0)
         self.assertEqual(response.data['emails_sent'], 0)
         self.assertEqual(response.data['replied'], 0)
+        self.assertEqual(response.data['tracked_leads'], 0)
+        self.assertEqual(response.data['engaged_leads'], 0)
         self.assertEqual(response.data['campaign_stats'], [])
 
         # org2 user should only see their own data
@@ -1154,6 +1156,40 @@ class CampaignWorkflowTests(APITestCase):
         self.assertEqual(response.data['total_leads'], 1)
         self.assertEqual(response.data['active_campaigns'], 1)
         self.assertEqual(response.data['replied'], 1)
+        self.assertEqual(response.data['tracked_leads'], 1)
+        self.assertEqual(response.data['engaged_leads'], 1)
+        self.assertTrue(response.data['recent_activity'])
+        self.assertIn('otherlead@othercorp.test', response.data['recent_activity'][0]['description'])
+
+    def test_dashboard_analytics_surfaces_engagement_tracking_summary(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Engagement Campaign',
+            status='ACTIVE',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='tracked@acme.test',
+        )
+        CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='REPLIED',
+            last_opened_at=timezone.now(),
+            last_clicked_at=timezone.now(),
+            last_replied_at=timezone.now(),
+        )
+
+        response = self.client.get('/api/v1/analytics/dashboard/?days=7')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['tracked_leads'], 1)
+        self.assertEqual(response.data['engaged_leads'], 1)
+        self.assertEqual(response.data['opened'], 1)
+        self.assertEqual(response.data['clicked'], 1)
+        self.assertEqual(response.data['replied'], 1)
+        self.assertTrue(response.data['recent_activity'])
+        self.assertIn('tracked@acme.test', response.data['recent_activity'][0]['description'])
 
     def test_dashboard_analytics_requires_authentication(self):
         self.client.force_authenticate(user=None)

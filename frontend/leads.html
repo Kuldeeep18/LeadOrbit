@@ -119,6 +119,51 @@
                     </div>
                 </div>
 
+                <div class="row g-4 mb-4">
+                    <div class="col-lg-6">
+                        <div class="glass-card p-3 h-100">
+                            <div class="d-flex flex-wrap align-items-start justify-content-between gap-2">
+                                <div>
+                                    <div class="section-title mb-1">Engagement Snapshot</div>
+                                    <div class="title-meta">Recent tracking activity across your campaigns.</div>
+                                </div>
+                                <span class="chip" style="background:#e0f2fe;color:#0369a1;">Last 30 days</span>
+                            </div>
+                            <div class="row g-3 mt-1">
+                                <div class="col-6 col-xl-3">
+                                    <div class="kpi-label">Tracked</div>
+                                    <div class="kpi-value" id="tracked-leads-count">0</div>
+                                    <div class="kpi-sub">Leads with campaign activity</div>
+                                </div>
+                                <div class="col-6 col-xl-3">
+                                    <div class="kpi-label">Engaged</div>
+                                    <div class="kpi-value" id="engaged-leads-count">0</div>
+                                    <div class="kpi-sub">Opened, clicked, or replied</div>
+                                </div>
+                                <div class="col-6 col-xl-3">
+                                    <div class="kpi-label">Open Rate</div>
+                                    <div class="kpi-value" id="lead-open-rate">0%</div>
+                                    <div class="kpi-sub">From tracked sends</div>
+                                </div>
+                                <div class="col-6 col-xl-3">
+                                    <div class="kpi-label">Reply Rate</div>
+                                    <div class="kpi-value" id="lead-reply-rate">0%</div>
+                                    <div class="kpi-sub">Direct responses</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-6">
+                        <div class="glass-card p-3 h-100">
+                            <div class="section-title mb-1">Recent Engagement</div>
+                            <div class="title-meta mb-3">Latest opens, clicks, replies, and delivery events.</div>
+                            <div id="lead-engagement-feed" class="list-group list-group-flush" style="max-height: 228px; overflow:auto;">
+                                <div class="text-muted small">Loading engagement activity...</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="table-shell">
                     <div class="table-responsive">
                         <table class="table table-hover mb-0 align-middle">
@@ -182,6 +227,7 @@
         import { fetchWithAuth } from './api.js';
 
         let allLeads = [];
+        let analyticsSnapshot = null;
 
         function copyToClipboard(text, button) {
             navigator.clipboard.writeText(text).then(() => {
@@ -265,6 +311,47 @@
             document.getElementById('avg-score').textContent = avgScore;
         }
 
+        function renderEngagementSnapshot(snapshot) {
+            const data = snapshot || {};
+            document.getElementById('tracked-leads-count').textContent = data.tracked_leads || 0;
+            document.getElementById('engaged-leads-count').textContent = data.engaged_leads || 0;
+            document.getElementById('lead-open-rate').textContent = `${data.open_rate || 0}%`;
+            document.getElementById('lead-reply-rate').textContent = `${data.reply_rate || 0}%`;
+
+            const feed = document.getElementById('lead-engagement-feed');
+            const items = Array.isArray(data.recent_activity) ? data.recent_activity : [];
+            if (!items.length) {
+                feed.innerHTML = '<div class="text-muted small">No engagement events yet. Launch a campaign to start tracking activity.</div>';
+                return;
+            }
+
+            feed.innerHTML = items.map(item => {
+                const type = (item.type || '').replace('lead_', '').toUpperCase();
+                const tone = {
+                    OPEN: 'background:#dcfce7;color:#166534;',
+                    CLICK: 'background:#dbeafe;color:#1d4ed8;',
+                    REPLIED: 'background:#fef3c7;color:#92400e;',
+                    BOUNCED: 'background:#fee2e2;color:#b91c1c;',
+                    ACTIVE: 'background:#e2e8f0;color:#334155;',
+                    FINISHED: 'background:#e2e8f0;color:#334155;',
+                    ENROLLED: 'background:#e2e8f0;color:#334155;',
+                    PAUSED: 'background:#e2e8f0;color:#334155;',
+                }[type] || 'background:#e2e8f0;color:#334155;';
+                const time = item.time ? new Date(item.time).toLocaleString() : 'Just now';
+                return `
+                    <div class="list-group-item px-0 py-2 border-0 border-bottom">
+                        <div class="d-flex flex-wrap align-items-start justify-content-between gap-2">
+                            <div>
+                                <div class="fw-semibold small">${item.description || 'Unknown activity'}</div>
+                                <div class="text-muted small">${time}</div>
+                            </div>
+                            <span class="chip" style="${tone}">${type || 'EVENT'}</span>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
         function applySearch() {
             const q = (document.getElementById('lead-search').value || '').trim().toLowerCase();
             if (!q) {
@@ -280,14 +367,26 @@
 
         document.addEventListener('DOMContentLoaded', async () => {
             try {
-                const res = await fetchWithAuth('/leads/');
-                if (res.ok) {
-                    allLeads = await res.json();
+                const [leadsRes, analyticsRes] = await Promise.all([
+                    fetchWithAuth('/leads/'),
+                    fetchWithAuth('/analytics/dashboard/?days=30'),
+                ]);
+
+                if (leadsRes.ok) {
+                    allLeads = await leadsRes.json();
                     renderStats(allLeads);
                     renderLeadRows(allLeads);
                 }
+
+                if (analyticsRes.ok) {
+                    analyticsSnapshot = await analyticsRes.json();
+                    renderEngagementSnapshot(analyticsSnapshot);
+                } else {
+                    renderEngagementSnapshot(null);
+                }
             } catch (e) {
                 console.error('Error fetching leads:', e);
+                renderEngagementSnapshot(null);
             }
 
             document.getElementById('lead-search').addEventListener('input', applySearch);
