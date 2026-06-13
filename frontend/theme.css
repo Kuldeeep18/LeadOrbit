@@ -195,6 +195,54 @@ body {
     padding-top: 0.8rem;
 }
 
+.project-attribution-footer {
+    margin-top: 0.45rem;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    font-size: 0.7rem;
+    line-height: 1.2;
+    letter-spacing: 0;
+}
+
+.project-attribution-version {
+    font-weight: 700;
+}
+
+.project-attribution-separator {
+    opacity: 0.6;
+}
+
+.project-attribution-link {
+    text-decoration: none;
+    font-weight: 600;
+    transition: opacity 0.15s ease;
+}
+
+.project-attribution-link:hover {
+    opacity: 0.9;
+}
+
+.sidebar .project-attribution-footer {
+    color: rgba(255, 255, 255, 0.68);
+}
+
+.sidebar .project-attribution-link {
+    color: rgba(255, 255, 255, 0.82);
+}
+
+.builder-page .project-attribution-footer {
+    margin-top: 1rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid #e2e8f0;
+    color: var(--ink-500);
+}
+
+.builder-page .project-attribution-link {
+    color: var(--primary);
+}
+
 .main-area {
     flex: 1;
     min-width: 0;
