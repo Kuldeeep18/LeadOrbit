@@ -330,7 +330,7 @@ class WebhookView(APIView):
     Receives webhooks from email service provider (e.g. SendGrid/Mailgun)
     to track opens, clicks, bounces.
     """
-    permission_classes = [AllowAny] # Webhooks need to be publicly accessible
+    permission_classes = [IsAuthenticated] # Webhooks need to be publicly accessible
     
     def post(self, request, *args, **kwargs):
         event_type = (request.data.get('event') or '').strip().lower()
