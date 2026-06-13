@@ -2,6 +2,8 @@
 import { fetchWithAuth, clearTokens } from './api.js';
 
 const THEME_STORAGE_KEY = 'theme';
+const LEADORBIT_VERSION = 'v1.0.0-beta';
+const LEADORBIT_REPO_URL = 'https://github.com/Kuldeeep18/LeadOrbit';
 
 export function getTheme() {
     return localStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light';
@@ -74,6 +76,36 @@ function initPasswordVisibilityToggle() {
   });
 }
 
+function buildProjectFooterMarkup() {
+    return `
+        <div class="project-attribution-footer" id="project-attribution-footer">
+            <span class="project-attribution-version">${LEADORBIT_VERSION}</span>
+            <span class="project-attribution-separator">•</span>
+            <a class="project-attribution-link" href="${LEADORBIT_REPO_URL}" target="_blank" rel="noreferrer noopener">
+                <i class="bi bi-github me-1" aria-hidden="true"></i>GitHub repository
+            </a>
+            <span class="project-attribution-separator">•</span>
+            <span class="project-attribution-note">Made with ❤️ for GSSoC 2026</span>
+        </div>
+    `;
+}
+
+function injectProjectFooter() {
+    const footerMarkup = buildProjectFooterMarkup();
+
+    const sidebarFooter = document.querySelector('.sidebar-footer');
+    if (sidebarFooter && !sidebarFooter.querySelector('#project-attribution-footer')) {
+        sidebarFooter.insertAdjacentHTML('afterbegin', footerMarkup);
+    }
+
+    if (/campaign-builder\.html/i.test(window.location.pathname)) {
+        const editorPanel = document.getElementById('editor-panel');
+        if (editorPanel && !editorPanel.querySelector('#project-attribution-footer')) {
+            editorPanel.insertAdjacentHTML('beforeend', footerMarkup);
+        }
+    }
+}
+
 applyTheme(getTheme());
 
 function setActiveNavLink() {
@@ -134,6 +166,8 @@ async function initAppShell() {
     if (window.location.pathname.includes('login.html') || window.location.pathname.includes('register.html')) {
         return;
     }
+
+    injectProjectFooter();
 
     try {
         const res = await fetchWithAuth('/auth/me/');

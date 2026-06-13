@@ -9,6 +9,7 @@ from rest_framework.test import APITestCase
 from campaigns.models import Campaign, CampaignLead, ConnectedEmailAccount, SequenceStep
 from campaigns.ai import personalize_email
 from campaigns.tasks import (
+    _execute_condition_event_step,
     _get_campaign_steps,
     poll_gmail_for_replies,
     process_active_leads,
@@ -840,6 +841,104 @@ class CampaignWorkflowTests(APITestCase):
         campaign_lead.refresh_from_db()
         self.assertEqual(campaign_lead.status, 'FINISHED')
         self.assertIsNone(campaign_lead.current_step_id)
+
+    def test_condition_open_waits_for_window_before_routing_to_no_branch(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Condition open wait flow',
+            status='ACTIVE',
+            settings={
+                'steps': [
+                    {'type': 'CONDITION_OPEN', 'condition_time': '1 day'},
+                    {'type': 'EMAIL', 'subject': 'No path', 'body': 'no', 'condition_branch': 'no', 'condition_parent_index': 0},
+                ]
+            },
+        )
+        condition_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='CONDITION_OPEN',
+            delay_minutes=1440,
+        )
+        SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=2,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='No path',
+            template_body='no',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='condition-open@acme.test',
+        )
+        next_check = timezone.now() + timedelta(hours=1)
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=condition_step,
+            status='ACTIVE',
+            next_execution_time=next_check,
+        )
+
+        _execute_condition_event_step(campaign_lead, condition_step, event_detected=False, now=timezone.now())
+
+        campaign_lead.refresh_from_db()
+        self.assertEqual(campaign_lead.current_step_id, condition_step.id)
+        self.assertEqual(campaign_lead.status, 'ACTIVE')
+        self.assertEqual(campaign_lead.next_execution_time, next_check)
+
+    def test_condition_click_waits_for_window_before_routing_to_no_branch(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Condition click wait flow',
+            status='ACTIVE',
+            settings={
+                'steps': [
+                    {'type': 'CONDITION_CLICK', 'condition_time': '1 day'},
+                    {'type': 'EMAIL', 'subject': 'No path', 'body': 'no', 'condition_branch': 'no', 'condition_parent_index': 0},
+                ]
+            },
+        )
+        condition_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='CONDITION_CLICK',
+            delay_minutes=1440,
+        )
+        SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=2,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='No path',
+            template_body='no',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='condition-click@acme.test',
+        )
+        next_check = timezone.now() + timedelta(hours=1)
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=condition_step,
+            status='ACTIVE',
+            next_execution_time=next_check,
+        )
+
+        _execute_condition_event_step(campaign_lead, condition_step, event_detected=False, now=timezone.now())
+
+        campaign_lead.refresh_from_db()
+        self.assertEqual(campaign_lead.current_step_id, condition_step.id)
+        self.assertEqual(campaign_lead.status, 'ACTIVE')
+        self.assertEqual(campaign_lead.next_execution_time, next_check)
 
     @override_settings(ENABLE_AUTO_REPLY_DETECTION=True)
     def test_poll_replies_defers_terminal_status_when_reply_yes_branch_exists(self):
