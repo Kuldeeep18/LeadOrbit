@@ -119,6 +119,40 @@
                     </div>
                 </div>
 
+                <div class="table-shell mb-4">
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 px-3 py-3 border-bottom">
+                        <div>
+                            <div class="fw-bold">Import history</div>
+                            <div class="text-muted small">Review CSV runs and inspect row-level validation errors.</div>
+                        </div>
+                        <button class="btn btn-sm btn-outline-secondary" type="button" id="refresh-history-btn">
+                            <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i> Refresh
+                        </button>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0 align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>File</th>
+                                    <th>Total</th>
+                                    <th>Imported</th>
+                                    <th>Failed</th>
+                                    <th>Uploaded</th>
+                                    <th>Errors</th>
+                                </tr>
+                            </thead>
+                            <tbody id="import-history-body">
+                                <tr>
+                                    <td colspan="6" class="text-center py-4 text-muted">
+                                        <div class="spinner-border spinner-border-sm text-primary me-2" role="status" aria-label="Loading import history"></div>
+                                        Loading import history...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <div class="table-shell">
                     <div class="table-responsive">
                         <table class="table table-hover mb-0 align-middle">
@@ -177,11 +211,51 @@
         </div>
     </div>
 
+    <div class="modal fade" id="importErrorsModal" tabindex="-1" aria-labelledby="importErrorsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content rounded-3 shadow">
+                <div class="modal-header border-0">
+                    <div>
+                        <h5 class="modal-title fw-bold" id="importErrorsModalLabel">Import error log</h5>
+                        <div class="text-muted small" id="import-errors-meta"></div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="table-responsive">
+                        <table class="table table-sm align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Row</th>
+                                    <th>Email</th>
+                                    <th>Error</th>
+                                </tr>
+                            </thead>
+                            <tbody id="import-errors-body">
+                                <tr>
+                                    <td colspan="3" class="text-center py-4 text-muted">No errors selected.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script type="module" src="./main.js"></script>
     <script type="module">
         import { fetchWithAuth } from './api.js';
 
         let allLeads = [];
+        let allImportJobs = [];
+
+        function formatTimestamp(value) {
+            if (!value) return '-';
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return '-';
+            return date.toLocaleString();
+        }
 
         function copyToClipboard(text, button) {
             navigator.clipboard.writeText(text).then(() => {
@@ -195,6 +269,38 @@
                     icon.classList.add('bi-clipboard');
                 }, 2000);
             });
+        }
+
+        function renderImportErrorRows(job) {
+            const tbody = document.getElementById('import-errors-body');
+            const errors = Array.isArray(job?.error_log) ? job.error_log : [];
+
+            if (!errors.length) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="3" class="text-center py-4 text-muted">This import completed without row-level errors.</td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = errors.map(entry => `
+                <tr>
+                    <td class="fw-semibold">${entry.row ?? '-'}</td>
+                    <td>${entry.email || '<span class="text-muted">-</span>'}</td>
+                    <td>${entry.error || '<span class="text-muted">-</span>'}</td>
+                </tr>
+            `).join('');
+        }
+
+        function openImportErrors(jobId) {
+            const job = allImportJobs.find(item => item.id === jobId);
+            if (!job) return;
+
+            document.getElementById('import-errors-meta').textContent =
+                `${job.filename} · ${job.failed_count} error${job.failed_count === 1 ? '' : 's'}`;
+            renderImportErrorRows(job);
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('importErrorsModal')).show();
         }
 
         function renderLeadRows(leads) {
@@ -256,6 +362,41 @@
             
         }
 
+        function renderImportHistory(jobs) {
+            const tbody = document.getElementById('import-history-body');
+            if (!jobs.length) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="text-center py-4 text-muted">
+                            No CSV imports yet. Use <strong>Import CSV</strong> to create your first history entry.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = jobs.map(job => `
+                <tr>
+                    <td class="fw-semibold">${job.filename}</td>
+                    <td>${job.total_rows ?? 0}</td>
+                    <td><span class="chip" style="background:#dcfce7;color:#166534;">${job.imported_count ?? 0}</span></td>
+                    <td><span class="chip" style="background:#fee2e2;color:#b91c1c;">${job.failed_count ?? 0}</span></td>
+                    <td>${formatTimestamp(job.created_at)}</td>
+                    <td>
+                        ${
+                            (job.failed_count || 0) > 0
+                                ? `<button class="btn btn-sm btn-outline-danger view-import-errors-btn" data-job-id="${job.id}"><i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>View</button>`
+                                : '<span class="text-muted small">None</span>'
+                        }
+                    </td>
+                </tr>
+            `).join('');
+
+            document.querySelectorAll('.view-import-errors-btn').forEach(btn => {
+                btn.addEventListener('click', () => openImportErrors(btn.dataset.jobId));
+            });
+        }
+
         function renderStats(leads) {
             document.getElementById('leads-count').textContent = leads.length;
             const active = leads.filter(l => !l.global_unsubscribe).length;
@@ -263,6 +404,22 @@
             document.getElementById('unsubscribed-count').textContent = leads.length - active;
             const avgScore = leads.length ? (leads.reduce((sum, l) => sum + Number(l.score || 0), 0) / leads.length).toFixed(1) : '0.0';
             document.getElementById('avg-score').textContent = avgScore;
+        }
+
+        async function loadLeads() {
+            const res = await fetchWithAuth('/leads/');
+            if (!res.ok) return;
+            allLeads = await res.json();
+            renderStats(allLeads);
+            renderLeadRows(allLeads);
+        }
+
+        async function loadImportHistory() {
+            const res = await fetchWithAuth('/lead-import-jobs/');
+            if (!res.ok) return;
+            const payload = await res.json();
+            allImportJobs = Array.isArray(payload) ? payload : (payload.results || []);
+            renderImportHistory(allImportJobs);
         }
 
         function applySearch() {
@@ -280,17 +437,14 @@
 
         document.addEventListener('DOMContentLoaded', async () => {
             try {
-                const res = await fetchWithAuth('/leads/');
-                if (res.ok) {
-                    allLeads = await res.json();
-                    renderStats(allLeads);
-                    renderLeadRows(allLeads);
-                }
+                await loadLeads();
+                await loadImportHistory();
             } catch (e) {
                 console.error('Error fetching leads:', e);
             }
 
             document.getElementById('lead-search').addEventListener('input', applySearch);
+            document.getElementById('refresh-history-btn').addEventListener('click', loadImportHistory);
 
             document.getElementById('upload-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
@@ -313,7 +467,10 @@
 
                     if (res.status === 202) {
                         statusEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1" aria-hidden="true" ></i>File uploaded. Processing now...</span>';
-                        setTimeout(() => window.location.reload(), 1800);
+                        await loadLeads();
+                        await loadImportHistory();
+                        fileInput.value = '';
+                        bootstrap.Modal.getOrCreateInstance(document.getElementById('uploadModal')).hide();
                     } else {
                         statusEl.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle me-1" aria-hidden="true" ></i>Upload failed.</span>';
                     }

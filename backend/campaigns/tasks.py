@@ -246,6 +246,13 @@ def _execute_condition_event_step(clead, step, event_detected, now=None):
         _advance_to_next_step(clead, step, now=now)
         return
 
+    if clead.next_execution_time and clead.next_execution_time > now:
+        logger.info(
+            f"{step.channel_type} condition still waiting for {clead.lead.email}; "
+            f"next check at {clead.next_execution_time}."
+        )
+        return
+
     if no_branch_step_order and no_branch_step_order > step.step_order:
         steps = _get_campaign_steps(clead.campaign)
         no_step = next((s for s in steps if s.step_order == no_branch_step_order), None)

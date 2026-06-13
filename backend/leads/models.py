@@ -41,6 +41,19 @@ class Lead(TenantModel):
     def __str__(self):
         return f"{self.first_name} {self.last_name} ({self.email})"
 
+class LeadImportJob(TenantModel):
+    filename = models.CharField(max_length=255)
+    total_rows = models.IntegerField(default=0)
+    imported_count = models.IntegerField(default=0)
+    failed_count = models.IntegerField(default=0)
+    error_log = models.JSONField(default=list, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.filename} ({self.imported_count}/{self.total_rows})"
+
 class Tag(TenantModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=50)
