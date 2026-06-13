@@ -192,6 +192,111 @@ class CampaignViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK,
         )
 
+    @action(detail=True, methods=['get'])
+    def metrics(self, request, pk=None):
+        """Get comprehensive campaign performance metrics."""
+        campaign = self.get_object()
+        enrolled_leads = campaign.enrolled_leads.all()
+        total = enrolled_leads.count()
+
+        if total == 0:
+            return Response({
+                'total_leads': 0,
+                'active': 0,
+                'replied': 0,
+                'bounced': 0,
+                'opened': 0,
+                'clicked': 0,
+                'engagement_rate': 0,
+                'conversion_rate': 0,
+                'click_through_rate': 0,
+            })
+
+        active = enrolled_leads.filter(status='ACTIVE').count()
+        replied = enrolled_leads.filter(status='REPLIED').count()
+        bounced = enrolled_leads.filter(status='BOUNCED').count()
+        opened = enrolled_leads.filter(last_opened_at__isnull=False).count()
+        clicked = enrolled_leads.filter(last_clicked_at__isnull=False).count()
+
+        return Response({
+            'campaign_id': str(campaign.id),
+            'campaign_name': campaign.name,
+            'total_leads': total,
+            'active': active,
+            'replied': replied,
+            'bounced': bounced,
+            'opened': opened,
+            'clicked': clicked,
+            'engagement_rate': round((opened / total * 100) if total > 0 else 0, 2),
+            'conversion_rate': round((replied / total * 100) if total > 0 else 0, 2),
+            'click_through_rate': round((clicked / total * 100) if total > 0 else 0, 2),
+        })
+
+    @action(detail=True, methods=['get'])
+    def leads(self, request, pk=None):
+        """Get paginated list of enrolled leads with metrics."""
+        campaign = self.get_object()
+        status_filter = request.query_params.get('status')
+        limit = int(request.query_params.get('limit', 50))
+        offset = int(request.query_params.get('offset', 0))
+
+        leads_qs = campaign.enrolled_leads.select_related('lead').order_by('-updated_at')
+
+        if status_filter:
+            leads_qs = leads_qs.filter(status=status_filter)
+
+        total = leads_qs.count()
+        leads_data = []
+
+        for cl in leads_qs[offset:offset+limit]:
+            leads_data.append({
+                'lead_id': str(cl.lead.id),
+                'email': cl.lead.email,
+                'status': cl.status,
+                'current_step': cl.current_step.step_order if cl.current_step else None,
+                'last_sent_at': cl.last_sent_message_id,
+                'last_opened_at': cl.last_opened_at.isoformat() if cl.last_opened_at else None,
+                'last_clicked_at': cl.last_clicked_at.isoformat() if cl.last_clicked_at else None,
+                'last_replied_at': cl.last_replied_at.isoformat() if cl.last_replied_at else None,
+                'next_execution': cl.next_execution_time.isoformat() if cl.next_execution_time else None,
+            })
+
+        return Response({
+            'campaign_id': str(campaign.id),
+            'total_leads': total,
+            'offset': offset,
+            'limit': limit,
+            'leads': leads_data,
+        })
+
+    @action(detail=True, methods=['post'])
+    def process_now(self, request, pk=None):
+        """Immediately process all pending leads in the campaign."""
+        from .tasks import process_active_leads_once
+
+        campaign = self.get_object()
+
+        if campaign.status != 'ACTIVE':
+            return Response(
+                {
+                    "error": "Campaign must be active to process leads.",
+                    "campaign_id": str(campaign.id),
+                    "status": campaign.status,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        processed = process_active_leads_once()
+
+        return Response(
+            {
+                "success": True,
+                "processed_leads": processed,
+                "message": f"Processed {processed} campaign leads immediately.",
+            },
+            status=status.HTTP_200_OK,
+        )
+
 class SequenceStepViewSet(viewsets.ModelViewSet):
     serializer_class = SequenceStepSerializer
     queryset = SequenceStep.objects.all()
