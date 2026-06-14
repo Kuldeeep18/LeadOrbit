@@ -1,5 +1,6 @@
 import logging
 
+
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
@@ -359,8 +360,17 @@ class WebhookView(APIView):
 
                 for cl in cleads:
                     if event_type == 'bounce':
+                        bounce_reason = request.data.get('reason', 'Unknown reason')
+                        bounce_type = request.data.get('type', 'unknown')
+
+                        logger.info(
+                            f"Bounce received for {lead_email} | "
+                            f"Type: {bounce_type} | "
+                            f"Reason: {bounce_reason}"
+                        )
+
                         cl.status = 'BOUNCED'
-                        cl.save(update_fields=['status'])
+                        cl.save(update_fields=['status'])     
                     elif event_type == 'reply':
                         cl.last_replied_at = now
                         # Only hard-stop if there is no reply-yes branch configured.
