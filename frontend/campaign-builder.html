@@ -2635,8 +2635,69 @@ document.getElementById('setting-daily-limit').value =
             switchTab('sequence');
         });
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <div id="validation-modal" class="modal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Missing Merge Tag Values</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <p>Some leads have missing values for the merge tags in this campaign. Do you want to launch the campaign anyway?</p>
+                <ul id="leads-with-missing-fields"></ul>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Review</button>
+                <button type="button" class="btn btn-primary" id="force-launch-btn">Launch Anyway</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    const launchCampaignBtn = document.getElementById('launch-campaign-btn');
+    const validationModal = new bootstrap.Modal(document.getElementById('validation-modal'));
+    const forceLaunchBtn = document.getElementById('force-launch-btn');
+    const leadsWithMissingFields = document.getElementById('leads-with-missing-fields');
+
+    async function launchCampaign() {
+        const campaignId = window.location.pathname.split('/').pop();
+        const response = await fetch(`/api/v1/campaigns/${campaignId}/launch/`, { method: 'POST' });
+        const data = await response.json();
+
+        if (response.ok) {
+            console.log('Campaign launched successfully');
+        } else {
+            console.error('Failed to launch campaign', data);
+        }
+    }
+
+    async function validateAndLaunch() {
+        const campaignId = window.location.pathname.split('/').pop();
+        const response = await fetch(`/api/v1/campaigns/${campaignId}/validate-launch/`);
+        const data = await response.json();
+
+        if (data.valid) {
+            launchCampaign();
+        } else {
+            leadsWithMissingFields.innerHTML = '';
+            data.leads_with_missing_fields.forEach(lead => {
+                const li = document.createElement('li');
+                li.textContent = `${lead.email} is missing the following fields: ${lead.missing_fields.join(', ')}`;
+                leadsWithMissingFields.appendChild(li);
+            });
+            validationModal.show();
+        }
+    }
+
+    launchCampaignBtn.addEventListener('click', validateAndLaunch);
+
+    forceLaunchBtn.addEventListener('click', () => {
+        launchCampaign();
+        validationModal.hide();
+    });
+</script>
 </body>
 
 </html>
-
