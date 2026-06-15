@@ -12,6 +12,8 @@ from .serializers import CampaignSerializer, SequenceStepSerializer, EmailTempla
 
 logger = logging.getLogger(__name__)
 
+logger = logging.getLogger(__name__)
+
 class CampaignViewSet(viewsets.ModelViewSet):
     serializer_class = CampaignSerializer
     queryset = Campaign.objects.all()
@@ -331,6 +333,34 @@ class WebhookView(APIView):
     to track opens, clicks, bounces.
     """
     permission_classes = [AllowAny] # Webhooks need to be publicly accessible
+
+    @staticmethod
+    def _extract_bounce_metadata(payload):
+        bounce_data = payload.get('bounce')
+        if not isinstance(bounce_data, dict):
+            bounce_data = {}
+
+        bounce_type = (
+            payload.get('bounce_type')
+            or payload.get('type')
+            or bounce_data.get('type')
+            or bounce_data.get('bounce_type')
+            or ''
+        )
+        bounce_reason = (
+            payload.get('bounce_reason')
+            or payload.get('reason')
+            or payload.get('description')
+            or payload.get('smtp_response')
+            or bounce_data.get('reason')
+            or bounce_data.get('description')
+            or bounce_data.get('smtp_response')
+            or bounce_data.get('status')
+            or bounce_data.get('code')
+            or ''
+        )
+
+        return str(bounce_type).strip().lower(), str(bounce_reason).strip()
     
     def post(self, request, *args, **kwargs):
         event_type = (request.data.get('event') or '').strip().lower()
@@ -359,8 +389,19 @@ class WebhookView(APIView):
 
                 for cl in cleads:
                     if event_type == 'bounce':
+                        bounce_type, bounce_reason = self._extract_bounce_metadata(request.data)
                         cl.status = 'BOUNCED'
-                        cl.save(update_fields=['status'])
+                        cl.current_step = None
+                        cl.next_execution_time = None
+                        cl.bounce_type = bounce_type or None
+                        cl.bounce_reason = bounce_reason or None
+                        cl.save(update_fields=['status', 'current_step', 'next_execution_time', 'bounce_type', 'bounce_reason'])
+                        logger.info(
+                            "Bounce detected for %s | type=%s | reason=%s",
+                            cl.lead.email,
+                            bounce_type or 'unknown',
+                            bounce_reason or 'unspecified',
+                        )
                     elif event_type == 'reply':
                         cl.last_replied_at = now
                         # Only hard-stop if there is no reply-yes branch configured.
