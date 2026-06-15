@@ -57,6 +57,11 @@ class LeadImportJob(TenantModel):
 class Tag(TenantModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=50)
+    color = models.CharField(
+        max_length=7,
+        default='#6366f1',
+        help_text='Hex color code for the tag badge, e.g. #6366f1',
+    )
 
     class Meta:
         unique_together = ('organization', 'name')
