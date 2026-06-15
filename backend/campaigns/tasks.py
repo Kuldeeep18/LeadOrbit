@@ -10,6 +10,7 @@ from .gmail_service import build_unsubscribe_url, check_for_replies, send_gmail
 from .sms_service import send_sms, initiate_call
 from .models import CampaignLead, SequenceStep
 from leads.models import BlockedDomain, normalize_domain
+from .utils import parse_spintax
 
 logger = logging.getLogger(__name__)
 
@@ -458,6 +459,9 @@ def send_email_step(campaign_lead_id, step_id):
             return
 
         subject, body = personalize_email(step.template_subject, step.template_body, clead.lead)
+        
+        subject = parse_spintax(subject)
+        body = parse_spintax(body)
 
         account = clead.campaign.connected_account
         if account:
