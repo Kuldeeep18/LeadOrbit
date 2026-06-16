@@ -51,5 +51,5 @@ class EncryptedTextField(models.TextField):
         Returns:
             tuple: Migration deconstruction tuple with a stable import path.
         """
-        name, path, args, kwargs = super().deconstruct()
+        name, _path, args, kwargs = super().deconstruct()
         return name, 'campaigns.fields.EncryptedTextField', args, kwargs
