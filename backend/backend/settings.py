@@ -49,6 +49,7 @@ def _normalize_google_redirect_uri(raw_uri: str, backend_base_url: str) -> str:
     return f'{scheme}://{host}/api/v1/auth/google/callback'
 
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-fallback-key-change-me')
+FIELD_ENCRYPTION_KEY = os.getenv('FIELD_ENCRYPTION_KEY', '')
 DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes')
 ALLOWED_HOSTS = ['*']
 CORS_ALLOWED_ORIGINS = [

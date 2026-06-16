@@ -2,6 +2,7 @@ from django.db import models
 from django.conf import settings
 from tenants.models import TenantModel
 from leads.models import Lead
+from .fields import EncryptedTextField
 import uuid
 
 class ConnectedEmailAccount(TenantModel):
@@ -25,7 +26,7 @@ class ConnectedEmailAccount(TenantModel):
     imap_host = models.CharField(max_length=255, blank=True, default='')
     imap_port = models.IntegerField(default=993)
     imap_username = models.CharField(max_length=255, blank=True, default='')
-    imap_password = models.CharField(max_length=255, blank=True, default='')
+    imap_password = EncryptedTextField(blank=True, default='')
 
     def __str__(self):
         return f"{self.email_address} ({self.get_provider_display()})"

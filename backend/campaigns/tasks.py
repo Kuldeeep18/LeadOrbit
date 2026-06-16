@@ -665,6 +665,8 @@ BOUNCE_SUBJECT_PATTERNS = (
     'Mail delivery failed',
 )
 
+IMAP_CONNECT_TIMEOUT_SECONDS = 30
+
 EMAIL_ADDRESS_RE = re.compile(r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}')
 
 
@@ -739,7 +741,11 @@ def _process_imap_bounce_messages(account):
     processed_bounces = 0
 
     try:
-        imap_conn = imaplib.IMAP4_SSL(account.imap_host, account.imap_port)
+        imap_conn = imaplib.IMAP4_SSL(
+            account.imap_host,
+            account.imap_port,
+            timeout=IMAP_CONNECT_TIMEOUT_SECONDS,
+        )
         imap_conn.login(account.imap_username, account.imap_password)
         imap_conn.select('INBOX')
 
@@ -796,12 +802,16 @@ def _process_imap_bounce_messages(account):
         if imap_conn is not None:
             try:
                 imap_conn.close()
-            except Exception:
-                pass
+            except Exception as err:
+                logger.warning(
+                    f"IMAP close failed for {account.email_address}: {err}"
+                )
             try:
                 imap_conn.logout()
-            except Exception:
-                pass
+            except Exception as err:
+                logger.warning(
+                    f"IMAP logout failed for {account.email_address}: {err}"
+                )
 
     return processed_bounces
 
