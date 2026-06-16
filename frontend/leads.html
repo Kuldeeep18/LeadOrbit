@@ -240,74 +240,11 @@
                     </div>
                 </div>
 
-<<<<<<< HEAD
-                <!-- ─── Filter Panel (hidden by default) ─────────────────────── -->
-                <div id="filter-panel" class="filter-panel" style="display:none;" aria-label="Lead filters">
-                    <div class="filter-panel-title">
-                        <i class="bi bi-funnel me-1"></i> Filter Leads
-                    </div>
 
-                    <div class="row g-3 align-items-start">
-                        <!-- Tag multi-select -->
-                        <div class="col-12 col-md-5">
-                            <label class="form-label fw-semibold" style="font-size:0.82rem;">
-                                <i class="bi bi-tags me-1"></i>Tags
-                                <span class="text-muted fw-normal">(click to toggle)</span>
-                            </label>
-                            <div id="tag-filter-chips" class="d-flex flex-wrap gap-2">
-                                <span class="text-muted small">Loading tags...</span>
-                            </div>
-                        </div>
-
-                        <!-- Date range -->
-                        <div class="col-6 col-md-3">
-                            <label for="filter-date-after" class="form-label fw-semibold" style="font-size:0.82rem;">
-                                <i class="bi bi-calendar-check me-1"></i>Created after
-                            </label>
-                            <input type="date" id="filter-date-after" class="form-control form-control-sm" aria-label="Created after date">
-                        </div>
-                        <div class="col-6 col-md-3">
-                            <label for="filter-date-before" class="form-label fw-semibold" style="font-size:0.82rem;">
-                                <i class="bi bi-calendar-x me-1"></i>Created before
-                            </label>
-                            <input type="date" id="filter-date-before" class="form-control form-control-sm" aria-label="Created before date">
-                        </div>
-
-                        <!-- Status / Pipeline stage -->
-                        <div class="col-12 col-md-1 d-flex flex-column gap-1" style="min-width:120px;">
-                            <label class="form-label fw-semibold mb-1" style="font-size:0.82rem;">
-                                <i class="bi bi-person-check me-1"></i>Status
-                            </label>
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="filter-status" id="status-all" value="" checked>
-                                <label class="form-check-label small" for="status-all">All</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="filter-status" id="status-active" value="active">
-                                <label class="form-check-label small" for="status-active">Active</label>
-                            </div>
-                            <div class="form-check">
-                                <input class="form-check-input" type="radio" name="filter-status" id="status-unsub" value="unsubscribed">
-                                <label class="form-check-label small" for="status-unsub">Unsubscribed</label>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Action buttons -->
-                    <div class="d-flex gap-2 mt-3">
-                        <button id="apply-filters-btn" class="btn btn-sm btn-primary">
-                            <i class="bi bi-funnel-fill me-1" aria-hidden="true"></i>Apply Filters
-                        </button>
-                        <button id="clear-filters-btn" class="btn btn-sm btn-outline-secondary">
-                            <i class="bi bi-x-circle me-1" aria-hidden="true"></i>Clear
-                        </button>
-                    </div>
-
-                    <!-- Active filter summary row -->
-                    <div id="active-filters-row" class="d-flex flex-wrap gap-1 mt-2" style="display:none!important;"></div>
-                </div>
-                <!-- ─────────────────────────────────────────────────────────── -->
-=======
+                                    </td>
+                                </tr>
+                            </tbody>
+   
                 <div class="table-shell mb-4">
                     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 px-3 py-3 border-bottom">
                         <div>
@@ -341,7 +278,7 @@
                         </table>
                     </div>
                 </div>
->>>>>>> upstream/main
+
 
                 <div class="table-shell">
                     <div class="table-responsive">
@@ -362,9 +299,6 @@
                                     <td colspan="7" class="text-center py-4 text-muted">
                                         <div class="spinner-border spinner-border-sm text-primary me-2" role="status" aria-label="Loading leads"></div>
                                         Loading leads...
-                                    </td>
-                                </tr>
-                            </tbody>
                         </table>
                     </div>
                 </div>
@@ -439,7 +373,7 @@
     <script type="module">
         import { fetchWithAuth } from './api.js';
 
-<<<<<<< HEAD
+
         // ─── State ──────────────────────────────────────────────────────────
         let allLeads = [];           // full unfiltered list (client-side search backup)
         let allTags = [];            // all org tags (for the filter panel)
@@ -481,10 +415,14 @@
 
         function escapeHtml(str) {
             return String(str || '').replace(/[&<>"']/g, c => ({
-                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;'
             }[c]));
-=======
-        let allLeads = [];
+        }
+
         let allImportJobs = [];
 
         function formatTimestamp(value) {
@@ -492,7 +430,6 @@
             const date = new Date(value);
             if (Number.isNaN(date.getTime())) return '-';
             return date.toLocaleString();
->>>>>>> upstream/main
         }
 
         function copyToClipboard(text, button) {
@@ -503,9 +440,6 @@
             });
         }
 
-<<<<<<< HEAD
-        // ─── Render ─────────────────────────────────────────────────────────
-=======
         function renderImportErrorRows(job) {
             const tbody = document.getElementById('import-errors-body');
             const errors = Array.isArray(job?.error_log) ? job.error_log : [];
@@ -537,7 +471,7 @@
             renderImportErrorRows(job);
             bootstrap.Modal.getOrCreateInstance(document.getElementById('importErrorsModal')).show();
         }
->>>>>>> upstream/main
+
 
         function renderLeadRows(leads) {
             const tbody = document.getElementById('leads-table-body');
@@ -631,154 +565,6 @@
             document.getElementById('avg-score').textContent = avgScore;
         }
 
-<<<<<<< HEAD
-        // ─── Filter Panel ────────────────────────────────────────────────────
-
-        async function loadTags() {
-            try {
-                const res = await fetchWithAuth('/tags/');
-                if (!res.ok) return;
-                allTags = await res.json();
-                renderTagFilterChips();
-            } catch (e) {
-                console.error('Failed to load tags:', e);
-            }
-        }
-
-        function renderTagFilterChips() {
-            const container = document.getElementById('tag-filter-chips');
-            if (!allTags.length) {
-                container.innerHTML = '<span class="text-muted small">No tags yet. Create tags in Settings.</span>';
-                return;
-            }
-            container.innerHTML = allTags.map(tag => {
-                const bg = tag.color || '#6366f1';
-                const fg = contrastColor(bg);
-                const isSelected = selectedTagIds.has(tag.id);
-                return `
-                <button
-                    class="tag-filter-chip${isSelected ? ' selected' : ''}"
-                    data-tag-id="${tag.id}"
-                    style="background:${bg};color:${fg};border-color:${isSelected ? 'var(--focus-ring)' : bg};"
-                    type="button"
-                    aria-pressed="${isSelected}"
-                    title="Filter by ${escapeHtml(tag.name)}">
-                    <span class="tag-dot" style="background:${fg};opacity:0.6;"></span>
-                    ${escapeHtml(tag.name)}
-                </button>`;
-            }).join('');
-
-            container.querySelectorAll('.tag-filter-chip').forEach(chip => {
-                chip.addEventListener('click', () => {
-                    const id = chip.dataset.tagId;
-                    if (selectedTagIds.has(id)) {
-                        selectedTagIds.delete(id);
-                        chip.classList.remove('selected');
-                        chip.setAttribute('aria-pressed', 'false');
-                        chip.style.borderColor = chip.style.backgroundColor;
-                    } else {
-                        selectedTagIds.add(id);
-                        chip.classList.add('selected');
-                        chip.setAttribute('aria-pressed', 'true');
-                        chip.style.borderColor = 'var(--focus-ring)';
-                    }
-                });
-            });
-        }
-
-        function getFilterParams() {
-            const params = {};
-
-            if (selectedTagIds.size > 0) {
-                params.tags = [...selectedTagIds].join(',');
-            }
-
-            const after = document.getElementById('filter-date-after').value;
-            if (after) params.created_after = after;
-
-            const before = document.getElementById('filter-date-before').value;
-            if (before) params.created_before = before;
-
-            const statusEl = document.querySelector('input[name="filter-status"]:checked');
-            if (statusEl && statusEl.value) params.status = statusEl.value;
-
-            return params;
-        }
-
-        function hasActiveFilters(params) {
-            return Object.keys(params).length > 0;
-        }
-
-        function updateFilterIndicator(params) {
-            const dot = document.getElementById('filter-active-dot');
-            if (hasActiveFilters(params)) {
-                dot.classList.add('visible');
-            } else {
-                dot.classList.remove('visible');
-            }
-
-            // Active filter summary chips
-            const row = document.getElementById('active-filters-row');
-            const chips = [];
-
-            if (params.tags) {
-                const tagCount = params.tags.split(',').length;
-                chips.push(`<span class="filter-active-badge"><i class="bi bi-tags me-1"></i>${tagCount} tag${tagCount > 1 ? 's' : ''}</span>`);
-            }
-            if (params.created_after) {
-                chips.push(`<span class="filter-active-badge"><i class="bi bi-calendar-check me-1"></i>After ${params.created_after}</span>`);
-            }
-            if (params.created_before) {
-                chips.push(`<span class="filter-active-badge"><i class="bi bi-calendar-x me-1"></i>Before ${params.created_before}</span>`);
-            }
-            if (params.status) {
-                chips.push(`<span class="filter-active-badge"><i class="bi bi-person-check me-1"></i>${params.status.charAt(0).toUpperCase() + params.status.slice(1)}</span>`);
-            }
-
-            if (chips.length) {
-                row.innerHTML = chips.join('');
-                row.style.removeProperty('display');
-            } else {
-                row.style.display = 'none';
-            }
-        }
-
-        async function fetchLeadsWithFilters(params = {}) {
-            const qs = new URLSearchParams(params).toString();
-            const endpoint = qs ? `/leads/?${qs}` : '/leads/';
-            const res = await fetchWithAuth(endpoint);
-            if (!res.ok) throw new Error('Failed to fetch leads');
-            return res.json();
-        }
-
-        async function applyFilters() {
-            const params = getFilterParams();
-            activeFilters = params;
-            updateFilterIndicator(params);
-
-            try {
-                const leads = await fetchLeadsWithFilters(params);
-                allLeads = leads;
-                renderStats(leads);
-                renderLeadRows(leads);
-            } catch (e) {
-                console.error('Error applying filters:', e);
-            }
-        }
-
-        function clearFilters() {
-            selectedTagIds.clear();
-            document.getElementById('filter-date-after').value = '';
-            document.getElementById('filter-date-before').value = '';
-            document.querySelector('input[name="filter-status"][value=""]').checked = true;
-            activeFilters = {};
-            renderTagFilterChips();
-            updateFilterIndicator({});
-        }
-
-        // ─── Text search (client-side, applied on top of server results) ────
-
-=======
         async function loadLeads() {
             const res = await fetchWithAuth('/leads/');
             if (!res.ok) return;
@@ -795,7 +581,6 @@
             renderImportHistory(allImportJobs);
         }
 
->>>>>>> upstream/main
         function applySearch() {
             const q = (document.getElementById('lead-search').value || '').trim().toLowerCase();
             if (!q) {
@@ -870,16 +655,13 @@
                     });
 
                     if (res.status === 202) {
-<<<<<<< HEAD
-                        statusEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>File uploaded. Processing now...</span>';
-                        setTimeout(() => window.location.reload(), 1800);
-=======
+
                         statusEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1" aria-hidden="true" ></i>File uploaded. Processing now...</span>';
                         await loadLeads();
                         await loadImportHistory();
                         fileInput.value = '';
                         bootstrap.Modal.getOrCreateInstance(document.getElementById('uploadModal')).hide();
->>>>>>> upstream/main
+
                     } else {
                         statusEl.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle me-1" aria-hidden="true"></i>Upload failed.</span>';
                     }
