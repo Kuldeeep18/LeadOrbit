@@ -6,6 +6,12 @@ from .fields import EncryptedTextField
 import uuid
 
 class ConnectedEmailAccount(TenantModel):
+    """
+    OAuth-connected mailbox used to send campaign email.
+
+    Optional IMAP credentials (imap_host, imap_username, imap_password) enable
+    automatic bounce detection via the check_imap_bounces Celery task.
+    """
     PROVIDER_CHOICES = (
         ('GOOGLE', 'Google'),
         ('MICROSOFT', 'Microsoft')

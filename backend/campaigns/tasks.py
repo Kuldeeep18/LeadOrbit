@@ -671,6 +671,15 @@ EMAIL_ADDRESS_RE = re.compile(r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}
 
 
 def _subject_matches_bounce(subject):
+    """
+    Return True when an email subject matches a known bounce notification pattern.
+
+    Args:
+        subject: Message Subject header value.
+
+    Returns:
+        bool: True if the subject contains a known bounce phrase.
+    """
     normalized = (subject or '').strip()
     if not normalized:
         return False
@@ -678,6 +687,15 @@ def _subject_matches_bounce(subject):
 
 
 def _extract_email_from_header_value(value):
+    """
+    Extract the first email address found in a header or line value.
+
+    Args:
+        value: Header value such as ``rfc822; user@example.com``.
+
+    Returns:
+        str | None: Lowercased email address, or None when not found.
+    """
     if not value:
         return None
     match = EMAIL_ADDRESS_RE.search(str(value))
@@ -685,6 +703,15 @@ def _extract_email_from_header_value(value):
 
 
 def _get_message_body_text(message):
+    """
+    Collect decoded plain-text and HTML body parts from an email message.
+
+    Args:
+        message: Parsed :class:`email.message.Message` instance.
+
+    Returns:
+        str: Combined body text from all text/plain and text/html parts.
+    """
     parts = []
     if message.is_multipart():
         for part in message.walk():
@@ -705,6 +732,19 @@ def _get_message_body_text(message):
 
 
 def _parse_bounced_recipient(message):
+    """
+    Determine the failed recipient address from a bounce notification message.
+
+    Checks ``Final-Recipient`` and ``X-Failed-Recipients`` headers first, then
+    scans the body for recipient lines, then falls back to the first email found
+    in the body.
+
+    Args:
+        message: Parsed bounce notification message.
+
+    Returns:
+        str | None: Lowercased bounced recipient email, or None when not found.
+    """
     for header_name in ('Final-Recipient', 'X-Failed-Recipients'):
         recipient = _extract_email_from_header_value(message.get(header_name))
         if recipient:
@@ -723,6 +763,15 @@ def _parse_bounced_recipient(message):
 
 
 def _mark_campaign_lead_bounced(clead):
+    """
+    Mark a campaign lead as BOUNCED and complete the campaign when appropriate.
+
+    Args:
+        clead: CampaignLead instance to update.
+
+    Returns:
+        bool: True when the lead status was changed, False if already BOUNCED.
+    """
     if clead.status == 'BOUNCED':
         return False
 
@@ -734,6 +783,15 @@ def _mark_campaign_lead_bounced(clead):
 
 
 def _process_imap_bounce_messages(account):
+    """
+    Connect to one mailbox over IMAP and process unread bounce notifications.
+
+    Args:
+        account: ConnectedEmailAccount with IMAP credentials configured.
+
+    Returns:
+        int: Number of campaign leads newly marked as BOUNCED.
+    """
     if not (account.imap_host and account.imap_username and account.imap_password):
         return 0
 
@@ -819,8 +877,13 @@ def _process_imap_bounce_messages(account):
 @shared_task
 def check_imap_bounces():
     """
-    Runs every 15 minutes via Celery Beat.
-    Checks connected email accounts with IMAP credentials for delivery failure notices.
+    Poll connected mailboxes for delivery-failure notices and mark leads BOUNCED.
+
+    Runs every 15 minutes via Celery Beat. Iterates over ConnectedEmailAccount
+    records with IMAP credentials; one account failure does not abort the rest.
+
+    Returns:
+        str: Summary string reporting how many bounces were processed.
     """
     accounts = ConnectedEmailAccount.objects.filter(
         imap_host__gt='',
