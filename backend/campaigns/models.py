@@ -22,6 +22,10 @@ class ConnectedEmailAccount(TenantModel):
     access_token = models.TextField()
     refresh_token = models.TextField(blank=True, null=True)
     token_expiry = models.DateTimeField(null=True, blank=True)
+    imap_host = models.CharField(max_length=255, blank=True, default='')
+    imap_port = models.IntegerField(default=993)
+    imap_username = models.CharField(max_length=255, blank=True, default='')
+    imap_password = models.CharField(max_length=255, blank=True, default='')
 
     def __str__(self):
         return f"{self.email_address} ({self.get_provider_display()})"

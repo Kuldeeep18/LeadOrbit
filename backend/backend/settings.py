@@ -160,6 +160,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'campaigns.tasks.poll_gmail_for_replies',
         'schedule': 300.0,
     },
+    'check-imap-bounces-every-15-minutes': {
+        'task': 'campaigns.tasks.check_imap_bounces',
+        'schedule': 900.0,
+    },
 }
 
 # SimpleJWT Configuration

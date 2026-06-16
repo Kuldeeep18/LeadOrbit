@@ -1,5 +1,10 @@
+import email
+import imaplib
 import logging
+import re
 from datetime import timedelta
+from email import policy
+from email.parser import BytesParser
 
 from celery import shared_task
 from django.conf import settings as django_settings
@@ -8,7 +13,7 @@ from django.utils import timezone
 from .ai import _apply_merge_tags, personalize_email
 from .gmail_service import build_unsubscribe_url, check_for_replies, send_gmail
 from .sms_service import send_sms, initiate_call
-from .models import CampaignLead, SequenceStep
+from .models import CampaignLead, ConnectedEmailAccount, SequenceStep
 from leads.models import BlockedDomain, normalize_domain
 
 logger = logging.getLogger(__name__)
@@ -652,3 +657,172 @@ def poll_gmail_for_replies():
                 _maybe_mark_campaign_completed(clead.campaign)
 
     return f"Detected {total_replies} new replies."
+
+
+BOUNCE_SUBJECT_PATTERNS = (
+    'Undelivered Mail Returned to Sender',
+    'Delivery Status Notification (Failure)',
+    'Mail delivery failed',
+)
+
+EMAIL_ADDRESS_RE = re.compile(r'[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}')
+
+
+def _subject_matches_bounce(subject):
+    normalized = (subject or '').strip()
+    if not normalized:
+        return False
+    return any(pattern.lower() in normalized.lower() for pattern in BOUNCE_SUBJECT_PATTERNS)
+
+
+def _extract_email_from_header_value(value):
+    if not value:
+        return None
+    match = EMAIL_ADDRESS_RE.search(str(value))
+    return match.group(0).lower() if match else None
+
+
+def _get_message_body_text(message):
+    parts = []
+    if message.is_multipart():
+        for part in message.walk():
+            if part.get_content_maintype() == 'multipart':
+                continue
+            if part.get_content_type() not in {'text/plain', 'text/html'}:
+                continue
+            payload = part.get_payload(decode=True)
+            if payload:
+                charset = part.get_content_charset() or 'utf-8'
+                parts.append(payload.decode(charset, errors='replace'))
+    else:
+        payload = message.get_payload(decode=True)
+        if payload:
+            charset = message.get_content_charset() or 'utf-8'
+            parts.append(payload.decode(charset, errors='replace'))
+    return '\n'.join(parts)
+
+
+def _parse_bounced_recipient(message):
+    for header_name in ('Final-Recipient', 'X-Failed-Recipients'):
+        recipient = _extract_email_from_header_value(message.get(header_name))
+        if recipient:
+            return recipient
+
+    body_text = _get_message_body_text(message)
+    for line in body_text.splitlines():
+        lowered = line.lower()
+        if 'final-recipient' in lowered or 'failed recipient' in lowered:
+            recipient = _extract_email_from_header_value(line)
+            if recipient:
+                return recipient
+
+    match = EMAIL_ADDRESS_RE.search(body_text)
+    return match.group(0).lower() if match else None
+
+
+def _mark_campaign_lead_bounced(clead):
+    if clead.status == 'BOUNCED':
+        return False
+
+    clead.status = 'BOUNCED'
+    clead.save(update_fields=['status'])
+    logger.info(f"Bounce detected for {clead.lead.email} in campaign {clead.campaign.name}")
+    _maybe_mark_campaign_completed(clead.campaign)
+    return True
+
+
+def _process_imap_bounce_messages(account):
+    if not (account.imap_host and account.imap_username and account.imap_password):
+        return 0
+
+    imap_conn = None
+    processed_bounces = 0
+
+    try:
+        imap_conn = imaplib.IMAP4_SSL(account.imap_host, account.imap_port)
+        imap_conn.login(account.imap_username, account.imap_password)
+        imap_conn.select('INBOX')
+
+        status, message_numbers = imap_conn.search(None, 'UNSEEN')
+        if status != 'OK' or not message_numbers or not message_numbers[0]:
+            return 0
+
+        parser = BytesParser(policy=policy.default)
+        for message_number in message_numbers[0].split():
+            try:
+                fetch_status, fetched_data = imap_conn.fetch(message_number, '(RFC822)')
+                if fetch_status != 'OK' or not fetched_data or not fetched_data[0]:
+                    continue
+
+                raw_message = fetched_data[0][1]
+                message = parser.parsebytes(raw_message)
+                subject = message.get('Subject', '')
+                if not _subject_matches_bounce(subject):
+                    continue
+
+                bounced_email = _parse_bounced_recipient(message)
+                if not bounced_email:
+                    logger.warning(
+                        f"Could not parse bounced recipient from IMAP message "
+                        f"for account {account.email_address}"
+                    )
+                    imap_conn.store(message_number, '+FLAGS', '\\Seen')
+                    continue
+
+                matching_leads = CampaignLead.objects.filter(
+                    organization_id=account.organization_id,
+                    campaign__connected_account=account,
+                    lead__email__iexact=bounced_email,
+                    status__in=['ENROLLED', 'ACTIVE', 'PAUSED', 'FINISHED'],
+                ).select_related('lead', 'campaign')
+
+                if not matching_leads.exists():
+                    logger.info(
+                        f"No matching campaign lead for bounced email {bounced_email} "
+                        f"in organization {account.organization_id}"
+                    )
+                else:
+                    for clead in matching_leads:
+                        if _mark_campaign_lead_bounced(clead):
+                            processed_bounces += 1
+
+                imap_conn.store(message_number, '+FLAGS', '\\Seen')
+            except Exception as message_err:
+                logger.error(
+                    f"Failed to process IMAP bounce message {message_number.decode()} "
+                    f"for {account.email_address}: {message_err}"
+                )
+    finally:
+        if imap_conn is not None:
+            try:
+                imap_conn.close()
+            except Exception:
+                pass
+            try:
+                imap_conn.logout()
+            except Exception:
+                pass
+
+    return processed_bounces
+
+
+@shared_task
+def check_imap_bounces():
+    """
+    Runs every 15 minutes via Celery Beat.
+    Checks connected email accounts with IMAP credentials for delivery failure notices.
+    """
+    accounts = ConnectedEmailAccount.objects.filter(
+        imap_host__gt='',
+        imap_username__gt='',
+        imap_password__gt='',
+    )
+
+    total_bounces = 0
+    for account in accounts:
+        try:
+            total_bounces += _process_imap_bounce_messages(account)
+        except Exception as err:
+            logger.error(f"Failed to check IMAP bounces for {account.email_address}: {err}")
+
+    return f"Processed {total_bounces} IMAP bounces."
