@@ -5,17 +5,12 @@ from rest_framework.routers import DefaultRouter
 from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.views import TokenObtainPairView as BaseTokenObtainPairView
 from users.jwt import CustomTokenObtainSerializer
-
-class CustomTokenObtainPairView(BaseTokenObtainPairView):
-    serializer_class = CustomTokenObtainSerializer
-
 from users.views import AuthViewSet
 from leads.views import BlockedDomainViewSet, LeadImportJobViewSet, LeadViewSet, TagViewSet
 
 
 from campaigns.views import (
     CampaignViewSet,
-    SequenceStepViewSet,
     EmailTemplateViewSet,
     WebhookView,
     DashboardAnalyticsView,
@@ -26,7 +21,8 @@ from campaigns.views import (
 # ------------------------------------------------
 
 from campaigns.google_auth_views import GoogleOAuthLoginView, GoogleOAuthCallbackView, ConnectedAccountsListView
-
+class CustomTokenObtainPairView(BaseTokenObtainPairView):
+    serializer_class = CustomTokenObtainSerializer
 
 def api_root(_request):
     return JsonResponse({

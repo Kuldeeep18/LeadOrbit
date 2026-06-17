@@ -5,6 +5,7 @@ from pathlib import Path
 import os
 import re
 from dotenv import load_dotenv
+from datetime import timedelta
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 # Prefer local project .env values for local development runs.
@@ -163,7 +164,6 @@ CELERY_BEAT_SCHEDULE = {
 }
 
 # SimpleJWT Configuration
-from datetime import timedelta
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(hours=2),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),

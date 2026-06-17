@@ -10,12 +10,18 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
+from django.utils import timezone
+from django.conf import settings as django_settings
+from django.http import HttpResponse
+from django.middleware.csrf import get_token
 
 from leads.models import Lead
 from users.permissions import IsOrgManager
 
 from .models import Campaign, CampaignLead, SequenceStep, EmailTemplate
 from .serializers import CampaignSerializer, SequenceStepSerializer, EmailTemplateSerializer
+from .utils import verify_unsubscribe_token
 
 logger = logging.getLogger(__name__)
 
@@ -359,10 +365,7 @@ class EmailTemplateViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization)
 
-from rest_framework.views import APIView
-from django.utils import timezone
-from django.conf import settings as django_settings
-from pathlib import Path
+
 
 class WebhookView(APIView):
     """
@@ -502,7 +505,7 @@ class DashboardAnalyticsView(APIView):
     def get(self, request, *args, **kwargs):
         from django.utils import timezone
         from datetime import timedelta
-        from django.db.models import Count, Q, Sum
+        from django.db.models import Count, Sum
         from django.db.models.functions import TruncDate
 
         org = getattr(request.user, 'organization', None)
@@ -706,10 +709,7 @@ class AIGenerateView(APIView):
         )
         return f"SUBJECT: {subject}\nBODY: {body}"
     
-from django.http import HttpResponse
-from django.middleware.csrf import get_token
-from leads.models import Lead
-from .utils import verify_unsubscribe_token
+
 
 
 def _unsubscribe_page(title, message, extra_html=''):

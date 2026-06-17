@@ -36,7 +36,6 @@ def _get_credentials(account):
         # Persist the refreshed token back to the database
         account.access_token = creds.token
         if creds.expiry:
-            from django.utils import timezone
             account.token_expiry = creds.expiry
         account.save(update_fields=['access_token', 'token_expiry'])
     return creds
