@@ -1386,3 +1386,555 @@ class CampaignWorkflowTests(APITestCase):
         self.assertIsNone(campaign_lead.next_execution_time)
         self.assertEqual(campaign.status, 'COMPLETED')
         mocked_send.assert_not_called()
+
+class CampaignLaunchTests(APITestCase):
+    def setUp(self):
+        self.organization = Organization.objects.create(name='LaunchCorp')
+        self.user = User.objects.create_user(
+            email='launcher@launchcorp.test',
+            password='StrongPass123!',
+            organization=self.organization,
+            role='ADMIN',
+        )
+        self.client.force_authenticate(self.user)
+
+        # A valid connected account owned by self.user
+        self.account = ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=self.user,
+            email_address='launcher@launchcorp.test',
+            provider='GOOGLE',
+            access_token='token',
+            refresh_token='refresh',
+        )
+
+    def _make_campaign(self, status='DRAFT', connected_account=None):
+        return Campaign.objects.create(
+            organization=self.organization,
+            name='Test Campaign',
+            status=status,
+            connected_account=connected_account,
+        )
+
+    def _enroll_lead(self, campaign, email='lead@launchcorp.test'):
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email=email,
+        )
+        CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='ENROLLED',
+        )
+        return lead
+
+    # ── Test 1: No connected account, zero leads ─────────────────────────────
+
+    def test_launch_without_connected_account_and_no_leads_returns_400(self):
+        """Campaign with no connected account and no leads should return 400."""
+        campaign = self._make_campaign()
+        response = self.client.post(f'/api/v1/campaigns/{campaign.id}/launch/', {}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('error', response.data)
+
+    # ── Test 2: Connected account from wrong organization ────────────────────
+
+    def test_launch_with_account_from_wrong_organization_returns_400(self):
+        """Connected account belonging to another org should return 400."""
+        other_org = Organization.objects.create(name='OtherOrg')
+        other_user = User.objects.create_user(
+            email='other@otherorg.test',
+            password='StrongPass123!',
+            organization=other_org,
+            role='ADMIN',
+        )
+        foreign_account = ConnectedEmailAccount.objects.create(
+            organization=other_org,
+            connected_by=other_user,
+            email_address='other@otherorg.test',
+            provider='GOOGLE',
+            access_token='token',
+            refresh_token='refresh',
+        )
+        campaign = self._make_campaign(connected_account=foreign_account)
+        self._enroll_lead(campaign)
+
+        response = self.client.post(f'/api/v1/campaigns/{campaign.id}/launch/', {}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('error', response.data)
+        campaign.refresh_from_db()
+        self.assertEqual(campaign.status, 'DRAFT')
+
+    # ── Test 3: Connected account owned by different user ────────────────────
+
+    def test_launch_with_account_owned_by_another_user_returns_400(self):
+        """Connected account owned by a teammate should return 400."""
+        teammate = User.objects.create_user(
+            email='teammate@launchcorp.test',
+            password='StrongPass123!',
+            organization=self.organization,
+            role='USER',
+        )
+        teammate_account = ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=teammate,
+            email_address='teammate@launchcorp.test',
+            provider='GOOGLE',
+            access_token='token',
+            refresh_token='refresh',
+        )
+        campaign = self._make_campaign(connected_account=teammate_account)
+        self._enroll_lead(campaign)
+
+        response = self.client.post(f'/api/v1/campaigns/{campaign.id}/launch/', {}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('error', response.data)
+        campaign.refresh_from_db()
+        self.assertEqual(campaign.status, 'DRAFT')
+
+    # ── Test 4: Zero enrolled leads ──────────────────────────────────────────
+
+    def test_launch_with_zero_enrolled_leads_returns_400(self):
+        """Campaign with no enrolled leads should return 400."""
+        campaign = self._make_campaign(connected_account=self.account)
+
+        response = self.client.post(f'/api/v1/campaigns/{campaign.id}/launch/', {}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('error', response.data)
+        campaign.refresh_from_db()
+        self.assertEqual(campaign.status, 'DRAFT')
+
+    # ── Test 5: Valid setup → status ACTIVE, 200 ─────────────────────────────
+
+    @override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+    def test_launch_with_valid_setup_sets_status_active_and_returns_200(self):
+        """Valid campaign with account and enrolled leads should go ACTIVE."""
+        campaign = self._make_campaign(connected_account=self.account)
+        self._enroll_lead(campaign)
+
+        with patch('campaigns.tasks.process_active_leads.delay'):
+            response = self.client.post(f'/api/v1/campaigns/{campaign.id}/launch/', {}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        campaign.refresh_from_db()
+        self.assertEqual(campaign.status, 'ACTIVE')
+        self.assertIn('campaign_id', response.data)
+        self.assertIn('enrolled_leads', response.data)
+        self.assertEqual(response.data['enrolled_leads'], 1)
+
+    # ── Test 6: Already ACTIVE campaign ──────────────────────────────────────
+
+    @override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+    def test_launch_already_active_campaign_does_not_change_status(self):
+        """Launching an already ACTIVE campaign should keep it ACTIVE and return 200."""
+        campaign = self._make_campaign(status='ACTIVE', connected_account=self.account)
+        self._enroll_lead(campaign)
+
+        with patch('campaigns.tasks.process_active_leads.delay') as mocked_delay:
+            response = self.client.post(f'/api/v1/campaigns/{campaign.id}/launch/', {}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        campaign.refresh_from_db()
+        self.assertEqual(campaign.status, 'ACTIVE')
+        mocked_delay.assert_called_once()
+
+    # ── Test 7: CELERY_TASK_ALWAYS_EAGER mode ────────────────────────────────
+
+    @override_settings(CELERY_TASK_ALWAYS_EAGER=True, LAUNCH_IMMEDIATE_PASSES=1)
+    def test_launch_in_eager_mode_processes_leads_inline(self):
+        """In eager mode, leads should be processed inline without dispatching a task."""
+        campaign = self._make_campaign(status='DRAFT', connected_account=self.account)
+        self._enroll_lead(campaign)
+
+        with patch('campaigns.tasks.process_active_leads_once') as mocked_once:
+            mocked_once.return_value = 1
+            with patch('campaigns.tasks.process_active_leads.delay') as mocked_delay:
+                response = self.client.post(f'/api/v1/campaigns/{campaign.id}/launch/', {}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        mocked_once.assert_called()
+        mocked_delay.assert_not_called()
+        campaign.refresh_from_db()
+        self.assertEqual(campaign.status, 'ACTIVE')
+
+    # ── Test 8: Async mode → dispatches Celery task ──────────────────────────
+
+    @override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+    def test_launch_in_async_mode_dispatches_celery_task(self):
+        """In async mode, process_active_leads.delay() should be called once."""
+        campaign = self._make_campaign(connected_account=self.account)
+        self._enroll_lead(campaign)
+
+        with patch('campaigns.tasks.process_active_leads.delay') as mocked_delay:
+            response = self.client.post(f'/api/v1/campaigns/{campaign.id}/launch/', {}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        mocked_delay.assert_called_once()
+
+class WebhookEventTests(APITestCase):
+    def setUp(self):
+        self.organization = Organization.objects.create(name='WebhookCorp')
+        self.user = User.objects.create_user(
+            email='webhook@webhookcorp.test',
+            password='StrongPass123!',
+            organization=self.organization,
+            role='ADMIN',
+        )
+        self.client.force_authenticate(self.user)
+
+        self.account = ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=self.user,
+            email_address='sender@webhookcorp.test',
+            provider='GOOGLE',
+            access_token='token',
+            refresh_token='refresh',
+        )
+        self.campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Webhook Test Campaign',
+            status='ACTIVE',
+            connected_account=self.account,
+        )
+        self.lead = Lead.objects.create(
+            organization=self.organization,
+            email='webhooklead@webhookcorp.test',
+        )
+        self.campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=self.campaign,
+            lead=self.lead,
+            status='ACTIVE',
+            last_sent_message_id='msg-webhook-001',
+        )
+
+    def _post_webhook(self, payload):
+        return self.client.post('/api/v1/webhooks/email/', payload, format='json')
+
+    # ── Test 1: Bounce event ─────────────────────────────────────────────────
+
+    def test_bounce_event_sets_lead_status_to_bounced(self):
+        response = self._post_webhook({
+            'event': 'bounce',
+            'email': self.lead.email,
+            'message_id': 'msg-webhook-001',
+        })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.campaign_lead.refresh_from_db()
+        self.assertEqual(self.campaign_lead.status, 'BOUNCED')
+
+    # ── Test 2: Reply event without condition branch ─────────────────────────
+
+    def test_reply_event_without_condition_branch_sets_status_replied(self):
+        response = self._post_webhook({
+            'event': 'reply',
+            'email': self.lead.email,
+            'message_id': 'msg-webhook-001',
+        })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.campaign_lead.refresh_from_db()
+        self.assertEqual(self.campaign_lead.status, 'REPLIED')
+        self.assertIsNone(self.campaign_lead.current_step)
+        self.assertIsNone(self.campaign_lead.next_execution_time)
+
+    # ── Test 3: Reply event with CONDITION_REPLY yes-branch ──────────────────
+
+    def test_reply_event_with_condition_reply_yes_branch_routes_to_yes_step(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Reply Yes Branch Campaign',
+            status='ACTIVE',
+            connected_account=self.account,
+            settings={
+                'steps': [
+                    {'type': 'CONDITION_REPLY', 'condition_time': '1 day'},
+                    {'type': 'EMAIL', 'subject': 'Yes path', 'body': 'yes',
+                     'condition_branch': 'yes', 'condition_parent_index': 0},
+                ]
+            },
+        )
+        condition_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='CONDITION_REPLY',
+            delay_minutes=0,
+        )
+        yes_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=2,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Yes path',
+            template_body='yes',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='reply-yes@webhookcorp.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='ACTIVE',
+            current_step=condition_step,
+            last_sent_message_id='msg-yes-branch',
+        )
+
+        response = self._post_webhook({
+            'event': 'reply',
+            'email': lead.email,
+            'message_id': 'msg-yes-branch',
+        })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        campaign_lead.refresh_from_db()
+        self.assertEqual(campaign_lead.status, 'ACTIVE')
+        self.assertEqual(campaign_lead.current_step_id, yes_step.id)
+
+    # ── Test 4: Reply event with CONDITION_REPLY no-branch ───────────────────
+
+    def test_reply_event_without_reply_routes_to_no_branch(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Reply No Branch Campaign',
+            status='ACTIVE',
+            connected_account=self.account,
+            settings={
+                'steps': [
+                    {'type': 'CONDITION_REPLY', 'condition_time': '1 day'},
+                    {'type': 'EMAIL', 'subject': 'No path', 'body': 'no',
+                     'condition_branch': 'no', 'condition_parent_index': 0},
+                ]
+            },
+        )
+        condition_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='CONDITION_REPLY',
+            delay_minutes=0,
+        )
+        SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=2,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='No path',
+            template_body='no',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='reply-no@webhookcorp.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='ACTIVE',
+            current_step=condition_step,
+            last_sent_message_id='msg-no-branch',
+        )
+
+        # No reply detected — webhook fires a non-reply event, status stays ACTIVE
+        response = self._post_webhook({
+            'event': 'open',
+            'email': lead.email,
+            'message_id': 'msg-no-branch',
+        })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        campaign_lead.refresh_from_db()
+        self.assertNotEqual(campaign_lead.status, 'REPLIED')
+
+    # ── Test 5: Open event sets last_opened_at ───────────────────────────────
+
+    def test_open_event_sets_last_opened_at(self):
+        response = self._post_webhook({
+            'event': 'open',
+            'email': self.lead.email,
+            'message_id': 'msg-webhook-001',
+        })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.campaign_lead.refresh_from_db()
+        self.assertIsNotNone(self.campaign_lead.last_opened_at)
+
+    # ── Test 6: Open event with CONDITION_OPEN step triggers routing ─────────
+
+    def test_open_event_with_condition_open_step_triggers_branch_routing(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Condition Open Campaign',
+            status='ACTIVE',
+            connected_account=self.account,
+            settings={
+                'steps': [
+                    {'type': 'CONDITION_OPEN', 'condition_time': '1 day'},
+                    {'type': 'EMAIL', 'subject': 'Yes open', 'body': 'yes',
+                     'condition_branch': 'yes', 'condition_parent_index': 0},
+                ]
+            },
+        )
+        condition_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='CONDITION_OPEN',
+            delay_minutes=1440,
+        )
+        yes_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=2,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Yes open',
+            template_body='yes',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='open-condition@webhookcorp.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='ACTIVE',
+            current_step=condition_step,
+            last_sent_message_id='msg-open-condition',
+        )
+
+        response = self._post_webhook({
+            'event': 'open',
+            'email': lead.email,
+            'message_id': 'msg-open-condition',
+        })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        campaign_lead.refresh_from_db()
+        self.assertIsNotNone(campaign_lead.last_opened_at)
+        self.assertEqual(campaign_lead.current_step_id, yes_step.id)
+
+    # ── Test 7: Click event sets last_clicked_at ─────────────────────────────
+
+    def test_click_event_sets_last_clicked_at(self):
+        response = self._post_webhook({
+            'event': 'click',
+            'email': self.lead.email,
+            'message_id': 'msg-webhook-001',
+        })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.campaign_lead.refresh_from_db()
+        self.assertIsNotNone(self.campaign_lead.last_clicked_at)
+
+    # ── Test 8: Click event with CONDITION_CLICK step triggers routing ────────
+
+    def test_click_event_with_condition_click_step_triggers_branch_routing(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Condition Click Campaign',
+            status='ACTIVE',
+            connected_account=self.account,
+            settings={
+                'steps': [
+                    {'type': 'CONDITION_CLICK', 'condition_time': '1 day'},
+                    {'type': 'EMAIL', 'subject': 'Yes click', 'body': 'yes',
+                     'condition_branch': 'yes', 'condition_parent_index': 0},
+                ]
+            },
+        )
+        condition_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='CONDITION_CLICK',
+            delay_minutes=1440,
+        )
+        yes_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=2,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Yes click',
+            template_body='yes',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='click-condition@webhookcorp.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='ACTIVE',
+            current_step=condition_step,
+            last_sent_message_id='msg-click-condition',
+        )
+
+        response = self._post_webhook({
+            'event': 'click',
+            'email': lead.email,
+            'message_id': 'msg-click-condition',
+        })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        campaign_lead.refresh_from_db()
+        self.assertIsNotNone(campaign_lead.last_clicked_at)
+        self.assertEqual(campaign_lead.current_step_id, yes_step.id)
+
+    # ── Test 9: Missing email field ───────────────────────────────────────────
+
+    def test_missing_email_field_does_not_crash_returns_200(self):
+        response = self._post_webhook({
+            'event': 'open',
+        })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    # ── Test 10: Missing event_type ───────────────────────────────────────────
+
+    def test_missing_event_type_does_not_crash_returns_200(self):
+        response = self._post_webhook({
+            'email': self.lead.email,
+        })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    # ── Test 11: Invalid message_id ───────────────────────────────────────────
+
+    def test_invalid_message_id_no_match_returns_200(self):
+        response = self._post_webhook({
+            'event': 'open',
+            'email': self.lead.email,
+            'message_id': 'non-existent-msg-id',
+        })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.campaign_lead.refresh_from_db()
+        self.assertIsNone(self.campaign_lead.last_opened_at)
+
+    # ── Test 12: Multiple matching campaign leads ─────────────────────────────
+
+    def test_multiple_matching_campaign_leads_all_updated(self):
+        campaign2 = Campaign.objects.create(
+            organization=self.organization,
+            name='Second Webhook Campaign',
+            status='ACTIVE',
+            connected_account=self.account,
+        )
+        campaign_lead2 = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign2,
+            lead=self.lead,
+            status='ACTIVE',
+            last_sent_message_id='msg-webhook-001',
+        )
+
+        response = self._post_webhook({
+            'event': 'open',
+            'email': self.lead.email,
+            'message_id': 'msg-webhook-001',
+        })
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.campaign_lead.refresh_from_db()
+        campaign_lead2.refresh_from_db()
+        self.assertIsNotNone(self.campaign_lead.last_opened_at)
+        self.assertIsNotNone(campaign_lead2.last_opened_at)

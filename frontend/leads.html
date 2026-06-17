@@ -194,7 +194,6 @@
                                 <input type="text" id="lead-search" class="form-control" placeholder="Search name, email, company" aria-label="Search leads">
                             </div>
                         </div>
-                        <!-- Filter toggle button -->
                         <button id="filter-toggle-btn" class="btn btn-sm btn-outline-secondary btn-filter-toggle" aria-label="Toggle filters" title="Filters">
                             <i class="bi bi-funnel me-1" aria-hidden="true"></i>Filters
                             <span class="filter-dot" id="filter-active-dot" aria-hidden="true"></span>
@@ -207,7 +206,6 @@
                 </div>
             </header>
 
-            <!-- Breadcrumb Navigation -->
             <nav aria-label="breadcrumb" class="container mt-3">
                 <ol class="breadcrumb">
                     <li class="breadcrumb-item"><a href="/dashboard.html">Home</a></li>
@@ -240,15 +238,12 @@
                     </div>
                 </div>
 
-<<<<<<< HEAD
                 <!-- ─── Filter Panel (hidden by default) ─────────────────────── -->
                 <div id="filter-panel" class="filter-panel" style="display:none;" aria-label="Lead filters">
                     <div class="filter-panel-title">
                         <i class="bi bi-funnel me-1"></i> Filter Leads
                     </div>
-
                     <div class="row g-3 align-items-start">
-                        <!-- Tag multi-select -->
                         <div class="col-12 col-md-5">
                             <label class="form-label fw-semibold" style="font-size:0.82rem;">
                                 <i class="bi bi-tags me-1"></i>Tags
@@ -258,8 +253,6 @@
                                 <span class="text-muted small">Loading tags...</span>
                             </div>
                         </div>
-
-                        <!-- Date range -->
                         <div class="col-6 col-md-3">
                             <label for="filter-date-after" class="form-label fw-semibold" style="font-size:0.82rem;">
                                 <i class="bi bi-calendar-check me-1"></i>Created after
@@ -272,8 +265,6 @@
                             </label>
                             <input type="date" id="filter-date-before" class="form-control form-control-sm" aria-label="Created before date">
                         </div>
-
-                        <!-- Status / Pipeline stage -->
                         <div class="col-12 col-md-1 d-flex flex-column gap-1" style="min-width:120px;">
                             <label class="form-label fw-semibold mb-1" style="font-size:0.82rem;">
                                 <i class="bi bi-person-check me-1"></i>Status
@@ -292,8 +283,6 @@
                             </div>
                         </div>
                     </div>
-
-                    <!-- Action buttons -->
                     <div class="d-flex gap-2 mt-3">
                         <button id="apply-filters-btn" class="btn btn-sm btn-primary">
                             <i class="bi bi-funnel-fill me-1" aria-hidden="true"></i>Apply Filters
@@ -302,12 +291,11 @@
                             <i class="bi bi-x-circle me-1" aria-hidden="true"></i>Clear
                         </button>
                     </div>
-
-                    <!-- Active filter summary row -->
                     <div id="active-filters-row" class="d-flex flex-wrap gap-1 mt-2" style="display:none!important;"></div>
                 </div>
                 <!-- ─────────────────────────────────────────────────────────── -->
-=======
+
+                <!-- Import History Table -->
                 <div class="table-shell mb-4">
                     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 px-3 py-3 border-bottom">
                         <div>
@@ -341,8 +329,8 @@
                         </table>
                     </div>
                 </div>
->>>>>>> upstream/main
 
+                <!-- Leads Table -->
                 <div class="table-shell">
                     <div class="table-responsive">
                         <table class="table table-hover mb-0 align-middle">
@@ -403,6 +391,7 @@
         </div>
     </div>
 
+    <!-- Import Errors Modal -->
     <div class="modal fade" id="importErrorsModal" tabindex="-1" aria-labelledby="importErrorsModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-scrollable">
             <div class="modal-content rounded-3 shadow">
@@ -439,12 +428,12 @@
     <script type="module">
         import { fetchWithAuth } from './api.js';
 
-<<<<<<< HEAD
         // ─── State ──────────────────────────────────────────────────────────
-        let allLeads = [];           // full unfiltered list (client-side search backup)
-        let allTags = [];            // all org tags (for the filter panel)
-        let selectedTagIds = new Set(); // tags selected in the filter panel
-        let activeFilters = {};      // last applied filter state
+        let allLeads = [];
+        let allTags = [];
+        let allImportJobs = [];
+        let selectedTagIds = new Set();
+        let activeFilters = {};
 
         // ─── Utilities ──────────────────────────────────────────────────────
 
@@ -455,11 +444,9 @@
             return { r, g, b };
         }
 
-        /** Compute a readable foreground colour (black or white) for a given hex bg. */
         function contrastColor(hex) {
             try {
                 const { r, g, b } = hexToRgb(hex);
-                // Perceived luminance (WCAG formula)
                 const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
                 return lum > 0.55 ? '#1e293b' : '#ffffff';
             } catch {
@@ -467,7 +454,6 @@
             }
         }
 
-        /** Render colored tag badges for the table cell. */
         function renderTagBadges(tags) {
             if (!tags || tags.length === 0) return '<span class="text-muted">—</span>';
             return tags.map(t => {
@@ -483,16 +469,13 @@
             return String(str || '').replace(/[&<>"']/g, c => ({
                 '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
             }[c]));
-=======
-        let allLeads = [];
-        let allImportJobs = [];
+        }
 
         function formatTimestamp(value) {
             if (!value) return '-';
             const date = new Date(value);
             if (Number.isNaN(date.getTime())) return '-';
             return date.toLocaleString();
->>>>>>> upstream/main
         }
 
         function copyToClipboard(text, button) {
@@ -503,22 +486,18 @@
             });
         }
 
-<<<<<<< HEAD
         // ─── Render ─────────────────────────────────────────────────────────
-=======
+
         function renderImportErrorRows(job) {
             const tbody = document.getElementById('import-errors-body');
             const errors = Array.isArray(job?.error_log) ? job.error_log : [];
-
             if (!errors.length) {
                 tbody.innerHTML = `
                     <tr>
                         <td colspan="3" class="text-center py-4 text-muted">This import completed without row-level errors.</td>
-                    </tr>
-                `;
+                    </tr>`;
                 return;
             }
-
             tbody.innerHTML = errors.map(entry => `
                 <tr>
                     <td class="fw-semibold">${entry.row ?? '-'}</td>
@@ -531,33 +510,30 @@
         function openImportErrors(jobId) {
             const job = allImportJobs.find(item => item.id === jobId);
             if (!job) return;
-
             document.getElementById('import-errors-meta').textContent =
                 `${job.filename} · ${job.failed_count} error${job.failed_count === 1 ? '' : 's'}`;
             renderImportErrorRows(job);
             bootstrap.Modal.getOrCreateInstance(document.getElementById('importErrorsModal')).show();
         }
->>>>>>> upstream/main
 
         function renderLeadRows(leads) {
             const tbody = document.getElementById('leads-table-body');
             if (leads.length === 0) {
                 tbody.innerHTML = `
-<tr>
-    <td colspan="7" class="text-center py-5">
-        <div class="empty-state">
-            <i class="bi bi-people display-4 text-secondary" aria-hidden="true"></i>
-            <h5 class="mt-3 mb-2">No leads found</h5>
-            <p class="text-muted mb-3">Try clearing your filters or import your first CSV.</p>
-            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#uploadModal">
-                <i class="bi bi-upload me-1" aria-hidden="true"></i> Import CSV
-            </button>
-        </div>
-    </td>
-</tr>`;
+                    <tr>
+                        <td colspan="7" class="text-center py-5">
+                            <div class="empty-state">
+                                <i class="bi bi-people display-4 text-secondary" aria-hidden="true"></i>
+                                <h5 class="mt-3 mb-2">No leads found</h5>
+                                <p class="text-muted mb-3">Try clearing your filters or import your first CSV.</p>
+                                <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#uploadModal">
+                                    <i class="bi bi-upload me-1" aria-hidden="true"></i> Import CSV
+                                </button>
+                            </div>
+                        </td>
+                    </tr>`;
                 return;
             }
-
             tbody.innerHTML = leads.map(lead => `
                 <tr>
                     <td class="fw-semibold">${escapeHtml(lead.first_name || '')} ${escapeHtml(lead.last_name || '')}</td>
@@ -579,7 +555,6 @@
                         : '<span class="chip" style="background:#dcfce7;color:#166534;">Active</span>'}</td>
                 </tr>
             `).join('');
-
             document.querySelectorAll('.copy-email-btn').forEach(btn => {
                 btn.addEventListener('click', () => copyToClipboard(btn.dataset.email, btn));
             });
@@ -593,11 +568,9 @@
                         <td colspan="6" class="text-center py-4 text-muted">
                             No CSV imports yet. Use <strong>Import CSV</strong> to create your first history entry.
                         </td>
-                    </tr>
-                `;
+                    </tr>`;
                 return;
             }
-
             tbody.innerHTML = jobs.map(job => `
                 <tr>
                     <td class="fw-semibold">${job.filename}</td>
@@ -606,15 +579,12 @@
                     <td><span class="chip" style="background:#fee2e2;color:#b91c1c;">${job.failed_count ?? 0}</span></td>
                     <td>${formatTimestamp(job.created_at)}</td>
                     <td>
-                        ${
-                            (job.failed_count || 0) > 0
-                                ? `<button class="btn btn-sm btn-outline-danger view-import-errors-btn" data-job-id="${job.id}"><i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>View</button>`
-                                : '<span class="text-muted small">None</span>'
-                        }
+                        ${(job.failed_count || 0) > 0
+                            ? `<button class="btn btn-sm btn-outline-danger view-import-errors-btn" data-job-id="${job.id}"><i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>View</button>`
+                            : '<span class="text-muted small">None</span>'}
                     </td>
                 </tr>
             `).join('');
-
             document.querySelectorAll('.view-import-errors-btn').forEach(btn => {
                 btn.addEventListener('click', () => openImportErrors(btn.dataset.jobId));
             });
@@ -631,7 +601,6 @@
             document.getElementById('avg-score').textContent = avgScore;
         }
 
-<<<<<<< HEAD
         // ─── Filter Panel ────────────────────────────────────────────────────
 
         async function loadTags() {
@@ -667,7 +636,6 @@
                     ${escapeHtml(tag.name)}
                 </button>`;
             }).join('');
-
             container.querySelectorAll('.tag-filter-chip').forEach(chip => {
                 chip.addEventListener('click', () => {
                     const id = chip.dataset.tagId;
@@ -688,20 +656,13 @@
 
         function getFilterParams() {
             const params = {};
-
-            if (selectedTagIds.size > 0) {
-                params.tags = [...selectedTagIds].join(',');
-            }
-
+            if (selectedTagIds.size > 0) params.tags = [...selectedTagIds].join(',');
             const after = document.getElementById('filter-date-after').value;
             if (after) params.created_after = after;
-
             const before = document.getElementById('filter-date-before').value;
             if (before) params.created_before = before;
-
             const statusEl = document.querySelector('input[name="filter-status"]:checked');
             if (statusEl && statusEl.value) params.status = statusEl.value;
-
             return params;
         }
 
@@ -716,25 +677,15 @@
             } else {
                 dot.classList.remove('visible');
             }
-
-            // Active filter summary chips
             const row = document.getElementById('active-filters-row');
             const chips = [];
-
             if (params.tags) {
                 const tagCount = params.tags.split(',').length;
                 chips.push(`<span class="filter-active-badge"><i class="bi bi-tags me-1"></i>${tagCount} tag${tagCount > 1 ? 's' : ''}</span>`);
             }
-            if (params.created_after) {
-                chips.push(`<span class="filter-active-badge"><i class="bi bi-calendar-check me-1"></i>After ${params.created_after}</span>`);
-            }
-            if (params.created_before) {
-                chips.push(`<span class="filter-active-badge"><i class="bi bi-calendar-x me-1"></i>Before ${params.created_before}</span>`);
-            }
-            if (params.status) {
-                chips.push(`<span class="filter-active-badge"><i class="bi bi-person-check me-1"></i>${params.status.charAt(0).toUpperCase() + params.status.slice(1)}</span>`);
-            }
-
+            if (params.created_after) chips.push(`<span class="filter-active-badge"><i class="bi bi-calendar-check me-1"></i>After ${params.created_after}</span>`);
+            if (params.created_before) chips.push(`<span class="filter-active-badge"><i class="bi bi-calendar-x me-1"></i>Before ${params.created_before}</span>`);
+            if (params.status) chips.push(`<span class="filter-active-badge"><i class="bi bi-person-check me-1"></i>${params.status.charAt(0).toUpperCase() + params.status.slice(1)}</span>`);
             if (chips.length) {
                 row.innerHTML = chips.join('');
                 row.style.removeProperty('display');
@@ -755,7 +706,6 @@
             const params = getFilterParams();
             activeFilters = params;
             updateFilterIndicator(params);
-
             try {
                 const leads = await fetchLeadsWithFilters(params);
                 allLeads = leads;
@@ -776,9 +726,8 @@
             updateFilterIndicator({});
         }
 
-        // ─── Text search (client-side, applied on top of server results) ────
+        // ─── Data Loaders ────────────────────────────────────────────────────
 
-=======
         async function loadLeads() {
             const res = await fetchWithAuth('/leads/');
             if (!res.ok) return;
@@ -795,7 +744,8 @@
             renderImportHistory(allImportJobs);
         }
 
->>>>>>> upstream/main
+        // ─── Text search ─────────────────────────────────────────────────────
+
         function applySearch() {
             const q = (document.getElementById('lead-search').value || '').trim().toLowerCase();
             if (!q) {
@@ -810,10 +760,9 @@
             renderLeadRows(filtered);
         }
 
-        // ─── Bootstrap ──────────────────────────────────────────────────────
+        // ─── Bootstrap ───────────────────────────────────────────────────────
 
         document.addEventListener('DOMContentLoaded', async () => {
-            // Initial load — no filters
             try {
                 await loadLeads();
                 await loadImportHistory();
@@ -821,21 +770,17 @@
                 console.error('Error fetching leads:', e);
             }
 
-            // Load tags for the filter panel
             await loadTags();
 
-            // Search input
             document.getElementById('lead-search').addEventListener('input', applySearch);
             document.getElementById('refresh-history-btn').addEventListener('click', loadImportHistory);
 
-            // Filter panel toggle
             const filterPanel = document.getElementById('filter-panel');
             document.getElementById('filter-toggle-btn').addEventListener('click', () => {
                 const isHidden = filterPanel.style.display === 'none';
                 filterPanel.style.display = isHidden ? 'block' : 'none';
             });
 
-            // Apply / Clear filter buttons
             document.getElementById('apply-filters-btn').addEventListener('click', applyFilters);
             document.getElementById('clear-filters-btn').addEventListener('click', async () => {
                 clearFilters();
@@ -849,7 +794,6 @@
                 }
             });
 
-            // CSV Upload
             document.getElementById('upload-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const fileInput = document.getElementById('csv-file');
@@ -868,18 +812,9 @@
                         method: 'POST',
                         body: formData,
                     });
-
                     if (res.status === 202) {
-<<<<<<< HEAD
                         statusEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>File uploaded. Processing now...</span>';
                         setTimeout(() => window.location.reload(), 1800);
-=======
-                        statusEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1" aria-hidden="true" ></i>File uploaded. Processing now...</span>';
-                        await loadLeads();
-                        await loadImportHistory();
-                        fileInput.value = '';
-                        bootstrap.Modal.getOrCreateInstance(document.getElementById('uploadModal')).hide();
->>>>>>> upstream/main
                     } else {
                         statusEl.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle me-1" aria-hidden="true"></i>Upload failed.</span>';
                     }
