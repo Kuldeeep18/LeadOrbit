@@ -3,7 +3,7 @@ Django signals to automatically maintain cached counters on Campaign model.
 This ensures real-time consistency when CampaignLead records are modified.
 """
 
-from django.db.models.signals import post_save, post_delete, pre_save
+from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
 from .models import CampaignLead, Campaign
 
@@ -13,7 +13,6 @@ def _update_campaign_counters(campaign):
     Recalculate and update all cached counters for a campaign.
     Called when a CampaignLead changes.
     """
-    from django.db.models import Q
     
     qs = CampaignLead.objects.filter(campaign=campaign)
     

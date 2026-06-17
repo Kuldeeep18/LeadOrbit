@@ -21,7 +21,6 @@ class CampaignsConfig(AppConfig):
         and reply tracking still work locally.
         """
         # Register signal handlers for cache counter updates
-        from . import signals
         
         from django.conf import settings
 

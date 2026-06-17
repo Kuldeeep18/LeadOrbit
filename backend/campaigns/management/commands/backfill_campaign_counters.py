@@ -8,7 +8,6 @@ Usage:
 """
 
 from django.core.management.base import BaseCommand, CommandError
-from django.db.models import Q
 from campaigns.models import Campaign, CampaignLead
 
 
