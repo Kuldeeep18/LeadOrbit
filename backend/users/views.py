@@ -73,7 +73,23 @@ class AuthViewSet(viewsets.GenericViewSet):
     def delete_organization(self, request):
         request.user.organization.delete()
         return Response(
-            {'message': 'Organization successfully deleted.'},
+            {'message': 'Organization successfully deleted.'
+    @action(detail=False, methods=['post'], permission_classes=[IsOrgAdmin], url_path='invite')
+    def invite_user(self, request):
+        email = request.data.get('email')
+        role = request.data.get('role', 'MEMBER')
+        if not email:
+            return Response({'error': 'Email is required'}, status=400)
+        if role not in dict(User.ROLE_CHOICES):
+            return Response({'error': 'Invalid role'}, status=400)
+        org = request.user.organization
+        if User.objects.filter(email=email, organization=org).exists():
+            return Response({'error': 'User already in organization'}, status=400)
+        user = User.objects.create_user(email=email, organization=org, role=role, is_active=False)
+        # TODO: send invitation email
+        return Response({'message': f'Invitation sent to {email} with role {role}'})
+},
             status=status.HTTP_200_OK,
         )
+
 
