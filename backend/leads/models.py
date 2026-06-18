@@ -93,3 +93,18 @@ class BlockedDomain(TenantModel):
 
     def __str__(self):
         return self.domain
+class BlockedDomain(models.Model):
+    domain = models.CharField(max_length=255)
+    organization = models.ForeignKey(
+        'tenants.Organization',   # adjust if path differs
+        on_delete=models.CASCADE,
+        related_name='blocked_domains'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        unique_together = ('domain', 'organization')
+        ordering = ['domain']
+
+    def __str__(self):
+        return f"{self.domain} (Org: {self.organization_id})"
