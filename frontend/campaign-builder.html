@@ -1202,6 +1202,16 @@
 
       </div>
 
+      <div class="modal-footer">
+        <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">
+          Close
+        </button>
+        <button type="button" class="btn btn-primary" id="save-campaign-settings-btn">
+          <i class="bi bi-check2 me-1"></i>
+          Save changes
+        </button>
+      </div>
+
     </div>
   </div>
 </div>
@@ -1659,20 +1669,12 @@ ${rows || `
             const name = document.getElementById('campaign-name').value;
             // const settings = { steps: steps.map((s, i) => ({ ...s, step_order: i + 1 })) };
             const settings = {
-    steps: steps.map((s, i) => ({ ...s, step_order: i + 1 })),
-
-    stop_on_reply:
-        document.getElementById('setting-stop-reply').checked,
-
-    track_opens:
-        document.getElementById('setting-track-opens').checked,
-
-    track_clicks:
-        document.getElementById('setting-track-clicks').checked,
-
-    daily_limit:
-        parseInt(document.getElementById('setting-daily-limit').value) || 100
-};
+                steps: steps.map((s, i) => ({ ...s, step_order: i + 1 })),
+                stop_on_reply: document.getElementById('setting-stop-reply').checked,
+                track_opens: document.getElementById('setting-track-opens').checked,
+                track_clicks: document.getElementById('setting-track-clicks').checked,
+                daily_limit: parseInt(document.getElementById('setting-daily-limit').value) || 100,
+            };
             const isActive = document.getElementById('status-toggle').classList.contains('on');
             const payload = {
                 name,
@@ -2575,12 +2577,29 @@ ${rows || `
 
         // ─── INIT ───────────────────────────
         document.addEventListener('DOMContentLoaded', async () => {
+            const campaignSettingsModalEl = document.getElementById('campaignSettingsModal');
+            const campaignSettingsModal = new bootstrap.Modal(campaignSettingsModalEl);
+
             document.getElementById('settings-icon').addEventListener('click', () => {
-    const modal = new bootstrap.Modal(
-        document.getElementById('campaignSettingsModal')
-    );
-    modal.show();
-});
+                campaignSettingsModal.show();
+            });
+
+            document.getElementById('save-campaign-settings-btn').addEventListener('click', async () => {
+                const saveBtn = document.getElementById('save-campaign-settings-btn');
+                const originalHtml = saveBtn.innerHTML;
+                saveBtn.disabled = true;
+                saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Saving...';
+
+                try {
+                    await saveCampaign();
+                    campaignSettingsModal.hide();
+                } catch (error) {
+                    alert(error.message || 'Unable to save campaign settings.');
+                } finally {
+                    saveBtn.disabled = false;
+                    saveBtn.innerHTML = originalHtml;
+                }
+            });
             // Load connected accounts
             try {
                 const res = await fetchWithAuth('/connected-accounts/');
@@ -2639,4 +2658,3 @@ document.getElementById('setting-daily-limit').value =
 </body>
 
 </html>
-
