@@ -1,3 +1,4 @@
+from users.permissions import IsOrgAdmin, IsOrgManagerOrAdmin
 from django.db.models import Q
 from rest_framework import viewsets, parsers, status
 from rest_framework.pagination import PageNumberPagination
@@ -68,6 +69,7 @@ class LeadViewSet(viewsets.ModelViewSet):
         serializer.save(organization=self.request.user.organization)
 
     @action(detail=False, methods=['delete'], url_path='delete-all')
+        @permission_classes([IsOrgAdmin])
     def delete_all(self, request):
         deleted_count, _ = self.get_queryset().delete()
         return Response(
@@ -165,3 +167,4 @@ class BlockedDomainViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization)
+

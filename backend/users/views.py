@@ -1,3 +1,4 @@
+from .permissions import IsOrgAdmin
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -68,9 +69,11 @@ class AuthViewSet(viewsets.GenericViewSet):
         return Response(serializer.data)
 
     @action(detail=False, methods=['delete'], permission_classes=[IsAuthenticated], url_path='delete-organization')
+        @permission_classes([IsOrgAdmin])
     def delete_organization(self, request):
         request.user.organization.delete()
         return Response(
             {'message': 'Organization successfully deleted.'},
             status=status.HTTP_200_OK,
         )
+
