@@ -2,6 +2,8 @@ import logging
 from datetime import timedelta
 
 from celery import shared_task
+import logging
+logger = logging.getLogger(__name__)
 from django.conf import settings as django_settings
 from django.utils import timezone
 
@@ -10,6 +12,7 @@ from .gmail_service import build_unsubscribe_url, check_for_replies, send_gmail
 from .sms_service import send_sms, initiate_call
 from .models import CampaignLead, SequenceStep
 from leads.models import BlockedDomain, normalize_domain
+from leads.models import BlockedDomain
 
 logger = logging.getLogger(__name__)
 
@@ -427,6 +430,19 @@ def send_email_step(campaign_lead_id, step_id):
         clead = CampaignLead.objects.select_related('lead', 'campaign').get(id=campaign_lead_id)
         step = SequenceStep.objects.get(id=step_id)
 
+
+    # --- Global unsubscribe domain check ---
+    domain = clead.lead.email.split('@')[-1].lower()
+    if BlockedDomain.objects.filter(
+        domain=domain,
+        organization=clead.campaign.organization
+    ).exists():
+        clead.status = 'SKIPPED'
+        clead.save(update_fields=['status'])
+        logger.info(f"Skipping lead {clead.lead.email}: domain {domain} is blocked")
+        return
+    # --- end domain check ---
+
         if clead.lead.global_unsubscribe:
             logger.info(
                 f"Skipping email send for unsubscribed lead {clead.lead.email}."
@@ -652,3 +668,6 @@ def poll_gmail_for_replies():
                 _maybe_mark_campaign_completed(clead.campaign)
 
     return f"Detected {total_replies} new replies."
+
+
+
