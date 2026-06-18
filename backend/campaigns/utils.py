@@ -20,7 +20,7 @@ def parse_spintax(text):
     if not text:
         return text
 
-    pattern = r"\{([^{}]+)\}"
+    pattern = r"\{([^{}]*\|[^{}]*)\}"
 
     while re.search(pattern, text):
         text = re.sub(
