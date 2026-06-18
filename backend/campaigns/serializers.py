@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.db.models import Q
 
-from .models import Campaign, CampaignLead, ConnectedEmailAccount, SequenceStep
+from .models import Campaign, CampaignLead, ConnectedEmailAccount, SequenceStep, EmailTemplate
 
 DELAY_UNIT_TO_MINUTES = {
     'minutes': 1,
@@ -224,6 +224,11 @@ class CampaignSerializer(serializers.ModelSerializer):
         except (TypeError, ValueError):
             return None
 
+
+class EmailTemplateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EmailTemplate
+        fields = ['id', 'name', 'subject', 'body', 'category', 'usage_count', 'created_at']
 
 class CampaignLeadSerializer(serializers.ModelSerializer):
     class Meta:

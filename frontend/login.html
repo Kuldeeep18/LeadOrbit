@@ -2,14 +2,27 @@
 <html lang="en">
 
 <head>
+        <!-- SEO Meta Tags -->
+    <title>LeadOrbit - Login</title>
+    <meta name="description" content="LeadOrbit - Login to your account. Manage leads, campaigns, and outreach.">
+    <meta name="keywords" content="lead management, outreach, CRM, login">
+    <meta name="author" content="LeadOrbit Team">
+    <meta property="og:title" content="LeadOrbit - Login">
+    <meta property="og:description" content="Login to LeadOrbit to manage your leads and campaigns.">
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="LeadOrbit">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="LeadOrbit - Login">
+    <meta name="twitter:description" content="Login to LeadOrbit - AI-powered outreach platform.">
+    <link rel="icon" type="image/png" href="/favicon.png">
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="/theme-boot.js"></script>
+    <script src="./theme-boot.js"></script>
     <title>Login - LeadOrbit</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700;800&display=swap" rel="stylesheet">
-    <link href="/theme.css" rel="stylesheet">
+    <link href="./theme.css" rel="stylesheet">
 
     <!-- Explicit overrides to bypass theme.css light-mode defaults -->
     <style>
@@ -55,39 +68,67 @@
 </head>
 
 <body class="auth-page d-flex align-items-center min-vh-100">
-
+  
     <div class="container py-5">
         <div class="row justify-content-center">
             <div class="col-md-6 col-lg-4">
                 <!-- Applied our custom glass styles -->
                 <div class="custom-glass-card p-4 shadow-lg">
                     <div class="card-body">
+
+                       <div class="mb-3">
+                            <a href="/" class="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-2">
+                                <span>&larr;</span>
+                                <span>Back to Home</span>
+                            </a>
+                        </div>
+                        
                         <div class="text-center mb-4">
                             <!-- Applied the premium brand gradient -->
                             <h2 class="brand-gradient mb-1" style="font-family: 'Sora', sans-serif; font-weight: 800; font-size: 2.5rem;">LeadOrbit</h2>
                             <p class="text-white-50 small">Welcome back! Please enter your details.</p>
                         </div>
 
-                        <form>
+                        <form aria-label="Login form">
                             <div class="mb-3">
                                 <label for="floatingInput" class="form-label text-white-50 small fw-semibold">Email Address</label>
                                 <div class="input-group">
-                                    <span class="input-group-text input-group-text-custom"><i class="bi bi-envelope"></i></span>
-                                    <input type="email" class="form-control form-control-lg fs-6 custom-input style-init" id="floatingInput"
+                                    <span class="input-group-text input-group-text-custom">
+                                        <i class="bi bi-envelope" aria-hidden="true"></i>
+                                    </span>
+                                    <input type="email" class="form-control form-control-lg fs-6 custom-input style-init" id="floatingInput"  autocomplete="email"
                                         placeholder="name@example.com" required style="border-left: none !important;">
                                 </div>
                             </div>
-                            <div class="mb-4">
-                                <label for="floatingPassword"
-                                    class="form-label text-muted small fw-semibold">Password</label>
-                                <div class="password-toggle-wrapper">
-                                    <input type="password" class="form-control form-control-lg fs-6" id="floatingPassword"
-                                        placeholder="Password" required>
-                                    <button type="button" id="floatingPasswordToggle" class="password-toggle-btn" aria-label="Show password">👁</button>
-                                </div>
                             </div>
 
-                            <div class="d-grid mb-3">
+<div class="mb-4">
+    <label for="floatingPassword" class="form-label text-muted small fw-semibold">
+        Password
+    </label>
+
+    <div class="password-toggle-wrapper">
+        <input
+            type="password"
+            class="form-control form-control-lg fs-6 custom-input"
+            id="floatingPassword"
+            placeholder="Password"
+            required
+        >
+
+        <button
+            type="button"
+            id="floatingPasswordToggle"
+            class="password-toggle-btn"
+            aria-label="Show password"
+            aria-pressed="false"
+        >
+            <i class="bi bi-eye" aria-hidden="true"></i>
+        </button>
+    </div>
+</div>
+
+<div class="d-grid mb-3">
                                 <button class="btn btn-lg fw-semibold text-dark" style="background: linear-gradient(45deg, #00b4db, #00ffca); border: none;" type="submit">Sign In</button>
                             </div>
                         </form>
@@ -103,9 +144,9 @@
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-    <script type="module" src="/main.js"></script>
+    <script type="module" src="./main.js"></script>
     <script type="module">
-        import { login } from '/api.js';
+        import { login } from './api.js';
 
         document.addEventListener('DOMContentLoaded', () => {
             const form = document.querySelector('form');
