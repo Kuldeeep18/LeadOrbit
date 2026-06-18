@@ -651,7 +651,36 @@ def unsubscribe_view(request, lead_id, token):
         csrf_token = get_token(request)
         form = (
             f'<form method="post" action="{request.path}">'
-            f'<input type="hidden" name="csrfmiddlewaretoken" value="{csrf_token}">'
+            f'<input type="hidden" name="csrfmiddlewaretoken" value="{csrf_token
+    @action(detail=True, methods=['get'], url_path='validate-launch')
+    def validate_launch(self, request, pk=None):
+        campaign = self.get_object()
+        # Get all merge tags used in the campaign
+        tags = get_all_step_merge_tags(campaign)  # from utils
+        # Map to actual lead fields
+        lead_fields = [MERGE_TAG_FIELD_MAP.get(t, t) for t in tags]
+
+        # Find enrolled leads missing any of those fields
+        enrolled_leads = campaign.enrolled_leads.select_related('lead')
+        missing_by_field = {}
+        total_incomplete = 0
+        for field in lead_fields:
+            missing = [clead.lead.id for clead in enrolled_leads
+                       if getattr(clead.lead, field, None) in (None, '')]
+            if missing:
+                missing_by_field[field] = missing
+                total_incomplete += len(missing)
+
+        if total_incomplete > 0:
+            # Return warning data
+            return Response({
+                'can_launch': False,
+                'total_incomplete_leads': total_incomplete,
+                'missing_fields': missing_by_field,
+                'message': f"{total_incomplete} leads are missing data for merge tags."
+            })
+        return Response({'can_launch': True, 'message': 'All merge fields are present.'})
+}">'
             '<button type="submit">Confirm unsubscribe</button>'
             '</form>'
         )
@@ -672,3 +701,4 @@ def unsubscribe_view(request, lead_id, token):
     )
 
     return HttpResponse(html, content_type='text/html')
+
