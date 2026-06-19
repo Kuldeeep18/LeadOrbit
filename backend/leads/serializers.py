@@ -104,3 +104,9 @@ class BlockedDomainSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({'domain': 'This domain is already blocked.'})
 
         return attrs
+
+class BlockedDomainSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BlockedDomain
+        fields = ['id', 'domain', 'organization', 'created_at']
+        read_only_fields = ['id', 'organization', 'created_at']
