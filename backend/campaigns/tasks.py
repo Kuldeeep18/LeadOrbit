@@ -1,15 +1,19 @@
-import logging
-from datetime import timedelta
+import logging from datetime 
+import timedelta from celery 
+import shared_task from django.conf 
+import settings as django_settings from django.utils 
+import timezone from .ai 
+import _apply_merge_tags, personalize_email from .gmail_service
+import build_unsubscribe_url, check_for_replies, send_gmail from .sms_service 
+import send_sms, initiate_call from .models 
+import CampaignLead, SequenceStep from leads.models 
+import BlockedDomain, normalize_domain
 
-from celery import shared_task
-from django.conf import settings as django_settings
-from django.utils import timezone
 
-from .ai import _apply_merge_tags, personalize_email
-from .gmail_service import build_unsubscribe_url, check_for_replies, send_gmail
-from .sms_service import send_sms, initiate_call
-from .models import CampaignLead, SequenceStep
-from leads.models import BlockedDomain, normalize_domain
+import urllib.parse
+from bs4 import BeautifulSoup
+from django.core.signing import Signer
+
 
 logger = logging.getLogger(__name__)
 
@@ -409,12 +413,45 @@ def _execute_call_step(clead, step, now=None):
         sid = initiate_call(phone, call_script or None)
         logger.info(f"Call initiated to {clead.lead.email} ({phone}) | sid={sid}")
     except RuntimeError:
-        # Twilio not configured — treat as manual step
+        
         logger.info(f"CALL step (manual) for {clead.lead.email} ({phone}): {call_script or 'No script'}")
     except Exception as err:
         logger.error(f"Call failed for {clead.lead.email}: {err}")
 
     _advance_to_next_step(clead, step, now=now)
+
+
+
+def rewrite_email_links(html_body, campaign_lead_id, step_id):
+    """
+    Parses the email body, finds all anchor tags, and replaces the href
+    with our tracking redirect URL.
+    """
+    if not html_body:
+        return html_body
+
+    soup = BeautifulSoup(html_body, 'html.parser')
+    signer = Signer()
+    
+    token_payload = f"{campaign_lead_id}:{step_id}"
+    signed_token = signer.sign(token_payload)
+    
+    base_url = getattr(django_settings, 'BACKEND_BASE_URL', 'http://127.0.0.1:8000').rstrip('/')
+    tracking_endpoint = f"{base_url}/api/v1/clicks/track/"
+    
+    for a_tag in soup.find_all('a', href=True):
+        original_url = a_tag.get('href', '')
+        
+        if not original_url or original_url.startswith(('mailto:', 'tel:')) or tracking_endpoint in original_url:
+            continue
+            
+        encoded_dest = urllib.parse.quote(original_url, safe='')
+        
+        tracking_url = f"{tracking_endpoint}?t={signed_token}&dest={encoded_dest}"
+        a_tag['href'] = tracking_url
+        
+    return str(soup)
+# -----------------------------------
 
 
 @shared_task
@@ -458,6 +495,10 @@ def send_email_step(campaign_lead_id, step_id):
             return
 
         subject, body = personalize_email(step.template_subject, step.template_body, clead.lead)
+
+       
+        body = rewrite_email_links(body, campaign_lead_id, step_id)
+        # -------------------------------------------
 
         account = clead.campaign.connected_account
         if account:

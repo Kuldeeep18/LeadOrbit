@@ -37,7 +37,13 @@ pip install -r requirements.txt
 
 ### 5. Configure Environment Variables
 
-Create a `backend/.env` file and add the required environment variables as described in the README.
+Copy the example environment file and fill in your values:
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Then edit `backend/.env` and add the required values (Google OAuth, Twilio, Celery, Gemini API, etc.) as described in the file comments.
 
 ### 6. Run Database Migrations
 
