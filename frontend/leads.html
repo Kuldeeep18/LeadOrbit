@@ -184,6 +184,7 @@
 
         <main class="main-area">
             <header class="top-header">
+
                 <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
                     <button id="hamburger-btn" class="btn d-lg-none p-1" aria-label="Toggle menu">
                         <i class="bi bi-list fs-4" aria-hidden="true"></i>
@@ -211,6 +212,17 @@
                     </div>
                 </div>
             </header>
+            
+            <nav aria-label="breadcrumb" class="mt-2 px-3">
+                <ol class="breadcrumb small">
+                    <li class="breadcrumb-item">
+                        <a href="dashboard.html">Dashboard</a>
+                    </li>
+                    <li class="breadcrumb-item active" aria-current="page">
+                         Leads
+                    </li>
+                </ol>
+            </nav>
 
             <!-- Breadcrumb Navigation -->
             <nav aria-label="breadcrumb" class="container mt-3">
@@ -453,6 +465,7 @@
         // ─── State ──────────────────────────────────────────────────────────
         let allLeads = [];           // current page leads
         let allTags = [];            // all org tags (for the filter panel)
+        let allImportJobs = [];      // import job history
         let selectedTagIds = new Set(); // tags selected in the filter panel
         let activeFilters = {};      // last applied filter state
         let allImportJobs = [];      // history
@@ -717,7 +730,6 @@
                 dot.classList.remove('visible');
             }
 
-            // Active filter summary chips
             const row = document.getElementById('active-filters-row');
             const chips = [];
 
@@ -878,22 +890,18 @@
             await fetchLeads(1);
             await loadImportHistory();
 
-            // Search input
             document.getElementById('lead-search').addEventListener('input', applySearch);
             document.getElementById('refresh-history-btn').addEventListener('click', loadImportHistory);
 
-            // Filter panel toggle
             const filterPanel = document.getElementById('filter-panel');
             document.getElementById('filter-toggle-btn').addEventListener('click', () => {
                 const isHidden = filterPanel.style.display === 'none';
                 filterPanel.style.display = isHidden ? 'block' : 'none';
             });
 
-            // Apply / Clear filter buttons
             document.getElementById('apply-filters-btn').addEventListener('click', applyFilters);
             document.getElementById('clear-filters-btn').addEventListener('click', clearFilters);
 
-            // CSV Upload
             document.getElementById('upload-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const fileInput = document.getElementById('csv-file');
