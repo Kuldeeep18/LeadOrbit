@@ -1,8 +1,11 @@
 import logging
+import urllib.parse
 from datetime import timedelta
 
+from bs4 import BeautifulSoup
 from celery import shared_task
 from django.conf import settings as django_settings
+from django.core.signing import Signer
 from django.db.models import Q
 from django.utils import timezone
 
@@ -126,7 +129,13 @@ def _maybe_mark_campaign_completed(campaign):
     logger.info(f"Campaign marked COMPLETED: {campaign.id}")
 
 
-def _mark_campaign_lead_bounced(clead, now=None):
+def _mark_campaign_lead_bounced(
+    clead,
+    now=None,
+    bounce_type=None,
+    bounce_code=None,
+    bounce_reason=None,
+):
     now = now or timezone.now()
     was_bounced = clead.status == 'BOUNCED'
 
@@ -140,6 +149,15 @@ def _mark_campaign_lead_bounced(clead, now=None):
     if clead.next_execution_time is not None:
         clead.next_execution_time = None
         update_fields.append('next_execution_time')
+    if bounce_type and clead.bounce_type != bounce_type:
+        clead.bounce_type = bounce_type
+        update_fields.append('bounce_type')
+    if bounce_code and clead.bounce_code != bounce_code:
+        clead.bounce_code = bounce_code
+        update_fields.append('bounce_code')
+    if bounce_reason and clead.bounce_reason != bounce_reason:
+        clead.bounce_reason = bounce_reason
+        update_fields.append('bounce_reason')
 
     if update_fields:
         clead.save(update_fields=update_fields)
@@ -148,7 +166,12 @@ def _mark_campaign_lead_bounced(clead, now=None):
         notify_email_bounced(clead.organization_id, clead.lead.email)
     _maybe_mark_campaign_completed(clead.campaign)
     logger.info(
-        f"Bounce detected for {clead.lead.email} in campaign {clead.campaign.name} at {now.isoformat()}"
+        "Bounce detected for %s in campaign %s at %s (type=%s, code=%s)",
+        clead.lead.email,
+        clead.campaign.name,
+        now.isoformat(),
+        clead.bounce_type or 'unknown',
+        clead.bounce_code or 'unknown',
     )
     return not was_bounced
 
@@ -477,12 +500,45 @@ def _execute_call_step(clead, step, now=None):
         sid = initiate_call(phone, call_script or None)
         logger.info(f"Call initiated to {clead.lead.email} ({phone}) | sid={sid}")
     except RuntimeError:
-        # Twilio not configured — treat as manual step
+        
         logger.info(f"CALL step (manual) for {clead.lead.email} ({phone}): {call_script or 'No script'}")
     except Exception as err:
         logger.error(f"Call failed for {clead.lead.email}: {err}")
 
     _advance_to_next_step(clead, step, now=now)
+
+
+
+def rewrite_email_links(html_body, campaign_lead_id, step_id):
+    """
+    Parses the email body, finds all anchor tags, and replaces the href
+    with our tracking redirect URL.
+    """
+    if not html_body:
+        return html_body
+
+    soup = BeautifulSoup(html_body, 'html.parser')
+    signer = Signer()
+    
+    token_payload = f"{campaign_lead_id}:{step_id}"
+    signed_token = signer.sign(token_payload)
+    
+    base_url = getattr(django_settings, 'BACKEND_BASE_URL', 'http://127.0.0.1:8000').rstrip('/')
+    tracking_endpoint = f"{base_url}/api/v1/clicks/track/"
+    
+    for a_tag in soup.find_all('a', href=True):
+        original_url = a_tag.get('href', '')
+        
+        if not original_url or original_url.startswith(('mailto:', 'tel:')) or tracking_endpoint in original_url:
+            continue
+            
+        encoded_dest = urllib.parse.quote(original_url, safe='')
+        
+        tracking_url = f"{tracking_endpoint}?t={signed_token}&dest={encoded_dest}"
+        a_tag['href'] = tracking_url
+        
+    return str(soup)
+# -----------------------------------
 
 
 @shared_task
@@ -526,6 +582,10 @@ def send_email_step(campaign_lead_id, step_id):
             return
 
         subject, body = personalize_email(step.template_subject, step.template_body, clead.lead)
+
+       
+        body = rewrite_email_links(body, campaign_lead_id, step_id)
+        # -------------------------------------------
 
         account = clead.campaign.connected_account
         if account:

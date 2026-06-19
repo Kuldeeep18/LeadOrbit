@@ -951,6 +951,12 @@
             }
         }
     </style>
+<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+<style>
+    #flowchart-container { display: none; padding: 15px; border: 1px solid #ccc; margin-top: 10px; }
+    .mermaid { text-align: center; }
+    .node rect, .node circle, .node polygon { cursor: pointer; }
+</style>
 </head>
 <!-- Breadcrumb Navigation -->
 <nav aria-label="breadcrumb" class="container mt-3">
@@ -983,6 +989,21 @@
         </div>
     </div>
 
+    <nav aria-label="breadcrumb" class="mt-2 px-3">
+        <ol class="breadcrumb small">
+            <li class="breadcrumb-item">
+                <a href="dashboard.html">Dashboard</a>
+            </li>
+            <li class="breadcrumb-item">
+                <a href="campaigns.html">Campaigns</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">
+                Campaign Builder
+            </li>
+        </ol>
+    </nav>
+
+    <!-- â”€â”€â”€ Main Layout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
     <!-- ─── Main Layout ─────────────────────── -->
     <div class="main-layout">
         <!-- Canvas -->
@@ -2019,6 +2040,18 @@ ${rows || `
                         </div>
                     </div>
                 </div>
+
+                <div class="mb-3">
+                    <div class="ep-label">Insert Tag</div>
+                        <select class="ep-input" id="merge-tag-select">
+                            <option value="">Select a merge tag</option>
+                            <option value="{{firstName}}">{{firstName}}</option>
+                            <option value="{{lastName}}">{{lastName}}</option>
+                            <option value="{{email}}">{{email}}</option>
+                            <option value="{{company}}">{{company}}</option>
+                            <option value="{{icebreaker}}">{{icebreaker}}</option>
+                        </select>
+                </div>
                 <div class="mb-3">
                     <div class="ep-label">Subject <span class="text-muted fw-normal">&middot; Add Cc</span></div>
                     <input type="text" class="ep-input" id="ep-subject" placeholder="Subject" value="${step.subject || ''}">
@@ -2054,6 +2087,47 @@ ${rows || `
             // Bind inputs
             document.getElementById('ep-subject').addEventListener('input', (e) => { step.subject = e.target.value; });
             document.getElementById('ep-body').addEventListener('input', (e) => { step.body = e.target.value; });
+
+            let activeEditor = document.getElementById('ep-body');
+
+            document.getElementById('ep-subject').addEventListener('focus', () => {
+                activeEditor = document.getElementById('ep-subject');
+            });
+
+            document.getElementById('ep-body').addEventListener('focus', () => {
+                activeEditor = document.getElementById('ep-body');
+            });
+
+
+
+            const mergeSelect = document.getElementById('merge-tag-select');
+
+            mergeSelect.addEventListener('change', (e) => {
+                const tagText = e.target.value;
+                if (!tagText) return;
+
+            const body = activeEditor;
+
+            const start = body.selectionStart;
+            const end = body.selectionEnd;
+
+            body.value =
+                body.value.substring(0, start) +
+                tagText +
+                body.value.substring(end);
+
+            if (body.id === 'ep-subject') {
+                step.subject = body.value;
+            } else {
+                step.body = body.value;
+            }
+
+            body.focus();
+            body.selectionStart = body.selectionEnd =
+                start + tagText.length;
+
+            mergeSelect.value = '';
+        });
             const senderSelect = document.getElementById('sender-account-select');
             if (senderSelect) {
                 senderSelect.addEventListener('change', (e) => {
@@ -2636,7 +2710,54 @@ document.getElementById('setting-daily-limit').value =
         });
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    mermaid.initialize({ startOnLoad: true, securityLevel: 'loose' });
+
+    document.getElementById('canvasTab').addEventListener('click', function() {
+        document.getElementById('flowchart-container').style.display = 'block';
+        document.getElementById('').style.display = 'none';
+        renderFlowchart();
+    });
+
+    document.getElementById('').addEventListener('click', function() {
+        document.getElementById('flowchart-container').style.display = 'none';
+        document.getElementById('').style.display = 'block';
+    });
+
+    function renderFlowchart() {
+        const steps = window.campaignSteps;
+        if (!steps || steps.length === 0) return;
+
+        let graph = 'graph TD\n';
+        steps.forEach((step, i) => {
+            const nodeId = step${i};
+            if (step.type === 'condition' || step.type === 'CONDITION') {
+                graph +=     ${nodeId}{${step.name || 'Condition'}}\n;
+            } else {
+                graph +=     ${nodeId}[${step.name || 'Action'}]\n;
+            }
+            if (i < steps.length - 1) {
+                graph +=     ${nodeId} --> step${i+1}\n;
+            }
+        });
+        steps.forEach((step, i) => {
+            graph +=     click step${i} openStepDetail\n;
+        });
+
+        document.getElementById('mermaidFlowchart').textContent = graph;
+        mermaid.init(undefined, document.getElementById('mermaidFlowchart'));
+    }
+
+    function openStepDetail(stepId) {
+        console.log('Clicked node:', stepId);
+        const stepIndex = parseInt(stepId.replace('step', ''));
+        if (typeof editStep === 'function') {
+            editStep(stepIndex);
+        }
+    }
+</script>
 </body>
 
 </html>
+
 

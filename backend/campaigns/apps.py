@@ -20,6 +20,9 @@ class CampaignsConfig(AppConfig):
         execute campaign processing + reply polling in-process so delayed steps
         and reply tracking still work locally.
         """
+        # Register signal handlers for cache counter updates
+        from . import signals
+        
         from django.conf import settings
 
         if not settings.DEBUG or not settings.CELERY_TASK_ALWAYS_EAGER:
