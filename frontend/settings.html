@@ -474,6 +474,45 @@
     </script>
     
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+
+<!-- Team Members Section -->
+<div id="team-members" class="card">
+    <h2>Team Members</h2>
+    <table id="members-table">
+        <thead><tr><th>Email</th><th>Role</th><th>Actions</th></tr></thead>
+        <tbody></tbody>
+    </table>
+    <h3>Invite Member</h3>
+    <input type="email" id="invite-email" placeholder="user@company.com">
+    <select id="invite-role">
+        <option value="MEMBER">Member</option>
+        <option value="MANAGER">Manager</option>
+        <option value="ADMIN">Admin</option>
+    </select>
+    <button id="send-invite-btn">Send Invitation</button>
+</div>
+
+<script>
+async function loadTeam() {
+    const res = await fetch('/api/users/?organization=' + currentUserOrgId);
+    const users = await res.json();
+    const tbody = document.querySelector('#members-table tbody');
+    tbody.innerHTML = users.map(u => `<tr><td>${u.email}</td><td><span class="badge badge-${u.role.toLowerCase()}">${u.role}</span></td><td></td></tr>`).join('');
+}
+document.getElementById('send-invite-btn').addEventListener('click', async () => {
+    const email = document.getElementById('invite-email').value;
+    const role = document.getElementById('invite-role').value;
+    const res = await fetch('/api/users/invite/', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({email, role})
+    });
+    const data = await res.json();
+    alert(data.message || data.error);
+    if (res.ok) loadTeam();
+});
+document.addEventListener('DOMContentLoaded', loadTeam);
+</script>
 </body>
 
 </html>

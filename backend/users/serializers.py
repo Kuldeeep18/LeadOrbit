@@ -31,6 +31,7 @@ class RegisterSerializer(serializers.Serializer):
             email=validated_data['email'],
             password=validated_data['password'],
             organization=org,
-            role='ADMIN',  # First user in org is admin
+            role = validated_data.get('role', 'MEMBER'),  # First user in org is admin
         )
         return user
+

@@ -41,3 +41,4 @@ class User(AbstractBaseUser, PermissionsMixin, TenantModel):
 
     def __str__(self):
         return self.email
+
