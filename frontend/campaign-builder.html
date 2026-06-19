@@ -1229,7 +1229,8 @@
 
     <script type="module" src="/main.js"></script>
     <script type="module">
-        import { fetchWithAuth } from './api.js';
+        import { fetchWithAuth } from '/api.js?v=20260311b';
+        import { showToast } from '/toast.js';
 
         // ─── STATE ──────────────────────────
         let campaignId = null;
@@ -2605,7 +2606,7 @@ ${rows || `
                     }
                     switchTab(tab.dataset.tab);
                 } catch (e) {
-                    alert(e.message || 'Unable to switch tab right now.');
+                    showToast(e.message || 'Unable to switch tab right now.', 'error');
                 }
             });
         });
@@ -2636,11 +2637,11 @@ ${rows || `
                     await saveCampaign();
                     await enrollLeads();
                     await launchCampaign();
-                    alert('Campaign launched and processing triggered.');
+                    showToast('Campaign launched and processing triggered.', 'success');
                     window.location.href = '/campaigns.html';
                 }
             } catch (e) {
-                alert('Error: ' + e.message);
+                showToast('Error: ' + e.message, 'error');
             } finally {
                 btn.disabled = false;
                 setNextButtonLabel();
