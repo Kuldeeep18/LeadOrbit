@@ -154,7 +154,7 @@ def _advance_to_next_step(clead, completed_step, now=None):
 
 def _execute_non_email_step(clead, step, now=None):
     if step.channel_type == 'CONDITION_REPLY':
-        _execute_condition_reply_step(clead, step, now=now)
+        evaluate_condition_reply_step.delay(clead.id, step.id)
         return
     if step.channel_type == 'CONDITION_OPEN':
         _execute_condition_open_step(clead, step, now=now)
@@ -163,10 +163,10 @@ def _execute_non_email_step(clead, step, now=None):
         _execute_condition_click_step(clead, step, now=now)
         return
     if step.channel_type == 'SMS':
-        _execute_sms_step(clead, step, now=now)
+        send_sms_step.delay(clead.id, step.id)
         return
     if step.channel_type == 'CALL':
-        _execute_call_step(clead, step, now=now)
+        initiate_call_step.delay(clead.id, step.id)
         return
     logger.info(f"Auto-advancing non-email step {step.channel_type} for {clead.lead.email}")
     _advance_to_next_step(clead, step, now=now)
@@ -455,6 +455,33 @@ def rewrite_email_links(html_body, campaign_lead_id, step_id):
 
 
 @shared_task
+def send_sms_step(campaign_lead_id, step_id):
+    """Queueable wrapper for SMS delivery so scheduler loops return quickly."""
+    clead = CampaignLead.objects.select_related('lead', 'campaign').get(id=campaign_lead_id)
+    step = SequenceStep.objects.get(id=step_id)
+    if step.channel_type == 'SMS':
+        _execute_sms_step(clead, step)
+
+
+@shared_task
+def initiate_call_step(campaign_lead_id, step_id):
+    """Queueable wrapper for Twilio call initiation so scheduler loops return quickly."""
+    clead = CampaignLead.objects.select_related('lead', 'campaign').get(id=campaign_lead_id)
+    step = SequenceStep.objects.get(id=step_id)
+    if step.channel_type == 'CALL':
+        _execute_call_step(clead, step)
+
+
+@shared_task
+def evaluate_condition_reply_step(campaign_lead_id, step_id):
+    """Queueable wrapper for reply-condition checks."""
+    clead = CampaignLead.objects.select_related('lead', 'campaign').get(id=campaign_lead_id)
+    step = SequenceStep.objects.get(id=step_id)
+    if step.channel_type == 'CONDITION_REPLY':
+        _execute_condition_reply_step(clead, step)
+
+
+@shared_task
 def send_email_step(campaign_lead_id, step_id):
     """
     Dispatches an email through the connected Gmail account (or falls back to mock logging).
@@ -583,7 +610,11 @@ def process_active_leads_once(now=None):
                 clead.next_execution_time = now + timedelta(minutes=max(clead.current_step.delay_minutes, 0))
                 clead.save(update_fields=['next_execution_time'])
 
-            if clead.next_execution_time > now:
+            if (
+                clead.next_execution_time > now
+                and clead.current_step
+                and clead.current_step.delay_minutes > 0
+            ):
                 break
 
             if clead.current_step.channel_type == 'EMAIL':
@@ -597,7 +628,19 @@ def process_active_leads_once(now=None):
                 if clead.current_step_id == prev_step_id and clead.next_execution_time == prev_next_time:
                     # Task likely queued/mocked but not executed inline; avoid repeated dispatch.
                     break
-                if clead.next_execution_time and clead.next_execution_time > now:
+                if clead.current_step and clead.current_step.delay_minutes > 0:
+                    break
+                continue
+
+            if clead.current_step.channel_type in {'SMS', 'CALL', 'CONDITION_REPLY'}:
+                prev_step_id = clead.current_step_id
+                prev_next_time = clead.next_execution_time
+                _execute_non_email_step(clead, clead.current_step, now=now)
+                lead_processed = True
+                clead.refresh_from_db(fields=['current_step', 'next_execution_time', 'status'])
+                if clead.current_step_id == prev_step_id and clead.next_execution_time == prev_next_time:
+                    break
+                if clead.current_step and clead.current_step.delay_minutes > 0:
                     break
                 continue
 
@@ -630,66 +673,86 @@ def poll_gmail_for_replies():
     for clead in active_leads:
         acct = clead.campaign.connected_account
         if acct.id not in account_map:
-            account_map[acct.id] = {'account': acct, 'leads': []}
-        account_map[acct.id]['leads'].append(clead)
+            account_map[acct.id] = []
+        account_map[acct.id].append(clead.id)
+
+    for campaign_lead_ids in account_map.values():
+        poll_gmail_replies_for_campaign_leads.delay(campaign_lead_ids)
+
+    return f"Queued reply polling for {len(account_map)} Gmail accounts."
+
+
+@shared_task
+def poll_gmail_replies_for_campaign_leads(campaign_lead_ids):
+    """Process Gmail replies for a batch of leads tied to the same sender account."""
+    leads = list(
+        CampaignLead.objects.filter(
+            id__in=campaign_lead_ids,
+            status__in=['ACTIVE', 'ENROLLED', 'FINISHED'],
+            last_sent_message_id__isnull=False,
+            campaign__connected_account__isnull=False,
+        ).select_related('campaign__connected_account', 'lead')
+    )
+
+    if not leads:
+        return "No campaign leads to poll"
+
+    account = leads[0].campaign.connected_account
+    if account is None:
+        return "No connected account"
+
+    msg_ids = [cl.last_sent_message_id for cl in leads if cl.last_sent_message_id]
+
+    try:
+        replies = check_for_replies(account, msg_ids)
+    except Exception as e:
+        logger.error(f"Failed to poll replies for {account.email_address}: {e}")
+        return "Reply polling failed"
 
     total_replies = 0
     campaign_branching_cache = {}
-    for data in account_map.values():
-        account = data['account']
-        leads = data['leads']
-        msg_ids = [cl.last_sent_message_id for cl in leads]
+    now = timezone.now()
 
-        try:
-            replies = check_for_replies(account, msg_ids)
-        except Exception as e:
-            logger.error(f"Failed to poll replies for {account.email_address}: {e}")
-            continue
+    for clead in leads:
+        if clead.last_sent_message_id in replies:
+            campaign_id = clead.campaign_id
+            uses_reply_yes_branch = campaign_branching_cache.get(campaign_id)
+            if uses_reply_yes_branch is None:
+                uses_reply_yes_branch = _campaign_has_condition_reply_yes_branch(clead.campaign)
+                campaign_branching_cache[campaign_id] = uses_reply_yes_branch
 
-        for clead in leads:
-            if clead.last_sent_message_id in replies:
-                campaign_id = clead.campaign_id
-                uses_reply_yes_branch = campaign_branching_cache.get(campaign_id)
-                if uses_reply_yes_branch is None:
-                    uses_reply_yes_branch = _campaign_has_condition_reply_yes_branch(clead.campaign)
-                    campaign_branching_cache[campaign_id] = uses_reply_yes_branch
-
-                if uses_reply_yes_branch:
-                    clead.last_replied_at = timezone.now()
-                    clead.save(update_fields=['last_replied_at'])
-                    total_replies += 1
-                    logger.info(
-                        f"Reply detected for {clead.lead.email} in campaign {clead.campaign.name}; "
-                        "marked last_replied_at for CONDITION_REPLY branch."
-                    )
-
-                    # If currently parked on CONDITION_REPLY, execute branch routing now
-                    # so the follow-up email can be sent immediately.
-                    if clead.current_step and clead.current_step.channel_type == 'CONDITION_REPLY':
-                        _execute_condition_reply_step(clead, clead.current_step, now=timezone.now())
-                    elif clead.status in {'FINISHED', 'REPLIED'}:
-                        # Recovery path: if the lead was already closed before reply was detected,
-                        # re-open it at CONDITION_REPLY and evaluate the yes/no routing.
-                        condition_step = (
-                            SequenceStep.objects.filter(
-                                campaign=clead.campaign,
-                                channel_type='CONDITION_REPLY',
-                            )
-                            .order_by('step_order')
-                            .first()
-                        )
-                        if condition_step:
-                            clead.current_step = condition_step
-                            clead.status = 'ACTIVE'
-                            clead.next_execution_time = timezone.now()
-                            clead.save(update_fields=['current_step', 'status', 'next_execution_time'])
-                            _execute_condition_reply_step(clead, condition_step, now=timezone.now())
-                    continue
-
-                clead.status = 'REPLIED'
-                clead.save(update_fields=['status'])
+            if uses_reply_yes_branch:
+                clead.last_replied_at = now
+                clead.save(update_fields=['last_replied_at'])
                 total_replies += 1
-                logger.info(f"Reply detected for {clead.lead.email} in campaign {clead.campaign.name}")
-                _maybe_mark_campaign_completed(clead.campaign)
+                logger.info(
+                    f"Reply detected for {clead.lead.email} in campaign {clead.campaign.name}; "
+                    "marked last_replied_at for CONDITION_REPLY branch."
+                )
+
+                if clead.current_step and clead.current_step.channel_type == 'CONDITION_REPLY':
+                    _execute_condition_reply_step(clead, clead.current_step, now=now)
+                elif clead.status in {'FINISHED', 'REPLIED'}:
+                    condition_step = (
+                        SequenceStep.objects.filter(
+                            campaign=clead.campaign,
+                            channel_type='CONDITION_REPLY',
+                        )
+                        .order_by('step_order')
+                        .first()
+                    )
+                    if condition_step:
+                        clead.current_step = condition_step
+                        clead.status = 'ACTIVE'
+                        clead.next_execution_time = now
+                        clead.save(update_fields=['current_step', 'status', 'next_execution_time'])
+                        _execute_condition_reply_step(clead, condition_step, now=now)
+                continue
+
+            clead.status = 'REPLIED'
+            clead.save(update_fields=['status'])
+            total_replies += 1
+            logger.info(f"Reply detected for {clead.lead.email} in campaign {clead.campaign.name}")
+            _maybe_mark_campaign_completed(clead.campaign)
 
     return f"Detected {total_replies} new replies."

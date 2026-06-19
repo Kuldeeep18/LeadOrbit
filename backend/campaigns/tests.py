@@ -11,10 +11,13 @@ from campaigns.ai import personalize_email
 from campaigns.tasks import (
     _execute_condition_event_step,
     _get_campaign_steps,
+    evaluate_condition_reply_step,
     poll_gmail_for_replies,
+    poll_gmail_replies_for_campaign_leads,
     process_active_leads,
     process_active_leads_once,
     send_email_step,
+    send_sms_step,
 )
 from campaigns.utils import generate_unsubscribe_token
 from leads.models import BlockedDomain, Lead
@@ -22,7 +25,7 @@ from tenants.models import Organization
 from users.models import User
 
 
-@override_settings(GEMINI_API_KEY='')
+@override_settings(GEMINI_API_KEY='', CELERY_TASK_ALWAYS_EAGER=True)
 class CampaignWorkflowTests(APITestCase):
     def setUp(self):
         self.organization = Organization.objects.create(name='Acme')
@@ -218,8 +221,9 @@ class CampaignWorkflowTests(APITestCase):
         )
 
         now = timezone.now()
-        with patch('campaigns.tasks.send_email_step.delay') as mocked_delay:
-            processed = process_active_leads_once(now=now)
+        with patch('campaigns.tasks.send_sms_step.delay', side_effect=lambda cid, sid: send_sms_step(cid, sid)):
+            with patch('campaigns.tasks.send_email_step.delay') as mocked_delay:
+                processed = process_active_leads_once(now=now)
 
         self.assertEqual(processed, 1)
         campaign_lead.refresh_from_db()
@@ -227,6 +231,326 @@ class CampaignWorkflowTests(APITestCase):
         self.assertEqual(campaign_lead.status, 'ACTIVE')
         self.assertGreaterEqual(campaign_lead.next_execution_time, now + timedelta(minutes=5))
         mocked_delay.assert_not_called()
+
+    def test_launch_processing_uses_fresh_steps_after_sequence_resync(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Fresh step cache flow',
+            status='ACTIVE',
+            settings={'steps': [{'type': 'WAIT'}]},
+        )
+        SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='WAIT',
+            delay_minutes=0,
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='fresh-steps@acme.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='ENROLLED',
+        )
+
+        processed = process_active_leads_once(now=timezone.now())
+        self.assertEqual(processed, 1)
+
+        campaign_lead.refresh_from_db()
+        self.assertEqual(campaign_lead.status, 'FINISHED')
+        self.assertIsNone(campaign_lead.current_step)
+
+    def test_process_active_leads_advances_non_email_steps(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Non-email flow',
+            status='ACTIVE',
+        )
+        wait_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='WAIT',
+            delay_minutes=0,
+        )
+        email_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=2,
+            channel_type='EMAIL',
+            delay_minutes=30,
+            template_subject='Hello',
+            template_body='Hi there',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='lead@acme.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=wait_step,
+            status='ACTIVE',
+            next_execution_time=timezone.now() - timedelta(minutes=1),
+        )
+
+        process_active_leads()
+        campaign_lead.refresh_from_db()
+
+        self.assertEqual(campaign_lead.current_step_id, email_step.id)
+        self.assertEqual(campaign_lead.status, 'ACTIVE')
+        self.assertGreaterEqual(campaign_lead.next_execution_time, timezone.now() + timedelta(minutes=29))
+
+    def test_delayed_wait_step_progresses_to_next_email_when_due(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Email wait email',
+            status='ACTIVE',
+        )
+        account = ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=self.user,
+            email_address='delay-sender@acme.test',
+            provider='GOOGLE',
+            access_token='token',
+            refresh_token='refresh',
+        )
+        campaign.connected_account = account
+        campaign.save(update_fields=['connected_account'])
+        first_email = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='First',
+            template_body='First body',
+        )
+        wait_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=2,
+            channel_type='WAIT',
+            delay_minutes=2,
+        )
+        second_email = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=3,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Second',
+            template_body='Second body',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='delay-flow@acme.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=first_email,
+            status='ACTIVE',
+            next_execution_time=timezone.now() - timedelta(seconds=1),
+        )
+
+        with patch('campaigns.tasks.send_email_step.delay', side_effect=lambda cid, sid: send_email_step(cid, sid)):
+            with patch('campaigns.tasks.send_gmail', side_effect=['msg-1', 'msg-2']):
+                now = timezone.now()
+                process_active_leads_once(now=now)
+                campaign_lead.refresh_from_db()
+                self.assertEqual(campaign_lead.current_step_id, wait_step.id)
+                self.assertEqual(campaign_lead.status, 'ACTIVE')
+                self.assertEqual(campaign_lead.last_sent_message_id, 'msg-1')
+
+                process_active_leads_once(now=now + timedelta(minutes=1))
+                campaign_lead.refresh_from_db()
+                self.assertEqual(campaign_lead.current_step_id, wait_step.id)
+                self.assertEqual(campaign_lead.last_sent_message_id, 'msg-1')
+
+                process_active_leads_once(now=now + timedelta(minutes=2, seconds=1))
+                campaign_lead.refresh_from_db()
+                if campaign_lead.status != 'FINISHED':
+                    self.assertEqual(campaign_lead.current_step_id, second_email.id)
+                    process_active_leads_once(now=now + timedelta(minutes=2, seconds=1))
+                    campaign_lead.refresh_from_db()
+                self.assertEqual(campaign_lead.status, 'FINISHED')
+                self.assertEqual(campaign_lead.last_sent_message_id, 'msg-2')
+
+    def test_campaign_auto_completes_when_all_enrolled_leads_finish(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Auto-complete flow',
+            status='ACTIVE',
+        )
+        SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='MANUAL',
+            delay_minutes=0,
+            template_body='Do a manual task',
+        )
+
+        lead_one = Lead.objects.create(
+            organization=self.organization,
+            email='auto1@acme.test',
+        )
+        lead_two = Lead.objects.create(
+            organization=self.organization,
+            email='auto2@acme.test',
+        )
+        CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead_one,
+            status='ENROLLED',
+        )
+        CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead_two,
+            status='ENROLLED',
+        )
+
+        processed = process_active_leads_once(now=timezone.now())
+        self.assertEqual(processed, 2)
+
+        campaign.refresh_from_db()
+        self.assertEqual(campaign.status, 'COMPLETED')
+        self.assertFalse(
+            CampaignLead.objects.filter(campaign=campaign).exclude(status='FINISHED').exists()
+        )
+
+    def test_process_active_leads_queues_email_steps(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Email flow',
+            status='ACTIVE',
+        )
+        email_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Hello',
+            template_body='Hi there',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='lead2@acme.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=email_step,
+            status='ACTIVE',
+            next_execution_time=timezone.now() - timedelta(minutes=1),
+        )
+
+        with patch('campaigns.tasks.send_email_step.delay') as mocked_delay:
+            process_active_leads()
+            mocked_delay.assert_called_once_with(campaign_lead.id, email_step.id)
+
+    def test_create_campaign_rejects_connected_account_not_owned_by_current_user(self):
+        teammate = User.objects.create_user(
+            email='teammate@acme.test',
+            password='StrongPass123!',
+            organization=self.organization,
+            role='USER',
+        )
+        teammate_account = ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=teammate,
+            email_address='teammate@acme.test',
+            provider='GOOGLE',
+            access_token='token',
+            refresh_token='refresh',
+        )
+
+        payload = {
+            'name': 'Unauthorized sender',
+            'status': 'DRAFT',
+            'settings': {'steps': []},
+            'connected_account_id': str(teammate_account.id),
+        }
+        response = self.client.post('/api/v1/campaigns/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('connected_account_id', response.data)
+
+    def test_connected_accounts_endpoint_returns_only_current_user_accounts(self):
+        teammate = User.objects.create_user(
+            email='teammate2@acme.test',
+            password='StrongPass123!',
+            organization=self.organization,
+            role='USER',
+        )
+        mine = ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=self.user,
+            email_address='owner@acme.test',
+            provider='GOOGLE',
+            access_token='token1',
+            refresh_token='refresh1',
+        )
+        ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=teammate,
+            email_address='teammate2@acme.test',
+            provider='GOOGLE',
+            access_token='token2',
+            refresh_token='refresh2',
+        )
+
+        response = self.client.get('/api/v1/connected-accounts/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        emails = {item['email_address'] for item in response.data}
+        self.assertEqual(emails, {mine.email_address})
+
+    @override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+    def test_process_active_leads_queues_sms_steps_without_blocking(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Queued SMS flow',
+            status='ACTIVE',
+        )
+        sms_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='SMS',
+            delay_minutes=0,
+            template_body='Queued SMS',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='queued-sms@acme.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=sms_step,
+            status='ACTIVE',
+            next_execution_time=timezone.now() - timedelta(minutes=1),
+        )
+
+        with patch('campaigns.tasks.send_sms_step.delay') as mocked_delay:
+            processed = process_active_leads_once(now=timezone.now())
+
+        self.assertEqual(processed, 1)
+        mocked_delay.assert_called_once_with(campaign_lead.id, sms_step.id)
+        campaign_lead.refresh_from_db()
+        self.assertEqual(campaign_lead.current_step_id, sms_step.id)
+        self.assertEqual(campaign_lead.status, 'ACTIVE')
 
     def test_launch_processing_uses_fresh_steps_after_sequence_resync(self):
         campaign = Campaign.objects.create(
@@ -991,6 +1315,41 @@ class CampaignWorkflowTests(APITestCase):
 
         campaign_lead.refresh_from_db()
         self.assertEqual(campaign_lead.status, 'ACTIVE')
+
+    @override_settings(ENABLE_AUTO_REPLY_DETECTION=True, CELERY_TASK_ALWAYS_EAGER=False)
+    def test_poll_replies_queues_account_batches_before_processing(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Reply polling queue',
+            status='ACTIVE',
+        )
+        account = ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=self.user,
+            email_address='sender-poll-queue@acme.test',
+            provider='GOOGLE',
+            access_token='token',
+            refresh_token='refresh',
+        )
+        campaign.connected_account = account
+        campaign.save(update_fields=['connected_account'])
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='poll-queue@acme.test',
+        )
+        CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='ACTIVE',
+            last_sent_message_id='poll-queue-mid',
+        )
+
+        with patch('campaigns.tasks.poll_gmail_replies_for_campaign_leads.delay') as mocked_delay:
+            result = poll_gmail_for_replies()
+
+        mocked_delay.assert_called_once()
+        self.assertIn('Queued reply polling', result)
 
     @override_settings(ENABLE_AUTO_REPLY_DETECTION=True)
     def test_poll_replies_handles_finished_leads(self):
