@@ -195,6 +195,7 @@ body {
     padding-top: 0.8rem;
 }
 
+
 .sidebar-user-profile {
     display: flex;
     align-items: center;
@@ -230,6 +231,53 @@ body {
 .avatar-image {
     object-fit: cover;
     background: rgba(255, 255, 255, 0.08);
+.project-attribution-footer {
+    margin-top: 0.45rem;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    font-size: 0.7rem;
+    line-height: 1.2;
+    letter-spacing: 0;
+}
+
+.project-attribution-version {
+    font-weight: 700;
+}
+
+.project-attribution-separator {
+    opacity: 0.6;
+}
+
+.project-attribution-link {
+    text-decoration: none;
+    font-weight: 600;
+    transition: opacity 0.15s ease;
+}
+
+.project-attribution-link:hover {
+    opacity: 0.9;
+}
+
+.sidebar .project-attribution-footer {
+    color: rgba(255, 255, 255, 0.68);
+}
+
+.sidebar .project-attribution-link {
+    color: rgba(255, 255, 255, 0.82);
+}
+
+.builder-page .project-attribution-footer {
+    margin-top: 1rem;
+    padding-top: 0.85rem;
+    border-top: 1px solid #e2e8f0;
+    color: var(--ink-500);
+}
+
+.builder-page .project-attribution-link {
+    color: var(--primary);
+
 }
 
 .main-area {
@@ -573,6 +621,12 @@ body.auth-page {
     color: var(--link-color) !important;
 }
 
+
+.password-toggle-btn:focus-visible {
+    outline: 2px solid rgba(13, 110, 253, 0.35);
+    outline-offset: 2px;
+}
+
 /* ── Campaigns page ── */
 .overview-grid {
     display: grid;
@@ -777,12 +831,26 @@ body.auth-page {
     font-weight: 700;
     padding: 0.28rem 0.55rem;
 }
+.analytics-empty-state {
+    border: none !important;
+    background: transparent !important;
+}
 
-.empty-state {
+.dashboard-empty-state {
+    border: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+}
+/* .empty-state {
     background: var(--panel);
     border: 1px dashed var(--line);
     border-radius: 14px;
     padding: 2rem;
+} */
+ .dashboard-empty-state {
+    border: none;
+    background: transparent;
+    padding: 0;
 }
 
 /* ── Campaign builder dark mode ── */
@@ -1100,10 +1168,44 @@ body.auth-page {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 }
+/* Sidebar overlay */
+#sidebar-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 1040;
+}
+
+#sidebar-overlay.active {
+    display: block;
+}
 
 @media (max-width: 991px) {
+    .app-shell {
+        display: block;
+    }
+
     .sidebar {
-        display: none;
+        position: fixed;
+        top: 0;
+        left: -260px;
+        height: 100vh;
+        z-index: 1050;
+        transition: left 0.28s ease;
+        width: 250px;
+    }
+
+    .sidebar.sidebar-open {
+        left: 0;
+    }
+
+    .main-area {
+        width: 100%;
+    }
+
+    .btn:not(.btn-close) {
+        min-height: 44px;
     }
 }
 
@@ -1121,4 +1223,121 @@ body.auth-page {
         min-width: 100%;
         max-width: 100%;
     }
+
+    .top-header .d-flex {
+        flex-wrap: wrap;
+    }
+
+    .top-header .search-wrap {
+        order: 3;
+        width: 100%;
+    }
+    
+    .page-title {
+        font-size: 1.1rem;
+    }
+
+    .kpi-value {
+        font-size: 1.2rem;
+    }
+}
+
+/* ── Skeleton Loading ── */
+@keyframes shimmer {
+    0% { background-position: -200% 0; }
+    100% { background-position: 200% 0; }
+}
+
+.skeleton-box {
+    display: inline-block;
+    background: linear-gradient(90deg, var(--panel-muted) 25%, var(--line) 50%, var(--panel-muted) 75%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s infinite;
+    border-radius: 4px;
+}
+
+.skeleton-text {
+    width: 100%;
+    height: 1rem;
+    margin-bottom: 0.5rem;
+}
+
+.skeleton-text.short {
+    width: 60%;
+}
+
+.skeleton-kpi-value {
+    width: 80px;
+    height: 32px;
+    margin-top: 0.25rem;
+    display: block;
+    border-radius: 6px;
+}
+
+.skeleton-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    flex-shrink: 0;
+}
+
+.password-toggle-wrapper {
+  position: relative;
+  display: block;
+}
+
+.password-toggle-wrapper .form-control {
+  padding-right: 3rem;
+  background-color: rgba(15, 23, 42, 0.55);
+  color: #ffffff;
+  border: 1px solid rgba(148, 163, 184, 0.25);
+}
+
+.password-toggle-wrapper .form-control::placeholder {
+  color: rgba(148, 163, 184, 0.8);
+}
+
+.password-toggle-wrapper .form-control:focus {
+  background-color: rgba(15, 23, 42, 0.75);
+  color: #ffffff;
+  border-color: rgba(0, 180, 219, 0.65);
+  box-shadow: 0 0 0 0.2rem rgba(0, 180, 219, 0.15);
+}
+
+.password-toggle-btn {
+  position: absolute;
+  top: 50%;
+  right: 0.85rem;
+  transform: translateY(-50%);
+  z-index: 5;
+
+  width: 1.75rem;
+  height: 1.75rem;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  border: none;
+  background: transparent;
+  color: rgba(226, 232, 240, 0.75);
+
+  padding: 0;
+  margin: 0;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.password-toggle-btn:hover {
+  color: #ffffff;
+}
+
+.password-toggle-btn:focus-visible {
+  outline: 2px solid rgba(0, 180, 219, 0.6);
+  outline-offset: 2px;
+  border-radius: 999px;
+}
+
+.password-toggle-btn i {
+  pointer-events: none;
 }

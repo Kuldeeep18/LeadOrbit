@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.db.models import Q
 
-from .models import Campaign, CampaignLead, ConnectedEmailAccount, SequenceStep
+from .models import Campaign, CampaignLead, ConnectedEmailAccount, SequenceStep, EmailTemplate
 
 DELAY_UNIT_TO_MINUTES = {
     'minutes': 1,
@@ -25,7 +25,7 @@ class SequenceStepSerializer(serializers.ModelSerializer):
 
 class CampaignSerializer(serializers.ModelSerializer):
     steps = serializers.SerializerMethodField()
-    enrolled_count = serializers.SerializerMethodField()
+    enrolled_count = serializers.IntegerField(source='leads_count', read_only=True)
     enrolled_lead_ids = serializers.SerializerMethodField()
     connected_account = serializers.SerializerMethodField()
     connected_account_id = serializers.UUIDField(write_only=True, required=False, allow_null=True)
@@ -40,13 +40,15 @@ class CampaignSerializer(serializers.ModelSerializer):
             'steps',
             'enrolled_count',
             'enrolled_lead_ids',
+            'sent_count',
+            'open_count',
+            'reply_count',
+            'clicked_count',
+            'bounced_count',
             'created_at',
             'connected_account',
             'connected_account_id',
         ]
-
-    def get_enrolled_count(self, obj):
-        return obj.enrolled_leads.count()
 
     def get_steps(self, obj):
         return SequenceStepSerializer(obj.steps.all(), many=True).data
@@ -224,6 +226,11 @@ class CampaignSerializer(serializers.ModelSerializer):
         except (TypeError, ValueError):
             return None
 
+
+class EmailTemplateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EmailTemplate
+        fields = ['id', 'name', 'subject', 'body', 'category', 'usage_count', 'created_at']
 
 class CampaignLeadSerializer(serializers.ModelSerializer):
     class Meta:

@@ -48,18 +48,43 @@ def _build_service(account):
     return build('gmail', GMAIL_API_VERSION, credentials=creds)
 
 
-def send_gmail(account, to_email, subject, body_html, thread_id=None):
+def build_unsubscribe_url(lead):
+    """
+    Build a signed unsubscribe URL for a lead using the backend base URL.
+    """
+    from .utils import generate_unsubscribe_token
+
+    token = generate_unsubscribe_token(lead.id)
+    return f"{settings.BACKEND_BASE_URL}/api/v1/unsubscribe/{lead.id}/{token}/"
+
+
+def send_gmail(account, to_email, subject, body_html, unsubscribe_url=None, thread_id=None):
     """
     Compose and send an email via the Gmail API.
 
     Returns the Message-ID string of the sent message (for reply tracking).
     """
+    if unsubscribe_url:
+        message_footer = (
+            '<div style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e7eb;'
+            'font-size:0.9em;color:#6b7280;line-height:1.5;">'
+            "If you'd like to stop receiving these emails, "
+            f'<a href="{unsubscribe_url}" style="color:#1d4ed8;text-decoration:none;">unsubscribe here</a>.'
+            '</div>'
+        )
+        body_html = f"{body_html}{message_footer}"
+        message_headers = f"<{unsubscribe_url}>"
+    else:
+        message_headers = None
+
     service = _build_service(account)
 
     message = MIMEText(body_html, 'html')
     message['to'] = to_email
     message['from'] = account.email_address
     message['subject'] = subject
+    if message_headers:
+        message['List-Unsubscribe'] = message_headers
 
     raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
     body = {'raw': raw}

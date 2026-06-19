@@ -1,14 +1,19 @@
-import logging
-from datetime import timedelta
+import logging from datetime 
+import timedelta from celery 
+import shared_task from django.conf 
+import settings as django_settings from django.utils 
+import timezone from .ai 
+import _apply_merge_tags, personalize_email from .gmail_service
+import build_unsubscribe_url, check_for_replies, send_gmail from .sms_service 
+import send_sms, initiate_call from .models 
+import CampaignLead, SequenceStep from leads.models 
+import BlockedDomain, normalize_domain
 
-from celery import shared_task
-from django.conf import settings as django_settings
-from django.utils import timezone
 
-from .ai import personalize_email
-from .gmail_service import check_for_replies, send_gmail
-from .sms_service import send_sms, initiate_call
-from .models import CampaignLead, SequenceStep
+import urllib.parse
+from bs4 import BeautifulSoup
+from django.core.signing import Signer
+
 
 logger = logging.getLogger(__name__)
 
@@ -102,7 +107,7 @@ def _maybe_mark_campaign_completed(campaign):
     if not campaign.enrolled_leads.exists():
         return
 
-    terminal_statuses = ['FINISHED', 'REPLIED', 'BOUNCED']
+    terminal_statuses = ['FINISHED', 'REPLIED', 'BOUNCED', 'SKIPPED']
     has_unfinished = campaign.enrolled_leads.exclude(status__in=terminal_statuses).exists()
     if has_unfinished:
         return
@@ -203,6 +208,13 @@ def _execute_condition_event_step(clead, step, event_detected, now=None):
                 _activate_step(clead, yes_step, now=now)
                 return
         _advance_to_next_step(clead, step, now=now)
+        return
+
+    if clead.next_execution_time and clead.next_execution_time > now:
+        logger.info(
+            f"{step.channel_type} condition still waiting for {clead.lead.email}; "
+            f"next check at {clead.next_execution_time}."
+        )
         return
 
     if no_branch_step_order and no_branch_step_order > step.step_order:
@@ -317,16 +329,42 @@ def _personalize_text(template, lead):
     """Replace merge tags in SMS/call text with lead data."""
     if not template:
         return template
-    replacements = {
-        '{{firstName}}': lead.first_name or '',
-        '{{lastName}}': lead.last_name or '',
-        '{{email}}': lead.email or '',
-        '{{company}}': lead.company or '',
-    }
-    text = template
-    for tag, value in replacements.items():
-        text = text.replace(tag, value)
-    return text
+    return _apply_merge_tags(template, lead)
+
+
+def _domain_lookup_candidates(domain):
+    parts = normalize_domain(domain).split('.')
+    if len(parts) < 2:
+        return []
+    return ['.'.join(parts[index:]) for index in range(len(parts) - 1)]
+
+
+def _lead_domain_is_blocked(lead):
+    email = lead.email or ''
+    if '@' not in email:
+        return False
+
+    candidates = _domain_lookup_candidates(email.rsplit('@', 1)[-1])
+    if not candidates:
+        return False
+
+    return BlockedDomain.objects.filter(
+        organization_id=lead.organization_id,
+        domain__in=candidates,
+    ).exists()
+
+
+def _skip_blocked_domain_lead(clead):
+    if not _lead_domain_is_blocked(clead.lead):
+        return False
+
+    clead.status = 'SKIPPED'
+    clead.current_step = None
+    clead.next_execution_time = None
+    clead.save(update_fields=['status', 'current_step', 'next_execution_time'])
+    logger.info(f"Skipping email send for blocked domain lead {clead.lead.email}.")
+    _maybe_mark_campaign_completed(clead.campaign)
+    return True
 
 
 def _execute_sms_step(clead, step, now=None):
@@ -375,7 +413,7 @@ def _execute_call_step(clead, step, now=None):
         sid = initiate_call(phone, call_script or None)
         logger.info(f"Call initiated to {clead.lead.email} ({phone}) | sid={sid}")
     except RuntimeError:
-        # Twilio not configured — treat as manual step
+        
         logger.info(f"CALL step (manual) for {clead.lead.email} ({phone}): {call_script or 'No script'}")
     except Exception as err:
         logger.error(f"Call failed for {clead.lead.email}: {err}")
@@ -383,17 +421,64 @@ def _execute_call_step(clead, step, now=None):
     _advance_to_next_step(clead, step, now=now)
 
 
+
+def rewrite_email_links(html_body, campaign_lead_id, step_id):
+    """
+    Parses the email body, finds all anchor tags, and replaces the href
+    with our tracking redirect URL.
+    """
+    if not html_body:
+        return html_body
+
+    soup = BeautifulSoup(html_body, 'html.parser')
+    signer = Signer()
+    
+    token_payload = f"{campaign_lead_id}:{step_id}"
+    signed_token = signer.sign(token_payload)
+    
+    base_url = getattr(django_settings, 'BACKEND_BASE_URL', 'http://127.0.0.1:8000').rstrip('/')
+    tracking_endpoint = f"{base_url}/api/v1/clicks/track/"
+    
+    for a_tag in soup.find_all('a', href=True):
+        original_url = a_tag.get('href', '')
+        
+        if not original_url or original_url.startswith(('mailto:', 'tel:')) or tracking_endpoint in original_url:
+            continue
+            
+        encoded_dest = urllib.parse.quote(original_url, safe='')
+        
+        tracking_url = f"{tracking_endpoint}?t={signed_token}&dest={encoded_dest}"
+        a_tag['href'] = tracking_url
+        
+    return str(soup)
+# -----------------------------------
+
+
 @shared_task
 def send_email_step(campaign_lead_id, step_id):
     """
     Dispatches an email through the connected Gmail account (or falls back to mock logging).
     """
+    
     try:
         clead = CampaignLead.objects.select_related('lead', 'campaign').get(id=campaign_lead_id)
         step = SequenceStep.objects.get(id=step_id)
 
+        if clead.lead.global_unsubscribe:
+            logger.info(
+                f"Skipping email send for unsubscribed lead {clead.lead.email}."
+            )
+            clead.status = 'FINISHED'
+            clead.current_step = None
+            clead.next_execution_time = None
+            clead.save(update_fields=['status', 'current_step', 'next_execution_time'])
+            return
+
         if step.channel_type != 'EMAIL':
             _execute_non_email_step(clead, step)
+            return
+
+        if _skip_blocked_domain_lead(clead):
             return
 
         # Atomic guard: claim this send by nullifying next_execution_time.
@@ -411,10 +496,20 @@ def send_email_step(campaign_lead_id, step_id):
 
         subject, body = personalize_email(step.template_subject, step.template_body, clead.lead)
 
+       
+        body = rewrite_email_links(body, campaign_lead_id, step_id)
+        # -------------------------------------------
+
         account = clead.campaign.connected_account
         if account:
             try:
-                message_id = send_gmail(account, clead.lead.email, subject, body)
+                message_id = send_gmail(
+                    account,
+                    clead.lead.email,
+                    subject,
+                    body,
+                    unsubscribe_url=build_unsubscribe_url(clead.lead),
+                )
                 clead.last_sent_message_id = message_id
                 clead.save(update_fields=['last_sent_message_id'])
                 logger.info(f"Gmail SENT to {clead.lead.email} | msg_id={message_id}")
@@ -457,6 +552,17 @@ def process_active_leads_once(now=None):
     processed = 0
     eager_mode = bool(getattr(django_settings, 'CELERY_TASK_ALWAYS_EAGER', False))
     for clead in ready_leads:
+        if clead.lead.global_unsubscribe:
+            logger.info(
+                f"Skipping campaign lead {clead.lead.email} because lead has globally unsubscribed."
+            )
+            clead.status = 'FINISHED'
+            clead.current_step = None
+            clead.next_execution_time = None
+            clead.save(update_fields=['status', 'current_step', 'next_execution_time'])
+            processed += 1
+            continue
+
         lead_processed = False
         for _ in range(20):
             if not clead.current_step:

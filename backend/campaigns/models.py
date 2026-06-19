@@ -38,6 +38,14 @@ class Campaign(TenantModel):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DRAFT')
     settings = models.JSONField(default=dict, blank=True)
     connected_account = models.ForeignKey(ConnectedEmailAccount, on_delete=models.SET_NULL, null=True, blank=True, related_name='campaigns')
+    
+    # Cached counters for performance optimization
+    leads_count = models.IntegerField(default=0, help_text="Total enrolled leads")
+    sent_count = models.IntegerField(default=0, help_text="Leads with sent messages")
+    open_count = models.IntegerField(default=0, help_text="Leads that opened emails")
+    reply_count = models.IntegerField(default=0, help_text="Leads that replied")
+    clicked_count = models.IntegerField(default=0, help_text="Leads that clicked links")
+    bounced_count = models.IntegerField(default=0, help_text="Bounced leads")
 
     def __str__(self):
         return self.name
@@ -69,6 +77,16 @@ class SequenceStep(TenantModel):
     def __str__(self):
         return f"{self.campaign.name} - Step {self.step_order} ({self.channel_type})"
 
+class EmailTemplate(TenantModel):
+    name = models.CharField(max_length=255)
+    subject = models.TextField()
+    body = models.TextField()
+    category = models.CharField(max_length=50, blank=True, default='general')
+    usage_count = models.IntegerField(default=0)
+
+    def __str__(self):
+        return self.name
+
 class CampaignLead(TenantModel):
     STATUS_CHOICES = (
         ('ENROLLED', 'Enrolled'),
@@ -76,6 +94,7 @@ class CampaignLead(TenantModel):
         ('PAUSED', 'Paused'),
         ('REPLIED', 'Replied'),
         ('BOUNCED', 'Bounced'),
+        ('SKIPPED', 'Skipped'),
         ('FINISHED', 'Finished')
     )
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -88,6 +107,9 @@ class CampaignLead(TenantModel):
     last_opened_at = models.DateTimeField(null=True, blank=True)
     last_clicked_at = models.DateTimeField(null=True, blank=True)
     last_replied_at = models.DateTimeField(null=True, blank=True)
+    bounce_type = models.CharField(max_length=32, null=True, blank=True)
+    bounce_code = models.CharField(max_length=64, null=True, blank=True)
+    bounce_reason = models.TextField(null=True, blank=True)
 
     class Meta:
         unique_together = ('campaign', 'lead')
