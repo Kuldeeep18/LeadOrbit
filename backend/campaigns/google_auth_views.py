@@ -8,11 +8,11 @@ Architecture notes:
   base model and explicit org assignment, since the callback request is
   unauthenticated (Google redirect).
 """
-import json
 import logging
 import requests
 from urllib.parse import urlencode, urlparse
 
+from django.core import signing
 from django.conf import settings
 from django.shortcuts import redirect
 from django.utils import timezone
@@ -27,6 +27,9 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from .models import ConnectedEmailAccount
 
 logger = logging.getLogger(__name__)
+
+GOOGLE_OAUTH_STATE_SALT = 'leadorbit-google-oauth-state'
+GOOGLE_OAUTH_STATE_MAX_AGE_SECONDS = 10 * 60
 
 
 def _is_local_host(hostname: str) -> bool:
@@ -103,11 +106,11 @@ class GoogleOAuthLoginView(APIView):
 
         # Encode user identity in state so callback can link to correct user
         frontend_origin = _sanitize_frontend_base(request, request.GET.get('frontend_origin', ''))
-        state_data = json.dumps({
+        state_data = signing.dumps({
             'user_id': str(user.id),
             'org_id': str(user.organization_id),
             'frontend_origin': frontend_origin,
-        })
+        }, salt=GOOGLE_OAUTH_STATE_SALT)
 
         params = {
             'client_id': settings.GOOGLE_CLIENT_ID,
@@ -139,9 +142,13 @@ class GoogleOAuthCallbackView(APIView):
         frontend_origin = ''
         if state_raw:
             try:
-                state_data = json.loads(state_raw)
+                state_data = signing.loads(
+                    state_raw,
+                    salt=GOOGLE_OAUTH_STATE_SALT,
+                    max_age=GOOGLE_OAUTH_STATE_MAX_AGE_SECONDS,
+                )
                 frontend_origin = _sanitize_frontend_base(request, state_data.get('frontend_origin', ''))
-            except (json.JSONDecodeError, TypeError):
+            except (signing.BadSignature, signing.SignatureExpired, TypeError):
                 frontend_origin = ''
 
         oauth_error = request.GET.get('error')
@@ -175,7 +182,11 @@ class GoogleOAuthCallbackView(APIView):
 
         if state_raw:
             try:
-                state_data = json.loads(state_raw)
+                state_data = signing.loads(
+                    state_raw,
+                    salt=GOOGLE_OAUTH_STATE_SALT,
+                    max_age=GOOGLE_OAUTH_STATE_MAX_AGE_SECONDS,
+                )
                 user_id = state_data.get('user_id')
                 org_id = state_data.get('org_id')
                 frontend_origin = _sanitize_frontend_base(request, state_data.get('frontend_origin', ''))
@@ -188,7 +199,7 @@ class GoogleOAuthCallbackView(APIView):
                     logger.info(f"[OAuth Callback] Resolved user={user.email}, org={org.name}")
                 except (User.DoesNotExist, Organization.DoesNotExist) as e:
                     logger.warning(f"[OAuth Callback] Could not find user/org from state: {e}")
-            except (json.JSONDecodeError, KeyError, TypeError) as e:
+            except (signing.BadSignature, signing.SignatureExpired, KeyError, TypeError) as e:
                 logger.warning(f"[OAuth Callback] Failed to parse state parameter: {e}")
 
         if not user or not org:
