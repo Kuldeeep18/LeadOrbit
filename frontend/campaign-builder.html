@@ -1611,8 +1611,16 @@ ${rows || `
 
             document.getElementById('editor-content').innerHTML = `
                 <div class="p-3">
-                    <h6 class="fw-bold mb-2">Lead targeting</h6>
-                    <p class="text-muted small mb-3">Choose leads to enroll before launching.</p>
+                    <div class="d-flex flex-wrap align-items-start justify-content-between gap-3 mb-3">
+                        <div>
+                            <h6 class="fw-bold mb-2">Lead targeting</h6>
+                            <p class="text-muted small mb-0">Choose leads to enroll before launching.</p>
+                        </div>
+                        <a href="/leads.html" class="btn btn-primary btn-sm d-inline-flex align-items-center gap-2">
+                            <i class="bi bi-upload" aria-hidden="true"></i>
+                            <span>Import Leads</span>
+                        </a>
+                    </div>
                     <div class="small text-muted">
                         Total leads: <b>${availableLeads.length}</b><br>
                         Selected leads: <b>${selectedLeadIds.size}</b>
@@ -2639,4 +2647,3 @@ document.getElementById('setting-daily-limit').value =
 </body>
 
 </html>
-
