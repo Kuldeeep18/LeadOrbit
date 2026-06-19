@@ -44,7 +44,7 @@
                     </a>
                 </li>
                 <li class="nav-item mb-2">
-                    <a href="/campaigns.html" class="nav-link d-flex align-items-center" aria-current="page">
+                    <a href="/campaigns.html" class="nav-link d-flex align-items-center">
                         <i class="bi bi-megaphone me-2" aria-hidden="true"></i> Campaigns
                     </a>
                 </li>
@@ -66,6 +66,7 @@
 
         <main class="main-area">
             <header class="top-header p-3">
+     
                 <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
                     <button id="hamburger-btn" class="btn d-lg-none p-1" aria-label="Toggle menu">
                         <i class="bi bi-list fs-4" aria-hidden="true"></i>
@@ -88,13 +89,18 @@
                     </div>
                 </div>
             </header>
-            <!-- Breadcrumb Navigation -->
-<nav aria-label="breadcrumb" class="container mt-3">
-    <ol class="breadcrumb">
-        <li class="breadcrumb-item"><a href="/dashboard.html">Home</a></li>
-        <li class="breadcrumb-item active" aria-current="page">Campaigns</li>
-    </ol>
-</nav>
+            
+            <nav aria-label="breadcrumb" class="mt-2 px-3">
+                <ol class="breadcrumb small">
+                    <li class="breadcrumb-item">
+                        <a href="dashboard.html">Dashboard</a>
+                    </li>
+                    <li class="breadcrumb-item active" aria-current="page">
+                        Campaigns
+                    </li>
+                </ol>
+            </nav> 
+
             <section class="content-wrap">
                 <div class="overview-grid">
                     <div class="overview-card">
@@ -137,6 +143,29 @@
         </main>
     </div>
 
+    <div class="modal fade" id="deleteCampaignModal" tabindex="-1" aria-labelledby="deleteCampaignModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header border-0">
+                    <h5 class="modal-title text-danger" id="deleteCampaignModalLabel">
+                        <i class="bi bi-trash me-2" aria-hidden="true"></i>Delete Campaign
+                    </h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body pt-0">
+                    <p class="mb-2">Are you sure you want to delete <strong id="delete-campaign-name">this campaign</strong>?</p>
+                    <p class="text-muted mb-0">This action cannot be undone. The campaign and its related data will be removed.</p>
+                </div>
+                <div class="modal-footer border-0 pt-0">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-danger" id="confirm-delete-campaign-btn">
+                        <i class="bi bi-trash me-1" aria-hidden="true"></i>Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script type="module" src="./main.js"></script>
     <script type="module">
         import { fetchWithAuth } from './api.js';
@@ -163,6 +192,8 @@
         let allCampaigns = [];
         let activeFilter = 'all';
         let searchQuery = '';
+        let deleteCampaignId = null;
+        let deleteCampaignName = '';
 
         const escapeHtml = (value) => String(value ?? '')
             .replaceAll('&', '&amp;')
@@ -340,6 +371,11 @@
                                        <i class="bi bi-pencil me-1" aria-hidden="true"></i> Edit
                                     </a>
                                     ${actionButton}
+                                    <button class="btn btn-sm btn-outline-danger flex-grow-1"
+                                        data-delete-id="${campaign.id}"
+                                        data-delete-name="${escapeHtml(campaign.name || 'Untitled campaign')}">
+                                        <i class="bi bi-trash me-1" aria-hidden="true"></i> Delete
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -377,6 +413,23 @@
                     }
                 });
             });
+
+            grid.querySelectorAll('[data-delete-id]').forEach(button => {
+                button.addEventListener('click', () => {
+                    deleteCampaignId = button.dataset.deleteId;
+                    deleteCampaignName = button.dataset.deleteName || 'this campaign';
+
+                    const nameEl = document.getElementById('delete-campaign-name');
+                    if (nameEl) {
+                        nameEl.textContent = deleteCampaignName;
+                    }
+
+                    const modalEl = document.getElementById('deleteCampaignModal');
+                    if (modalEl && window.bootstrap) {
+                        bootstrap.Modal.getOrCreateInstance(modalEl).show();
+                    }
+                });
+            });
         }
 
         function renderApp() {
@@ -393,6 +446,46 @@
             renderApp();
         }
 
+        async function confirmDeleteCampaign() {
+            if (!deleteCampaignId) return;
+
+            const confirmButton = document.getElementById('confirm-delete-campaign-btn');
+            const modalEl = document.getElementById('deleteCampaignModal');
+            const originalLabel = confirmButton ? confirmButton.innerHTML : '';
+
+            if (confirmButton) {
+                confirmButton.disabled = true;
+                confirmButton.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Deleting';
+            }
+
+            try {
+                const res = await fetchWithAuth(`/campaigns/${deleteCampaignId}/`, {
+                    method: 'DELETE',
+                });
+
+                if (!res.ok) {
+                    throw new Error('Failed to delete campaign.');
+                }
+
+                allCampaigns = allCampaigns.filter(campaign => String(campaign.id) !== String(deleteCampaignId));
+
+                if (modalEl && window.bootstrap) {
+                    bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+                }
+
+                deleteCampaignId = null;
+                deleteCampaignName = '';
+                renderApp();
+            } catch (error) {
+                alert(error.message || 'Could not delete campaign.');
+            } finally {
+                if (confirmButton) {
+                    confirmButton.disabled = false;
+                    confirmButton.innerHTML = originalLabel;
+                }
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', async () => {
             document.querySelectorAll('.filter-chip').forEach(button => {
                 button.addEventListener('click', () => {
@@ -406,6 +499,20 @@
                 searchQuery = searchInput.value || '';
                 renderCampaignGrid();
             });
+
+            const deleteModalEl = document.getElementById('deleteCampaignModal');
+            const confirmDeleteButton = document.getElementById('confirm-delete-campaign-btn');
+
+            if (deleteModalEl) {
+                deleteModalEl.addEventListener('hidden.bs.modal', () => {
+                    deleteCampaignId = null;
+                    deleteCampaignName = '';
+                });
+            }
+
+            if (confirmDeleteButton) {
+                confirmDeleteButton.addEventListener('click', confirmDeleteCampaign);
+            }
 
             try {
                 await loadCampaigns();
