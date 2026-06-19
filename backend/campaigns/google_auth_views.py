@@ -11,13 +11,14 @@ Architecture notes:
 import logging
 import requests
 from urllib.parse import urlencode, urlparse
+from datetime import timedelta
 
 from django.core import signing
 from django.conf import settings
+from django.db import transaction
 from django.shortcuts import redirect
 from django.utils import timezone
 from django.db.models import Q
-from datetime import timedelta
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
@@ -98,6 +99,10 @@ class CustomMailboxAccountSerializer(serializers.Serializer):
         if attrs.get('smtp_use_ssl') and attrs.get('smtp_use_tls'):
             raise serializers.ValidationError(
                 {'smtp_use_tls': 'Choose either SMTP SSL or STARTTLS, not both.'}
+            )
+        if not attrs.get('smtp_use_ssl') and not attrs.get('smtp_use_tls'):
+            raise serializers.ValidationError(
+                {'smtp_use_tls': 'Enable SMTP SSL or STARTTLS to protect credentials in transit.'}
             )
 
         email_address = attrs.get('email_address')
@@ -452,41 +457,29 @@ class ConnectedAccountsListView(APIView):
         serializer.is_valid(raise_exception=True)
         payload = serializer.validated_data
 
-        account = (
-            ConnectedEmailAccount._default_manager
-            .filter(
-                organization=org,
-                connected_by=request.user,
-                provider='CUSTOM',
-                email_address__iexact=payload['email_address'],
-            )
-            .first()
-        )
-        created = account is None
-
-        if account is None:
-            account = ConnectedEmailAccount(
+        with transaction.atomic():
+            account, created = ConnectedEmailAccount._default_manager.update_or_create(
                 organization=org,
                 connected_by=request.user,
                 provider='CUSTOM',
                 email_address=payload['email_address'],
+                defaults={
+                    'access_token': '',
+                    'refresh_token': None,
+                    'token_expiry': None,
+                    'smtp_host': payload['smtp_host'].strip(),
+                    'smtp_port': payload['smtp_port'],
+                    'smtp_username': payload['smtp_username'],
+                    'smtp_password': payload['smtp_password'],
+                    'smtp_use_tls': payload.get('smtp_use_tls', True),
+                    'smtp_use_ssl': payload.get('smtp_use_ssl', False),
+                    'imap_host': payload['imap_host'].strip(),
+                    'imap_port': payload['imap_port'],
+                    'imap_username': payload['imap_username'],
+                    'imap_password': payload['imap_password'],
+                    'imap_use_ssl': payload.get('imap_use_ssl', True),
+                },
             )
-
-        account.access_token = ''
-        account.refresh_token = None
-        account.token_expiry = None
-        account.smtp_host = payload['smtp_host'].strip()
-        account.smtp_port = payload['smtp_port']
-        account.smtp_username = payload['smtp_username']
-        account.smtp_password = payload['smtp_password']
-        account.smtp_use_tls = payload.get('smtp_use_tls', True)
-        account.smtp_use_ssl = payload.get('smtp_use_ssl', False)
-        account.imap_host = payload['imap_host'].strip()
-        account.imap_port = payload['imap_port']
-        account.imap_username = payload['imap_username']
-        account.imap_password = payload['imap_password']
-        account.imap_use_ssl = payload.get('imap_use_ssl', True)
-        account.save()
 
         return Response(
             _serialize_connected_account(account),

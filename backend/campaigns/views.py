@@ -417,7 +417,7 @@ class WebhookView(APIView):
         if event_type and lead_email:
             try:
                 tracked_statuses = ['ACTIVE', 'ENROLLED']
-                if event_type in {'bounce', 'reply'}:
+                if event_type in {'bounce', 'reply'} and message_id:
                     tracked_statuses.append('FINISHED')
 
                 # Find active campaign lead matching this email

@@ -832,6 +832,7 @@ def check_imap_bounces():
             message_id = candidate.get('message_id')
             failed_recipients = candidate.get('failed_recipients') or []
 
+            processed = False
             try:
                 if not failed_recipients:
                     logger.warning(
@@ -843,7 +844,13 @@ def check_imap_bounces():
                         failed_recipients,
                         now=timezone.now(),
                     )
-            finally:
+                processed = True
+            except Exception as exc:
+                logger.error(
+                    f"Failed processing bounce email {message_id} for {account.email_address}: {exc}"
+                )
+
+            if processed:
                 try:
                     if account.provider == 'GOOGLE':
                         mark_gmail_message_as_read(account, message_id)

@@ -23,6 +23,7 @@ BOUNCE_FROM_KEYWORDS = ('mailer-daemon', 'postmaster')
 
 
 def _smtp_login_parts(account):
+    """Return the SMTP username/password pair for a connected mailbox."""
     return (
         (account.smtp_username or account.email_address or '').strip(),
         account.smtp_password or '',
@@ -30,6 +31,7 @@ def _smtp_login_parts(account):
 
 
 def _imap_login_parts(account):
+    """Return the IMAP username/password pair for a connected mailbox."""
     return (
         (account.imap_username or account.email_address or '').strip(),
         account.imap_password or '',
@@ -37,6 +39,7 @@ def _imap_login_parts(account):
 
 
 def _connect_smtp(account):
+    """Open and authenticate an SMTP client using the account settings."""
     if account.smtp_use_ssl:
         client = smtplib.SMTP_SSL(account.smtp_host, account.smtp_port, timeout=20)
     else:
@@ -91,6 +94,7 @@ def send_smtp_email(account, to_email, subject, body_html, unsubscribe_url=None)
 
 
 def _connect_imap(account):
+    """Open and authenticate an IMAP client using the account settings."""
     if account.imap_use_ssl:
         client = imaplib.IMAP4_SSL(account.imap_host, account.imap_port)
     else:
@@ -102,6 +106,7 @@ def _connect_imap(account):
 
 
 def _looks_like_bounce(message):
+    """Heuristically identify common bounce messages from subject or sender."""
     subject = str(message.get('Subject', '') or '').lower()
     from_value = str(message.get('From', '') or '').lower()
     return any(keyword in subject for keyword in BOUNCE_SUBJECT_KEYWORDS) or any(
@@ -110,6 +115,7 @@ def _looks_like_bounce(message):
 
 
 def _extract_raw_bytes(fetch_data):
+    """Pull the RFC822 byte payload out of an IMAP fetch response."""
     for item in fetch_data or []:
         if isinstance(item, tuple) and len(item) > 1 and isinstance(item[1], bytes):
             return item[1]
@@ -137,24 +143,28 @@ def find_imap_bounce_candidates(account, max_results=25):
             if status != 'OK':
                 continue
 
-            raw_bytes = _extract_raw_bytes(fetch_data)
-            if not raw_bytes:
-                continue
+            try:
+                raw_bytes = _extract_raw_bytes(fetch_data)
+                if not raw_bytes:
+                    continue
 
-            parsed = BytesParser(policy=policy.default).parsebytes(raw_bytes)
-            if not _looks_like_bounce(parsed):
-                continue
+                parsed = BytesParser(policy=policy.default).parsebytes(raw_bytes)
+                if not _looks_like_bounce(parsed):
+                    continue
 
-            candidates.append(
-                {
-                    'message_id': message_id,
-                    'subject': str(parsed.get('Subject', '') or ''),
-                    'failed_recipients': _extract_failed_recipients(
-                        parsed,
-                        account_email=account.email_address,
-                    ),
-                }
-            )
+                candidates.append(
+                    {
+                        'message_id': message_id,
+                        'subject': str(parsed.get('Subject', '') or ''),
+                        'failed_recipients': _extract_failed_recipients(
+                            parsed,
+                            account_email=account.email_address,
+                        ),
+                    }
+                )
+            except Exception as exc:
+                logger.warning(f"Skipping IMAP bounce candidate {message_id}: {exc}")
+                continue
 
         return candidates
     finally:

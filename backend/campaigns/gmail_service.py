@@ -84,6 +84,7 @@ def _build_service(account):
 
 
 def _decode_gmail_raw_message(raw_message):
+    """Decode a Gmail API raw message payload into an email.message object."""
     if not raw_message:
         return None
 
@@ -93,6 +94,7 @@ def _decode_gmail_raw_message(raw_message):
 
 
 def _extract_text_from_message(message):
+    """Collect relevant text content from a parsed MIME message."""
     if message is None:
         return ''
 
@@ -120,6 +122,7 @@ def _extract_text_from_message(message):
 
 
 def _normalize_email_list(values, account_email=None):
+    """Normalize parsed addresses and drop duplicates plus sender/bounce aliases."""
     ignored = {(account_email or '').strip().lower(), 'mailer-daemon', 'postmaster'}
     normalized = []
     seen = set()
@@ -135,6 +138,7 @@ def _normalize_email_list(values, account_email=None):
 
 
 def _extract_failed_recipients(message, account_email=None):
+    """Extract intended failed-recipient addresses from a bounce message."""
     if message is None:
         return []
 
@@ -149,8 +153,12 @@ def _extract_failed_recipients(message, account_email=None):
     if matches:
         return _normalize_email_list(matches, account_email=account_email)
 
-    fallback_emails = EMAIL_REGEX.findall(combined_text)
-    return _normalize_email_list(fallback_emails, account_email=account_email)
+    fallback_emails = _normalize_email_list(
+        EMAIL_REGEX.findall(combined_text),
+        account_email=account_email,
+    )
+    # Fail closed when free-text scanning finds multiple candidates.
+    return fallback_emails if len(fallback_emails) == 1 else []
 
 
 def build_unsubscribe_url(lead):
@@ -258,22 +266,26 @@ def find_gmail_bounce_candidates(account, max_results=25):
         if not message_id:
             continue
 
-        raw_message = service.users().messages().get(
-            userId='me',
-            id=message_id,
-            format='raw',
-        ).execute()
-        parsed = _decode_gmail_raw_message(raw_message.get('raw'))
-        candidates.append(
-            {
-                'message_id': message_id,
-                'subject': parsed.get('Subject', '') if parsed else '',
-                'failed_recipients': _extract_failed_recipients(
-                    parsed,
-                    account_email=account.email_address,
-                ),
-            }
-        )
+        try:
+            raw_message = service.users().messages().get(
+                userId='me',
+                id=message_id,
+                format='raw',
+            ).execute()
+            parsed = _decode_gmail_raw_message(raw_message.get('raw'))
+            candidates.append(
+                {
+                    'message_id': message_id,
+                    'subject': parsed.get('Subject', '') if parsed else '',
+                    'failed_recipients': _extract_failed_recipients(
+                        parsed,
+                        account_email=account.email_address,
+                    ),
+                }
+            )
+        except Exception as exc:
+            logger.warning(f"Skipping Gmail bounce candidate {message_id}: {exc}")
+            continue
 
     return candidates
 
