@@ -15,7 +15,7 @@ def _make_user(org, email='user@example.com', password='StrongPass123!'):
         email=email,
         password=password,
         organization=org,
-        role='ADMIN',
+        role=User.ROLE_ADMIN,
     )
 
 
@@ -98,13 +98,25 @@ class LeadIsolationAPITests(APITestCase):
             email='orga@example.com',
             password='StrongPass123!',
             organization=self.org_a,
-            role='ADMIN',
+            role=User.ROLE_ADMIN,
         )
         self.user_b = User.objects.create_user(
             email='orgb@example.com',
             password='StrongPass123!',
             organization=self.org_b,
-            role='ADMIN',
+            role=User.ROLE_ADMIN,
+        )
+        self.member_a = User.objects.create_user(
+            email='member-a@example.com',
+            password='StrongPass123!',
+            organization=self.org_a,
+            role=User.ROLE_MEMBER,
+        )
+        self.manager_a = User.objects.create_user(
+            email='manager-a@example.com',
+            password='StrongPass123!',
+            organization=self.org_a,
+            role=User.ROLE_MANAGER,
         )
 
         self.lead_a = Lead.objects.create(
@@ -150,6 +162,43 @@ class LeadIsolationAPITests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(Lead.objects.filter(id=self.lead_a.id).exists())
+        self.assertTrue(Lead.objects.filter(id=self.lead_b.id).exists())
+
+    def test_member_can_list_but_cannot_create_leads(self):
+        self.client.force_authenticate(self.member_a)
+
+        list_response = self.client.get('/api/v1/leads/')
+        create_response = self.client.post(
+            '/api/v1/leads/',
+            {'email': 'blocked-member-create@example.com'},
+            format='json',
+        )
+
+        self.assertEqual(list_response.status_code, status.HTTP_200_OK)
+        self.assertEqual(create_response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertFalse(Lead.objects.filter(email='blocked-member-create@example.com').exists())
+
+    def test_member_cannot_delete_all_leads(self):
+        self.client.force_authenticate(self.member_a)
+
+        response = self.client.delete('/api/v1/leads/delete-all/')
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(Lead.objects.filter(id=self.lead_a.id).exists())
+
+    def test_manager_can_create_and_delete_organization_leads(self):
+        self.client.force_authenticate(self.manager_a)
+
+        create_response = self.client.post(
+            '/api/v1/leads/',
+            {'email': 'manager-created@example.com'},
+            format='json',
+        )
+        delete_response = self.client.delete('/api/v1/leads/delete-all/')
+
+        self.assertEqual(create_response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(delete_response.status_code, status.HTTP_200_OK)
+        self.assertFalse(Lead.objects.filter(organization=self.org_a).exists())
         self.assertTrue(Lead.objects.filter(id=self.lead_b.id).exists())
 
     def test_blocked_domain_create_normalizes_domain_for_current_organization(self):
