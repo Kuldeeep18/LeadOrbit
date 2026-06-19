@@ -1165,6 +1165,67 @@
         </div>
     </div>
 
+    <!-- Campaign Settings Modal -->
+<div class="modal fade" id="campaignSettingsModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <h5 class="modal-title">Campaign Settings</h5>
+        <button type="button"
+                class="btn-close"
+                data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input"
+                 type="checkbox"
+                 id="setting-stop-reply"
+                 checked>
+          <label class="form-check-label">
+            Stop on Reply
+          </label>
+        </div>
+
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input"
+                 type="checkbox"
+                 id="setting-track-opens"
+                 checked>
+          <label class="form-check-label">
+            Track Email Opens
+          </label>
+        </div>
+
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input"
+                 type="checkbox"
+                 id="setting-track-clicks"
+                 checked>
+          <label class="form-check-label">
+            Track Link Clicks
+          </label>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">
+            Daily Sending Limit
+          </label>
+
+          <input type="number"
+                 class="form-control"
+                 id="setting-daily-limit"
+                 value="100">
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+</div>
+
     <script type="module" src="./main.js"></script>
     <!-- Campaign Settings Modal -->
 <div class="modal fade" id="campaignSettingsModal" tabindex="-1">

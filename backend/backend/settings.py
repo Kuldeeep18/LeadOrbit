@@ -160,6 +160,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'campaigns.tasks.poll_gmail_for_replies',
         'schedule': 300.0,
     },
+    'send-campaign-reports-daily': {
+        'task': 'campaigns.tasks.send_campaign_reports',
+        'schedule': 86400.0, # Every 24 hours
+    },
 }
 
 # SimpleJWT Configuration
