@@ -2,8 +2,9 @@
 <html lang="en">
 
 <head>
-        <!-- SEO Meta Tags -->
-    <title>LeadOrbit - Settings</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings - LeadOrbit</title>
     <meta name="description" content="LeadOrbit - Settings. Configure your account, integrations, API keys, and preferences.">
     <meta name="keywords" content="settings, account settings, integrations, API keys">
     <meta name="author" content="LeadOrbit Team">
@@ -15,10 +16,6 @@
     <meta name="twitter:title" content="LeadOrbit - Settings">
     <meta name="twitter:description" content="LeadOrbit settings - Manage account, integrations, and preferences.">
     <link rel="icon" type="image/png" href="/favicon.png">
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="./theme-boot.js"></script>
-    <title>Settings - LeadOrbit</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700&display=swap" rel="stylesheet">
@@ -54,7 +51,7 @@
                     </a>
                 </li>
                 <li class="nav-item mb-2">
-                   <a href="/settings.html" class="nav-link d-flex align-items-center" aria-current="page">
+                   <a href="/settings.html" class="nav-link d-flex align-items-center">
                         <i class="bi bi-gear me-2" aria-hidden="true"></i> Settings
                     </a>
                 </li>
@@ -77,18 +74,23 @@
                     <button id="logout-btn" class="btn btn-sm btn-logout" aria-label="Log out">Logout</button>
                 </div>
             </header>
-      <!-- Breadcrumb Navigation -->
-<nav aria-label="breadcrumb" class="container mt-3">
-    <ol class="breadcrumb">
-        <li class="breadcrumb-item"><a href="/dashboard.html">Home</a></li>
-        <li class="breadcrumb-item active" aria-current="page">Settings</li>
-    </ol>
-</nav>
+
+            <nav aria-label="breadcrumb" class="mt-2 px-3">
+                <ol class="breadcrumb small">
+                    <li class="breadcrumb-item">
+                        <a href="dashboard.html">Dashboard</a>
+                    </li>
+                    <li class="breadcrumb-item active" aria-current="page">
+                        Settings
+                    </li>
+                </ol>
+            </nav>
+
             <section class="content-wrap">
                 <div class="row g-4">
                     <div class="col-lg-6">
                         <div class="glass-card p-4">
-                            <div class="section-title"><i class="bi bi-person-circle me-2 text-primary" aria-hidden="true" ></i>Profile</div>
+                            <div class="section-title"><i class="bi bi-person-circle me-2 text-primary" aria-hidden="true"></i>Profile</div>
                             <div class="mb-3">
                                 <label class="form-label small text-muted fw-semibold">Email</label>
                                 <input type="email" class="form-control" id="profile-email" disabled>
@@ -194,87 +196,79 @@
 
         const apiBaseUrl = (localStorage.getItem('api_base_url') || '').replace(/\/$/, '');
         const isLocalhost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
-        // Bootstrap Modal Helpers
-function showConfirmModal(title, message, confirmLabel, onConfirm) {
-    const modalHtml = `
-        <div class="modal fade" id="dynamicConfirmModal" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">${title}</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <p>${message}</p>
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn btn-danger" id="dynamicConfirmBtn">${confirmLabel}</button>
+        
+        function showConfirmModal(title, message, confirmLabel, onConfirm) {
+            const modalHtml = `
+                <div class="modal fade" id="dynamicConfirmModal" tabindex="-1">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">${title}</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <p>${message}</p>
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                <button type="button" class="btn btn-danger" id="dynamicConfirmBtn">${confirmLabel}</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </div>
-    `;
-    
-    const existingModal = document.getElementById('dynamicConfirmModal');
-    if (existingModal) existingModal.remove();
-    
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-    const modal = new bootstrap.Modal(document.getElementById('dynamicConfirmModal'));
-    
-    document.getElementById('dynamicConfirmBtn').onclick = () => {
-        modal.hide();
-        if (onConfirm) onConfirm();
-    };
-    modal.show();
-}
+            `;
+            const existingModal = document.getElementById('dynamicConfirmModal');
+            if (existingModal) existingModal.remove();
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+            const modal = new bootstrap.Modal(document.getElementById('dynamicConfirmModal'));
+            document.getElementById('dynamicConfirmBtn').onclick = () => {
+                modal.hide();
+                if (onConfirm) onConfirm();
+            };
+            modal.show();
+        }
 
-function showPromptModal(title, message, placeholder, onConfirm) {
-    const modalHtml = `
-        <div class="modal fade" id="dynamicPromptModal" tabindex="-1">
-            <div class="modal-dialog">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h5 class="modal-title">${title}</h5>
-                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                    </div>
-                    <div class="modal-body">
-                        <p>${message}</p>
-                        <input type="text" class="form-control" id="dynamicPromptInput" placeholder="${placeholder}">
-                    </div>
-                    <div class="modal-footer">
-                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                        <button type="button" class="btn btn-danger" id="dynamicPromptConfirmBtn">Confirm</button>
+        function showPromptModal(title, message, placeholder, onConfirm) {
+            const modalHtml = `
+                <div class="modal fade" id="dynamicPromptModal" tabindex="-1">
+                    <div class="modal-dialog">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title">${title}</h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            </div>
+                            <div class="modal-body">
+                                <p>${message}</p>
+                                <input type="text" class="form-control" id="dynamicPromptInput" placeholder="${placeholder}">
+                            </div>
+                            <div class="modal-footer">
+                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                <button type="button" class="btn btn-danger" id="dynamicPromptConfirmBtn">Confirm</button>
+                            </div>
+                        </div>
                     </div>
                 </div>
-            </div>
-        </div>
-    `;
-    
-    const existingModal = document.getElementById('dynamicPromptModal');
-    if (existingModal) existingModal.remove();
-    
-    document.body.insertAdjacentHTML('beforeend', modalHtml);
-    const modal = new bootstrap.Modal(document.getElementById('dynamicPromptModal'));
-    
-    document.getElementById('dynamicPromptConfirmBtn').onclick = () => {
-        const inputValue = document.getElementById('dynamicPromptInput').value;
-        modal.hide();
-        if (onConfirm) onConfirm(inputValue);
-    };
-    modal.show();
-}
+            `;
+            const existingModal = document.getElementById('dynamicPromptModal');
+            if (existingModal) existingModal.remove();
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+            const modal = new bootstrap.Modal(document.getElementById('dynamicPromptModal'));
+            document.getElementById('dynamicPromptConfirmBtn').onclick = () => {
+                const inputValue = document.getElementById('dynamicPromptInput').value;
+                modal.hide();
+                if (onConfirm) onConfirm(inputValue);
+            };
+            modal.show();
+        }
+        
         const defaultOAuthHost = isLocalhost ? 'http://127.0.0.1:8000' : 'https://leadorbit.onrender.com';
         const oauthHost = apiBaseUrl ? apiBaseUrl.replace(/\/api\/v1$/, '') : defaultOAuthHost;
-
 
         function copyToClipboard(text, button) {
             navigator.clipboard.writeText(text).then(() => {
                 const icon = button.querySelector('i');
-
                 icon.classList.remove('bi-clipboard');
                 icon.classList.add('bi-check');
-
                 setTimeout(() => {
                     icon.classList.remove('bi-check');
                     icon.classList.add('bi-clipboard');
@@ -298,47 +292,35 @@ function showPromptModal(title, message, placeholder, onConfirm) {
                 console.error(e);
             }
 
-
             const copyOrgBtn = document.getElementById('copy-org-id-btn');
-
             copyOrgBtn?.addEventListener('click', () => {
                 const orgId = document.getElementById('org-id').value;
                 copyToClipboard(orgId, copyOrgBtn);
             });
-            
             
             const saveBtn = document.getElementById('save-profile-btn');
             if (saveBtn) {
                 saveBtn.addEventListener('click', async () => {
                     const organization_name = document.getElementById('org-name').value.trim();
                     const new_password = document.getElementById('new-password').value;
-
                     const gemini_api_key = document.getElementById('gemini-api-key').value.trim();
                     const enable_ai_personalization = document.getElementById('enable-ai-personalization').checked;
-
                     const payload = {};
                     if (organization_name) payload.organization_name = organization_name;
                     if (new_password) payload.new_password = new_password;
-
-                    // 1. Run the "Nothing to update" check on the text fields first
                     if (Object.keys(payload).length === 0 && gemini_api_key === '' && enable_ai_personalization === true) {
                         alert('Nothing to update.');
                         return;
                     }
-
-                    // 2. Then safely attach the Gemini fields right before sending the PATCH request
                     payload.gemini_api_key = gemini_api_key || null;
                     payload.enable_ai_personalization = enable_ai_personalization;
-
                     saveBtn.disabled = true;
                     saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Saving...';
-
                     try {
                         const res = await fetchWithAuth('/auth/me/', {
                             method: 'PATCH',
                             body: JSON.stringify(payload),
                         });
-
                         if (!res.ok) {
                             const err = await res.json().catch(() => ({}));
                             const msg = err.new_password?.[0] || err.organization_name?.[0] || err.detail || 'Failed to save settings.';
@@ -364,47 +346,25 @@ function showPromptModal(title, message, placeholder, onConfirm) {
             if (deleteLeadsBtn) {
                 deleteLeadsBtn.addEventListener('click', async () => {
                     showConfirmModal('Delete All Leads', 'Delete every lead in this organization? This cannot be undone.', 'Yes, Delete', () => {
-    // Proceed with deletion
-    deleteLeadsBtn.disabled = true;
-    deleteLeadsBtn.textContent = 'Deleting...';
-    
-    (async () => {
-        try {
-            const res = await fetchWithAuth('/leads/delete-all/', { method: 'DELETE' });
-            const data = await res.json().catch(() => ({}));
-            if (!res.ok) {
-                alert(data.detail || data.error || 'Could not delete leads right now.');
-                return;
-            }
-            alert(data.message || 'All leads were deleted.');
-        } catch (e) {
-            alert('Could not delete leads right now.');
-        } finally {
-            deleteLeadsBtn.disabled = false;
-            deleteLeadsBtn.textContent = 'Delete All Leads';
-        }
-    })();
-});
-return;
-
-                    deleteLeadsBtn.disabled = true;
-                    deleteLeadsBtn.textContent = 'Deleting...';
-
-                    try {
-                        const res = await fetchWithAuth('/leads/delete-all/', { method: 'DELETE' });
-                        const data = await res.json().catch(() => ({}));
-                        if (!res.ok) {
-                            alert(data.detail || data.error || 'Could not delete leads right now.');
-                            return;
-                        }
-
-                        alert(data.message || 'All leads were deleted.');
-                    } catch (e) {
-                        alert('Could not delete leads right now.');
-                    } finally {
-                        deleteLeadsBtn.disabled = false;
-                        deleteLeadsBtn.textContent = 'Delete All Leads';
-                    }
+                        deleteLeadsBtn.disabled = true;
+                        deleteLeadsBtn.textContent = 'Deleting...';
+                        (async () => {
+                            try {
+                                const res = await fetchWithAuth('/leads/delete-all/', { method: 'DELETE' });
+                                const data = await res.json().catch(() => ({}));
+                                if (!res.ok) {
+                                    alert(data.detail || data.error || 'Could not delete leads right now.');
+                                    return;
+                                }
+                                alert(data.message || 'All leads were deleted.');
+                            } catch (e) {
+                                alert('Could not delete leads right now.');
+                            } finally {
+                                deleteLeadsBtn.disabled = false;
+                                deleteLeadsBtn.textContent = 'Delete All Leads';
+                            }
+                        })();
+                    });
                 });
             }
 
@@ -413,57 +373,34 @@ return;
                 deleteOrgBtn.addEventListener('click', async () => {
                     const orgName = document.getElementById('org-name').value.trim();
                     showPromptModal('Delete Organization', `Type "${orgName}" to permanently delete this organization.`, `Enter "${orgName}"`, (typedName) => {
-    if (!typedName) return;
-    if (typedName.trim() !== orgName) {
-        alert('Organization name did not match. Nothing was deleted.');
-        return;
-    }
-    
-    showConfirmModal('Confirm Deletion', 'This will permanently delete the organization and sign you out. Continue?', 'Yes, Delete', () => {
-        deleteOrgBtn.disabled = true;
-        deleteOrgBtn.textContent = 'Deleting...';
-        
-        (async () => {
-            try {
-                const res = await fetchWithAuth('/auth/delete-organization/', { method: 'DELETE' });
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok) {
-                    alert(data.detail || data.error || 'Could not delete organization right now.');
-                    return;
-                }
-                clearTokens();
-                alert(data.message || 'Organization deleted. You have been signed out.');
-                window.location.href = '/login.html';
-            } catch (e) {
-                alert('Could not delete organization right now.');
-            } finally {
-                deleteOrgBtn.disabled = false;
-                deleteOrgBtn.textContent = 'Delete Organization';
-            }
-        })();
-    });
-});
-return;
-                    deleteOrgBtn.disabled = true;
-                    deleteOrgBtn.textContent = 'Deleting...';
-
-                    try {
-                        const res = await fetchWithAuth('/auth/delete-organization/', { method: 'DELETE' });
-                        const data = await res.json().catch(() => ({}));
-                        if (!res.ok) {
-                            alert(data.detail || data.error || 'Could not delete organization right now.');
+                        if (!typedName) return;
+                        if (typedName.trim() !== orgName) {
+                            alert('Organization name did not match. Nothing was deleted.');
                             return;
                         }
-
-                        clearTokens();
-                        alert(data.message || 'Organization deleted. You have been signed out.');
-                        window.location.href = '/login.html';
-                    } catch (e) {
-                        alert('Could not delete organization right now.');
-                    } finally {
-                        deleteOrgBtn.disabled = false;
-                        deleteOrgBtn.textContent = 'Delete Organization';
-                    }
+                        showConfirmModal('Confirm Deletion', 'This will permanently delete the organization and sign you out. Continue?', 'Yes, Delete', () => {
+                            deleteOrgBtn.disabled = true;
+                            deleteOrgBtn.textContent = 'Deleting...';
+                            (async () => {
+                                try {
+                                    const res = await fetchWithAuth('/auth/delete-organization/', { method: 'DELETE' });
+                                    const data = await res.json().catch(() => ({}));
+                                    if (!res.ok) {
+                                        alert(data.detail || data.error || 'Could not delete organization right now.');
+                                        return;
+                                    }
+                                    clearTokens();
+                                    alert(data.message || 'Organization deleted. You have been signed out.');
+                                    window.location.href = '/login.html';
+                                } catch (e) {
+                                    alert('Could not delete organization right now.');
+                                } finally {
+                                    deleteOrgBtn.disabled = false;
+                                    deleteOrgBtn.textContent = 'Delete Organization';
+                                }
+                            })();
+                        });
+                    });
                 });
             }
 
@@ -478,7 +415,6 @@ return;
                     google_access_denied: 'Google denied access. If OAuth app is in Testing mode, add this email under OAuth Consent Screen > Test users.',
                     no_code: 'Google did not return an authorization code. Please try again.',
                 };
-
                 if (authStatus === 'error') {
                     alertEl.className = 'alert alert-danger';
                     msgEl.textContent = reasonText[reason] || `Failed to connect Google account. Reason: ${reason}`;
@@ -503,10 +439,7 @@ return;
                         return;
                     }
                     const frontendOrigin = window.location.origin;
-                    window.location.href =
-                        oauthHost +
-                        '/auth/google/login?token=' + encodeURIComponent(token) +
-                        '&frontend_origin=' + encodeURIComponent(frontendOrigin);
+                    window.location.href = oauthHost + '/auth/google/login?token=' + encodeURIComponent(token) + '&frontend_origin=' + encodeURIComponent(frontendOrigin);
                 });
             }
 
@@ -527,7 +460,7 @@ return;
                                         <div class="text-muted" style="font-size:0.75rem;">${account.provider} &middot; Connected</div>
                                     </div>
                                 </div>
-                                <span class="badge bg-success-subtle text-success"><i class="bi bi-check-circle me-1" aria-hidden="true" ></i>Active</span>
+                                <span class="badge bg-success-subtle text-success"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>Active</span>
                             </div>
                         `).join('');
                     }
@@ -539,6 +472,7 @@ return;
             }
         });
     </script>
+    
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 

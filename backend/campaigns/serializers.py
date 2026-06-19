@@ -25,7 +25,7 @@ class SequenceStepSerializer(serializers.ModelSerializer):
 
 class CampaignSerializer(serializers.ModelSerializer):
     steps = serializers.SerializerMethodField()
-    enrolled_count = serializers.SerializerMethodField()
+    enrolled_count = serializers.IntegerField(source='leads_count', read_only=True)
     enrolled_lead_ids = serializers.SerializerMethodField()
     connected_account = serializers.SerializerMethodField()
     connected_account_id = serializers.UUIDField(write_only=True, required=False, allow_null=True)
@@ -40,13 +40,15 @@ class CampaignSerializer(serializers.ModelSerializer):
             'steps',
             'enrolled_count',
             'enrolled_lead_ids',
+            'sent_count',
+            'open_count',
+            'reply_count',
+            'clicked_count',
+            'bounced_count',
             'created_at',
             'connected_account',
             'connected_account_id',
         ]
-
-    def get_enrolled_count(self, obj):
-        return obj.enrolled_leads.count()
 
     def get_steps(self, obj):
         return SequenceStepSerializer(obj.steps.all(), many=True).data

@@ -1,10 +1,166 @@
 
-import { fetchWithAuth, clearTokens } from './api.js';
+import { fetchWithAuth, clearTokens, refreshAccessToken } from './api.js';
 
 const THEME_STORAGE_KEY = 'theme';
+const LEADORBIT_VERSION = 'v1.0.0-beta';
+const LEADORBIT_REPO_URL = 'https://github.com/Kuldeeep18/LeadOrbit';
+
+// ==========================================
+// THEME MANAGEMENT
+// ==========================================
+
+function decodeJwt(token) {
+    try {
+        const payload = token.split('.')[1];
+        return JSON.parse(atob(payload));
+    } catch {
+        return null;
+    }
+}
+
+function getTokenExpiryTime() {
+    const token = localStorage.getItem('access_token');
+    if (!token) return null;
+
+    const decoded = decodeJwt(token);
+    if (!decoded?.exp) return null;
+
+    return decoded.exp * 1000;
+}
+
+
+let sessionWarningTimer = null;
+let sessionLogoutTimer = null;
+
+
+function clearSessionTimers() {
+    if (sessionWarningTimer) {
+        clearTimeout(sessionWarningTimer);
+        sessionWarningTimer = null;
+    }
+
+    if (sessionLogoutTimer) {
+        clearTimeout(sessionLogoutTimer);
+        sessionLogoutTimer = null;
+    }
+}
+
+function showSessionTimeoutModal() {
+    const modalEl = document.getElementById('sessionTimeoutModal');
+
+    if (!modalEl || !window.bootstrap) {
+        console.warn('Session timeout modal not found');
+        return;
+    }
+
+    const modal = bootstrap.Modal.getOrCreateInstance(modalEl);
+
+    const stayLoggedInBtn = document.getElementById('sessionStayLoggedInBtn');
+
+    if (stayLoggedInBtn && !stayLoggedInBtn.dataset.bound) {
+        stayLoggedInBtn.dataset.bound = 'true';
+
+        stayLoggedInBtn.addEventListener('click', async () => {
+            try {
+                await refreshAccessToken();
+
+                document.activeElement?.blur();
+                modal.hide();
+
+                scheduleSessionWarning();
+
+                console.log('Session refreshed successfully');
+            } catch (error) {
+                console.error(error);
+
+                clearTokens();
+                window.location.href = '/login.html';
+            }
+        });
+    }
+
+    modal.show();
+}
+
+
+function injectSessionTimeoutModal() {
+    if (document.getElementById('sessionTimeoutModal')) {
+        return;
+    }
+
+    const modalHTML = `
+        <div class="modal fade" id="sessionTimeoutModal" tabindex="-1" aria-labelledby="sessionTimeoutModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="sessionTimeoutModalLabel">
+                            Session Expiring Soon
+                        </h5>
+                    </div>
+
+                    <div class="modal-body">
+                        Your session will expire in approximately 2 minutes.
+
+                        Would you like to stay logged in?
+                    </div>
+
+                    <div class="modal-footer">
+                        <button type="button"
+                                class="btn btn-secondary"
+                                id="sessionLogoutBtn">
+                            Log Out
+                        </button>
+
+                        <button type="button"
+                                class="btn btn-primary"
+                                id="sessionStayLoggedInBtn">
+                            Stay Logged In
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+}
+
+function scheduleSessionWarning() {
+    const expiryTime = getTokenExpiryTime();
+
+    if (!expiryTime) return;
+
+    clearSessionTimers();
+
+    const now = Date.now();
+    const warningTime = expiryTime - (2 * 60 * 1000);
+
+    const warningDelay = warningTime - now;
+    const logoutDelay = expiryTime - now;
+
+    console.log('Session warning in:', warningDelay);
+    console.log('Auto logout in:', logoutDelay);
+
+    sessionWarningTimer = setTimeout(() => {
+    showSessionTimeoutModal();
+    }, Math.max(0, warningDelay));
+
+    sessionLogoutTimer = setTimeout(() => {
+    clearSessionTimers();
+    clearTokens();
+    window.location.href = '/login.html';
+    }, Math.max(0, logoutDelay));
+}
+
+
 
 export function getTheme() {
-    return localStorage.getItem(THEME_STORAGE_KEY) === 'dark' ? 'dark' : 'light';
+    const savedTheme = localStorage.getItem(THEME_STORAGE_KEY);
+    if (savedTheme === 'dark' || savedTheme === 'light') {
+        return savedTheme;
+    }
+    // Check system preference if no saved theme
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
 }
 
 export function applyTheme(theme) {
@@ -22,76 +178,156 @@ export function setTheme(theme) {
     window.setTimeout(() => {
         document.documentElement.classList.remove('theme-transition');
     }, 300);
+    
+    // Dispatch event for other components to react
+    window.dispatchEvent(new CustomEvent('themeChanged', { detail: { theme: value } }));
+}
+
+export function toggleTheme() {
+    const newTheme = getTheme() === 'dark' ? 'light' : 'dark';
+    setTheme(newTheme);
+    
+    // Update toggle if it exists
+    const themeToggle = document.getElementById('theme-toggle');
+    if (themeToggle) {
+        themeToggle.checked = newTheme === 'dark';
+    }
+    return newTheme;
 }
 
 function initThemeToggle() {
     const themeToggle = document.getElementById('theme-toggle');
     if (!themeToggle) {
+        console.debug('Theme toggle not found on this page');
         return;
     }
 
-    themeToggle.checked = getTheme() === 'dark';
-    themeToggle.addEventListener('change', () => {
-        setTheme(themeToggle.checked ? 'dark' : 'light');
+    // Set initial state from saved or system preference
+    const currentTheme = getTheme();
+    themeToggle.checked = currentTheme === 'dark';
+    applyTheme(currentTheme);
+    
+    // Remove existing listeners by cloning (prevents duplicates)
+    const newToggle = themeToggle.cloneNode(true);
+    themeToggle.parentNode.replaceChild(newToggle, themeToggle);
+    
+    // Add change listener
+    newToggle.addEventListener('change', () => {
+        const newTheme = newToggle.checked ? 'dark' : 'light';
+        setTheme(newTheme);
     });
 }
+
+// Sync theme across multiple tabs
+window.addEventListener('storage', (event) => {
+    if (event.key === THEME_STORAGE_KEY && event.newValue) {
+        const newTheme = event.newValue === 'dark' ? 'dark' : 'light';
+        applyTheme(newTheme);
+        
+        // Update toggle if it exists
+        const themeToggle = document.getElementById('theme-toggle');
+        if (themeToggle) {
+            themeToggle.checked = newTheme === 'dark';
+        }
+    }
+});
+
+// ==========================================
+// PASSWORD VISIBILITY TOGGLE
+// ==========================================
 
 function initPasswordVisibilityToggle() {
-  const toggles = [
-    { inputId: 'floatingPassword', toggleId: 'floatingPasswordToggle' },
-    { inputId: 'password', toggleId: 'passwordToggle' }
-  ];
+    const toggles = [
+        { inputId: 'floatingPassword', toggleId: 'floatingPasswordToggle' },
+        { inputId: 'password', toggleId: 'passwordToggle' }
+    ];
 
-  toggles.forEach(({ inputId, toggleId }) => {
-    const input = document.getElementById(inputId);
-    const toggle = document.getElementById(toggleId);
+    toggles.forEach(({ inputId, toggleId }) => {
+        const input = document.getElementById(inputId);
+        const toggle = document.getElementById(toggleId);
 
-    if (!input || !toggle) {
-      return;
-    }
+        if (!input || !toggle) {
+            return;
+        }
 
-    const updateToggleState = () => {
-      const isPasswordVisible = input.type === 'text';
+        const updateToggleState = () => {
+            const isPasswordVisible = input.type === 'text';
 
-      toggle.innerHTML = isPasswordVisible
-        ? '<i class="bi bi-eye-slash" aria-hidden="true"></i>'
-        : '<i class="bi bi-eye" aria-hidden="true"></i>';
+            toggle.innerHTML = isPasswordVisible
+                ? '<i class="bi bi-eye-slash" aria-hidden="true"></i>'
+                : '<i class="bi bi-eye" aria-hidden="true"></i>';
 
-      toggle.setAttribute(
-        'aria-label',
-        isPasswordVisible ? 'Hide password' : 'Show password'
-      );
+            toggle.setAttribute(
+                'aria-label',
+                isPasswordVisible ? 'Hide password' : 'Show password'
+            );
 
-      toggle.setAttribute('aria-pressed', String(isPasswordVisible));
-    };
+            toggle.setAttribute('aria-pressed', String(isPasswordVisible));
+        };
 
-    updateToggleState();
+        updateToggleState();
 
-    toggle.addEventListener('click', () => {
-      input.type = input.type === 'password' ? 'text' : 'password';
-      updateToggleState();
+        toggle.addEventListener('click', () => {
+            input.type = input.type === 'password' ? 'text' : 'password';
+            updateToggleState();
+        });
     });
-  });
 }
 
+// ==========================================
+// FOOTER ATTRIBUTION
+// ==========================================
+
+function buildProjectFooterMarkup() {
+    return `
+        <div class="project-attribution-footer" id="project-attribution-footer">
+            <span class="project-attribution-version">${LEADORBIT_VERSION}</span>
+            <span class="project-attribution-separator">•</span>
+            <a class="project-attribution-link" href="${LEADORBIT_REPO_URL}" target="_blank" rel="noreferrer noopener">
+                <i class="bi bi-github me-1" aria-hidden="true"></i>GitHub repository
+            </a>
+            <span class="project-attribution-separator">•</span>
+            <span class="project-attribution-note">Made with ❤️ for GSSoC 2026</span>
+        </div>
+    `;
+}
+
+function injectProjectFooter() {
+    const footerMarkup = buildProjectFooterMarkup();
+
+    const sidebarFooter = document.querySelector('.sidebar-footer');
+    if (sidebarFooter && !sidebarFooter.querySelector('#project-attribution-footer')) {
+        sidebarFooter.insertAdjacentHTML('afterbegin', footerMarkup);
+    }
+
+    if (/campaign-builder\.html/i.test(window.location.pathname)) {
+        const editorPanel = document.getElementById('editor-panel');
+        if (editorPanel && !editorPanel.querySelector('#project-attribution-footer')) {
+            editorPanel.insertAdjacentHTML('beforeend', footerMarkup);
+        }
+    }
+}
+
+// Apply theme on load
 applyTheme(getTheme());
 
+// ==========================================
+// ACTIVE NAVIGATION LINK
+// ==========================================
 function setActiveNavLink() {
     const pathname = window.location.pathname;
     const navLinks = document.querySelectorAll('.nav-link');
-    
-    // Skip if no nav links found (e.g., on login/register pages)
+
     if (navLinks.length === 0) return;
-    
-    // Remove active class from all links
-    navLinks.forEach(link => link.classList.remove('active'));
-    
-    // Determine which nav link should be active based on current page
-    let activeHref = '/dashboard.html'; // default
-    
-    // Use regex to match page names more precisely
+
+    navLinks.forEach(link => {
+        link.classList.remove('active');
+        link.removeAttribute('aria-current');
+    });
+
+    let activeHref = '/dashboard.html';
+
     if (/campaign-builder\.html/i.test(pathname)) {
-        // Campaign builder should highlight Campaigns link
         activeHref = '/campaigns.html';
     } else if (/dashboard\.html/i.test(pathname)) {
         activeHref = '/dashboard.html';
@@ -104,21 +340,23 @@ function setActiveNavLink() {
     } else if (/settings\.html/i.test(pathname)) {
         activeHref = '/settings.html';
     }
-    
-    // Find and highlight the matching nav link
+
     const activeLink = document.querySelector(`a.nav-link[href="${activeHref}"]`);
     if (activeLink) {
         activeLink.classList.add('active');
+        activeLink.setAttribute('aria-current', 'page');
     }
 }
 
-// Set active link when page loads
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', setActiveNavLink);
 } else {
-    // DOM is already loaded (for dynamic navigation)
     setActiveNavLink();
 }
+
+// ==========================================
+// APP SHELL INITIALIZATION
+// ==========================================
 
 let appShellInitialized = false;
 
@@ -130,10 +368,28 @@ async function initAppShell() {
 
     initThemeToggle();
     initPasswordVisibilityToggle();
+    injectSessionTimeoutModal();
+
+    document.addEventListener('click', (event) => {
+    if (event.target.id === 'sessionLogoutBtn') {
+        clearSessionTimers();
+        clearTokens();
+
+    const modalEl = document.getElementById('sessionTimeoutModal');
+    if (modalEl && window.bootstrap) {
+        bootstrap.Modal.getOrCreateInstance(modalEl).hide();
+    }
+
+    window.location.href = '/login.html';
+
+    }
+    });
 
     if (window.location.pathname.includes('login.html') || window.location.pathname.includes('register.html')) {
         return;
     }
+
+    injectProjectFooter();
 
     try {
         const res = await fetchWithAuth('/auth/me/');
@@ -168,6 +424,9 @@ async function initAppShell() {
             }
         }
 
+        console.log("Scheduling session warning...");
+        scheduleSessionWarning();
+
     } catch (e) {
         console.error('Error loading user profile:', e);
     }
@@ -176,10 +435,12 @@ async function initAppShell() {
     if (logoutBtn) {
         logoutBtn.addEventListener('click', (e) => {
             e.preventDefault();
+            clearSessionTimers();
             clearTokens();
             window.location.href = '/login.html';
-        });
+    });
     }
+    
     // Responsive sidebar toggle
     const hamburgerBtn = document.getElementById('hamburger-btn');
     const sidebar = document.querySelector('.sidebar');
@@ -205,14 +466,10 @@ if (document.readyState === 'loading') {
 }
 
 // ==========================================
-// KEYBOARD SHORTCUTS IMPLEMENTATION (#67)
+// KEYBOARD SHORTCUTS
 // ==========================================
 
-/**
- * Dynamically injects the Bootstrap shortcuts modal and the footer trigger link into the DOM
- */
 function injectShortcutsModal() {
-    // 1. Inject the Modal at the end of the body if it isn't there already
     if (!document.getElementById('shortcutsHelpModal')) {
         const modalHTML = `
             <div class="modal fade" id="shortcutsHelpModal" tabindex="-1" aria-labelledby="shortcutsHelpModalLabel" aria-hidden="true">
@@ -237,6 +494,7 @@ function injectShortcutsModal() {
                                     <tr><td><kbd>Alt + A</kbd></td><td>Navigate to Analytics</td></tr>
                                     <tr><td><kbd>Alt + S</kbd></td><td>Navigate to Settings</td></tr>
                                     <tr><td><kbd>Alt + N</kbd></td><td>New Campaign Builder</td></tr>
+                                    <tr><td><kbd>Ctrl/Cmd + T</kbd></td><td>Toggle Dark/Light Theme</td></tr>
                                     <tr><td><kbd>?</kbd></td><td>Show this help menu</td></tr>
                                     <tr><td><kbd>/</kbd></td><td>Focus search bar</td></tr>
                                 </tbody>
@@ -249,7 +507,6 @@ function injectShortcutsModal() {
         document.body.insertAdjacentHTML('beforeend', modalHTML);
     }
 
-    // 2. Inject a neat text link in the Sidebar Footer area (with robust fallback selectors)
     const sidebarFooter = document.querySelector('.sidebar-footer') || 
                           document.querySelector('aside .small') || 
                           document.querySelector('aside');
@@ -263,10 +520,8 @@ function injectShortcutsModal() {
                     </a>
                 </div>
             `;
-            // Insert it right at the top inside the sidebar footer container
             sidebarFooter.insertAdjacentHTML('afterbegin', linkHTML);
 
-            // Add click listener to open the modal via the UI link
             document.getElementById('shortcut-trigger-btn').addEventListener('click', (e) => {
                 e.preventDefault();
                 const modalEl = document.getElementById('shortcutsHelpModal');
@@ -276,28 +531,19 @@ function injectShortcutsModal() {
             });
         }
     } else {
-        // Fallback: If the sidebar element isn't painted yet, retry in 100ms
         setTimeout(injectShortcutsModal, 100);
     }
 }
-/**
- * Initializes global event listener for keyboard navigation
- */
 
 function initKeyboardShortcuts() {
-    // Only track shortcuts on authenticated pages (skip login/register)
     if (window.location.pathname.includes('login.html') || window.location.pathname.includes('register.html')) {
         return;
     }
 
-    // Run the DOM injection immediately
     injectShortcutsModal();
-
-    // Backup injection: If elements were slow to render, try again in a split second
     setTimeout(injectShortcutsModal, 200);
 
     document.addEventListener('keydown', (event) => {
-        // Guard Check: Ignore shortcuts if typing in input, textarea, or editable element
         const activeEl = document.activeElement;
         if (activeEl && (
             activeEl.tagName === 'INPUT' || 
@@ -307,32 +553,37 @@ function initKeyboardShortcuts() {
             return;
         }
 
-        // Handle "?" key for Help Modal
+        // Show help modal
         if (event.key === '?') {
             event.preventDefault();
             const modalEl = document.getElementById('shortcutsHelpModal');
             if (modalEl && window.bootstrap) {
-                const modalInstance = bootstrap.Modal.getOrCreateInstance(modalEl);
-                modalInstance.show();
+                bootstrap.Modal.getOrCreateInstance(modalEl).show();
             }
             return;
         }
-        // Handle "/" key to focus the search input if it exists
+        
+        // Focus search
         if (event.key === '/') {
-            // Find an input field that looks like a search bar
             const searchInput = document.querySelector('input[type="search"]') || 
                                 document.querySelector('input[placeholder*="Search"]') ||
                                 document.querySelector('.search-box input');
-            
             if (searchInput) {
-                event.preventDefault(); // Prevent typing the "/" character into the box
+                event.preventDefault();
                 searchInput.focus();
-                searchInput.select();   // Optional: highlights text if they already typed something
+                searchInput.select();
             }
             return;
         }
+        
+        // Toggle theme with Ctrl+T or Cmd+T
+        if ((event.ctrlKey || event.metaKey) && event.key === 't') {
+            event.preventDefault();
+            toggleTheme();
+            return;
+        }
 
-        // Handle "Alt" combinations
+        // Alt shortcuts for navigation
         if (event.altKey) {
             let targetPage = '';
             switch (event.key.toLowerCase()) {
@@ -342,14 +593,14 @@ function initKeyboardShortcuts() {
                 case 'a': targetPage = 'analytics.html'; break;
                 case 's': targetPage = 'settings.html'; break;
                 case 'n': targetPage = 'campaign-builder.html'; break;
-                default: return; // Exit if unmapped alt key
+                default: return;
             }
             event.preventDefault();
             window.location.href = targetPage;
         }
     });
 }
-// Safely execute shortcut setup inside the DOMContentLoaded cycle
+
 if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initKeyboardShortcuts);
 } else {

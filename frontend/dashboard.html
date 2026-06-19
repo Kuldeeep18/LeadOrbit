@@ -34,7 +34,7 @@
             </div>
             <ul class="nav nav-pills flex-column mb-auto">
                 <li class="nav-item mb-2">
-                    <a href="/dashboard.html" class="nav-link d-flex align-items-center" aria-current="page">
+                    <a href="/dashboard.html" class="nav-link d-flex align-items-center">
                         <i class="bi bi-grid-1x2 me-2" aria-hidden="true"></i> Dashboard
                     </a>
                 </li>
@@ -66,6 +66,7 @@
 
         <main class="main-area">
             <header class="top-header">
+
                 <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
                     <button id="hamburger-btn" class="btn d-lg-none p-1" aria-label="Toggle menu">
                         <i class="bi bi-list fs-4" aria-hidden="true"></i>
@@ -82,31 +83,55 @@
                     </div>
                 </div>
             </header>
-            <!-- Breadcrumb Navigation -->
-<nav aria-label="breadcrumb" class="container mt-3">
-    <ol class="breadcrumb">
-        <li class="breadcrumb-item active" aria-current="page">Dashboard</li>
-    </ol>
-</nav>
+            
+            <nav aria-label="breadcrumb" class="mt-2 px-3">
+                <ol class="breadcrumb small">
+                <li class="breadcrumb-item active" aria-current="page">
+                    Dashboard
+                </li>
+                </ol>
+            </nav>
+
+
             <section class="content-wrap">
                 <div class="kpi-grid mb-4">
                     <div class="kpi-card">
-                        <div class="kpi-label">Total Leads</div>
+                        <div class="kpi-label">
+                        Total Leads
+                        <i class="bi bi-info-circle text-muted ms-1"
+                        data-bs-toggle="tooltip"
+                        data-bs-title="The total number of lead contacts imported into your workspace."></i>
+                    </div>
                         <div class="kpi-value"><div class="skeleton-box skeleton-kpi-value skeleton-kpi"></div><span id="total-leads-count" class="kpi-value-text" style="display: none;">0</span></div>
                         <div class="kpi-sub">Prospects in your workspace</div>
                     </div>
                     <div class="kpi-card">
-                        <div class="kpi-label">Active Campaigns</div>
+                        <div class="kpi-label">
+                            Active Campaigns
+                            <i class="bi bi-info-circle text-muted ms-1"
+                            data-bs-toggle="tooltip"
+                            data-bs-title="Campaigns currently sending emails or processing sequence steps."></i>
+                        </div>
                         <div class="kpi-value"><div class="skeleton-box skeleton-kpi-value skeleton-kpi"></div><span id="active-campaigns-count" class="kpi-value-text" style="display: none;">0</span></div>
                         <div class="kpi-sub">Currently running sequences</div>
                     </div>
                     <div class="kpi-card">
-                        <div class="kpi-label">Emails Sent</div>
+                        <div class="kpi-label">
+                            Emails Sent
+                            <i class="bi bi-info-circle text-muted ms-1"
+                            data-bs-toggle="tooltip"
+                            data-bs-title="Total outbound emails delivered across all campaigns."></i>
+                        </div>
                         <div class="kpi-value"><div class="skeleton-box skeleton-kpi-value skeleton-kpi"></div><span id="emails-sent-count" class="kpi-value-text" style="display: none;">0</span></div>
                         <div class="kpi-sub">Messages delivered by campaigns</div>
                     </div>
                     <div class="kpi-card">
-                        <div class="kpi-label">Reply Rate</div>
+                        <div class="kpi-label">
+                            Reply Rate
+                            <i class="bi bi-info-circle text-muted ms-1"
+                            data-bs-toggle="tooltip"
+                            data-bs-title="Percentage of contacted leads who replied to your outreach."></i>
+                        </div>
                         <div class="kpi-value text-success"><div class="skeleton-box skeleton-kpi-value skeleton-kpi"></div><span id="reply-rate" class="kpi-value-text" style="display: none;">0.0%</span></div>
                         <div class="kpi-sub">Percentage of leads replying</div>
                     </div>
@@ -217,6 +242,12 @@
         });
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+    document.addEventListener('DOMContentLoaded', function () {
+        const tooltipTriggerList = document.querySelectorAll('[data-bs-toggle="tooltip"]');
+        [...tooltipTriggerList].forEach(el => new bootstrap.Tooltip(el));
+    });
+    </script>
 </body>
 
 </html>
