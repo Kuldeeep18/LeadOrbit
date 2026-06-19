@@ -32,6 +32,8 @@ class LeadViewSet(viewsets.ModelViewSet):
         return permissions
 
     def get_queryset(self):
+        # Do not rely only on thread-local tenant middleware for JWT requests.
+        from django.db.models import Q
         """
         Returns leads scoped to the current user's organization.
 

@@ -14,8 +14,8 @@ from rest_framework.response import Response
 from leads.models import Lead
 from users.permissions import IsOrgManager
 
-from .models import Campaign, CampaignLead, SequenceStep, EmailTemplate
-from .serializers import CampaignSerializer, SequenceStepSerializer, EmailTemplateSerializer
+from .models import Campaign, CampaignLead, SequenceStep, ManualTask, EmailTemplate
+from .serializers import CampaignSerializer, SequenceStepSerializer, ManualTaskSerializer, EmailTemplateSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -347,6 +347,49 @@ class SequenceStepViewSet(viewsets.ModelViewSet):
         campaign_id = self.kwargs.get('campaign_pk')
         campaign = Campaign.objects.get(id=campaign_id, organization=self.request.user.organization)
         serializer.save(campaign=campaign, organization=self.request.user.organization)
+
+class ManualTaskViewSet(viewsets.ModelViewSet):
+    serializer_class = ManualTaskSerializer
+    queryset = ManualTask.objects.all()
+
+    def get_queryset(self):
+        return ManualTask.objects.filter(organization=self.request.user.organization)
+
+    @action(detail=True, methods=['post'])
+    def complete(self, request, pk=None):
+        task = self.get_object()
+        task.status = 'COMPLETED'
+        task.save(update_fields=['status'])
+        
+        # Resume Campaign Lead progression
+        clead = task.campaign_lead
+        clead.status = 'ACTIVE'
+        clead.next_execution_time = timezone.now()
+        clead.save(update_fields=['status', 'next_execution_time'])
+        
+        # Advance lead past the manual step
+        from campaigns.tasks import _advance_to_next_step
+        _advance_to_next_step(clead, task.step)
+        
+        return Response({"status": "task completed, lead advanced"})
+
+    @action(detail=True, methods=['post'])
+    def skip(self, request, pk=None):
+        task = self.get_object()
+        task.status = 'SKIPPED'
+        task.save(update_fields=['status'])
+        
+        # Resume Campaign Lead progression
+        clead = task.campaign_lead
+        clead.status = 'ACTIVE'
+        clead.next_execution_time = timezone.now()
+        clead.save(update_fields=['status', 'next_execution_time'])
+        
+        # Advance lead past the manual step
+        from campaigns.tasks import _advance_to_next_step
+        _advance_to_next_step(clead, task.step)
+        
+        return Response({"status": "task skipped, lead advanced"})
 
 class EmailTemplateViewSet(viewsets.ModelViewSet):
     permission_classes = [IsAuthenticated]
