@@ -18,13 +18,19 @@ class UserManager(BaseUserManager):
         return self.create_user(email, password, **extra_fields)
 
 class User(AbstractBaseUser, PermissionsMixin, TenantModel):
+    ROLE_ADMIN = 'ADMIN'
+    ROLE_MANAGER = 'MANAGER'
+    ROLE_MEMBER = 'MEMBER'
+    ROLE_LEGACY_USER = 'USER'
+
     ROLE_CHOICES = (
-        ('ADMIN', 'Admin'),
-        ('MANAGER', 'Manager'),
-        ('USER', 'User')
+        (ROLE_ADMIN, 'Admin'),
+        (ROLE_MANAGER, 'Manager'),
+        (ROLE_MEMBER, 'Member'),
+        (ROLE_LEGACY_USER, 'User'),
     )
     email = models.EmailField(unique=True)
-    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='USER')
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default=ROLE_MEMBER)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
 

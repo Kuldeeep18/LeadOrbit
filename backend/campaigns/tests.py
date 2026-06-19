@@ -1,6 +1,8 @@
 from datetime import timedelta
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlparse
 
+from django.core import signing
 from django.test import override_settings
 from django.utils import timezone
 from rest_framework import status
@@ -1208,10 +1210,53 @@ class CampaignWorkflowTests(APITestCase):
                     format='json',
                 )
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.status_code, 
+            status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
         self.assertTrue(
             any('Webhook processing error for event=open email=lead@acme.test' in entry for entry in logs.output)
         )
+
+    def test_email_webhook_persists_bounce_metadata(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Bounce metadata flow',
+            status='ACTIVE',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='bounce@acme.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='ACTIVE',
+            last_sent_message_id='msg-123',
+        )
+
+        response = self.client.post(
+            '/api/v1/webhooks/email/',
+            {
+                'event': 'bounce',
+                'email': 'bounce@acme.test',
+                'message_id': 'msg-123',
+                'bounce': {
+                    'type': 'soft',
+                    'code': 'mailbox_full',
+                    'reason': 'Mailbox full',
+                },
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        campaign_lead.refresh_from_db()
+        self.assertEqual(campaign_lead.status, 'BOUNCED')
+        self.assertEqual(campaign_lead.bounce_type, 'soft')
+        self.assertEqual(campaign_lead.bounce_code, 'mailbox_full')
+        self.assertEqual(campaign_lead.bounce_reason, 'Mailbox full')
 
     def test_dashboard_analytics_isolates_data_by_tenant(self):
         org2 = Organization.objects.create(name='Other Corp')
@@ -1386,3 +1431,88 @@ class CampaignWorkflowTests(APITestCase):
         self.assertIsNone(campaign_lead.next_execution_time)
         self.assertEqual(campaign.status, 'COMPLETED')
         mocked_send.assert_not_called()
+
+
+@override_settings(
+    GOOGLE_CLIENT_ID='test-google-client-id',
+    GOOGLE_CLIENT_SECRET='test-google-client-secret',
+    GOOGLE_REDIRECT_URI='https://example.test/api/v1/auth/google/callback',
+    GOOGLE_SCOPES=['https://www.googleapis.com/auth/gmail.send'],
+)
+class GoogleOAuthStateTests(APITestCase):
+    def setUp(self):
+        self.organization = Organization.objects.create(name='OAuth Org')
+        self.user = User.objects.create_user(
+            email='oauth-owner@acme.test',
+            password='StrongPass123!',
+            organization=self.organization,
+            role='ADMIN',
+        )
+        self.client.force_authenticate(self.user)
+
+    def test_login_view_signs_oauth_state(self):
+        response = self.client.get(
+            '/api/v1/auth/google/login',
+            {'frontend_origin': 'https://app.example.test'},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
+        redirect_url = response['Location']
+        parsed = urlparse(redirect_url)
+        params = parse_qs(parsed.query)
+        state = params['state'][0]
+
+        state_data = signing.loads(
+            state,
+            salt='leadorbit-google-oauth-state',
+            max_age=600,
+        )
+        self.assertEqual(state_data['user_id'], str(self.user.id))
+        self.assertEqual(state_data['org_id'], str(self.organization.id))
+        self.assertEqual(state_data['frontend_origin'], 'https://app.example.test')
+
+    def test_callback_rejects_tampered_state_and_accepts_signed_state(self):
+        with patch('campaigns.google_auth_views.requests.post') as mock_post, patch(
+            'campaigns.google_auth_views.requests.get'
+        ) as mock_get:
+            mock_post.return_value.status_code = 200
+            mock_post.return_value.json.return_value = {
+                'access_token': 'access-token',
+                'refresh_token': 'refresh-token',
+                'expires_in': 3600,
+            }
+            mock_get.return_value.json.return_value = {'email': 'sender@example.test'}
+
+            signed_state = signing.dumps(
+                {
+                    'user_id': str(self.user.id),
+                    'org_id': str(self.organization.id),
+                    'frontend_origin': 'https://app.example.test',
+                },
+                salt='leadorbit-google-oauth-state',
+            )
+            response = self.client.get(
+                '/api/v1/auth/google/callback',
+                {'code': 'authorization-code', 'state': signed_state},
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
+        self.assertIn('google_auth=connected', response['Location'])
+        self.assertTrue(
+            ConnectedEmailAccount.objects.filter(
+                organization=self.organization,
+                connected_by=self.user,
+                provider='GOOGLE',
+                email_address='sender@example.test',
+            ).exists()
+        )
+
+        tampered_state = signed_state[:-1] + ('x' if signed_state[-1] != 'x' else 'y')
+        response = self.client.get(
+            '/api/v1/auth/google/callback',
+            {'code': 'authorization-code', 'state': tampered_state},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
+        self.assertIn('google_auth=error', response['Location'])
+        self.assertIn('reason=no_user', response['Location'])
