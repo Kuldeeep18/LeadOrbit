@@ -1,7 +1,5 @@
 import campaigns.fields
-from django.db import migrations, models
-from django.db.models import Q
-from django.db.models.functions import Lower
+from django.db import migrations
 
 
 def encrypt_existing_mailbox_passwords(apps, schema_editor):
@@ -18,6 +16,29 @@ def encrypt_existing_mailbox_passwords(apps, schema_editor):
             account.save(update_fields=update_fields)
 
 
+def decrypt_existing_mailbox_passwords(apps, schema_editor):
+    ConnectedEmailAccount = apps.get_model("campaigns", "ConnectedEmailAccount")
+    quote_name = schema_editor.connection.ops.quote_name
+    table = quote_name(ConnectedEmailAccount._meta.db_table)
+    id_column = quote_name("id")
+
+    with schema_editor.connection.cursor() as cursor:
+        for account in ConnectedEmailAccount.objects.iterator():
+            updates = {}
+            if account.smtp_password:
+                updates["smtp_password"] = account.smtp_password
+            if account.imap_password:
+                updates["imap_password"] = account.imap_password
+            if not updates:
+                continue
+
+            set_clause = ", ".join(f"{quote_name(field)} = %s" for field in updates)
+            cursor.execute(
+                f"UPDATE {table} SET {set_clause} WHERE {id_column} = %s",
+                [*updates.values(), account.pk],
+            )
+
+
 class Migration(migrations.Migration):
 
     dependencies = [
@@ -27,17 +48,6 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
-        migrations.AddConstraint(
-            model_name="connectedemailaccount",
-            constraint=models.UniqueConstraint(
-                Lower("email_address"),
-                "organization",
-                "connected_by",
-                "provider",
-                condition=Q(provider="CUSTOM"),
-                name="uniq_custom_connected_account_per_user_email",
-            ),
-        ),
         migrations.AlterField(
             model_name="connectedemailaccount",
             name="smtp_password",
@@ -50,6 +60,6 @@ class Migration(migrations.Migration):
         ),
         migrations.RunPython(
             encrypt_existing_mailbox_passwords,
-            migrations.RunPython.noop,
+            decrypt_existing_mailbox_passwords,
         ),
     ]

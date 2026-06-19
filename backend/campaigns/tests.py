@@ -3,6 +3,7 @@ from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
 from django.core import signing
+from django.core.exceptions import ImproperlyConfigured
 from django.db import connection
 from django.test import override_settings
 from django.utils import timezone
@@ -10,6 +11,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from campaigns.models import Campaign, CampaignLead, ConnectedEmailAccount, SequenceStep
+from campaigns.fields import decrypt_mailbox_credential, encrypt_mailbox_credential
 from campaigns.ai import personalize_email
 from campaigns.tasks import (
     _execute_condition_event_step,
@@ -156,6 +158,19 @@ class CampaignWorkflowTests(APITestCase):
         self.assertNotEqual(stored_imap_password, 'imap-pass')
         self.assertTrue(stored_smtp_password.startswith('enc::'))
         self.assertTrue(stored_imap_password.startswith('enc::'))
+
+    def test_encrypt_mailbox_credential_encrypts_plaintext_with_prefix(self):
+        raw_password = 'enc::not-actually-encrypted'
+        encrypted_password = encrypt_mailbox_credential(raw_password)
+
+        self.assertNotEqual(encrypted_password, raw_password)
+        self.assertTrue(encrypted_password.startswith('enc::'))
+        self.assertEqual(decrypt_mailbox_credential(encrypted_password), raw_password)
+
+    @override_settings(DEBUG=False, MAILBOX_CREDENTIALS_ENCRYPTION_KEY='')
+    def test_encrypt_mailbox_credential_requires_dedicated_key_outside_debug(self):
+        with self.assertRaises(ImproperlyConfigured):
+            encrypt_mailbox_credential('smtp-pass')
 
     def test_create_campaign_supports_all_step_and_condition_types(self):
         payload = {

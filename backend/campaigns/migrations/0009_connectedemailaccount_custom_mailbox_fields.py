@@ -1,4 +1,6 @@
 from django.db import migrations, models
+from django.db.models import Q
+from django.db.models.functions import Lower
 
 
 class Migration(migrations.Migration):
@@ -7,6 +9,17 @@ class Migration(migrations.Migration):
     ]
 
     operations = [
+        migrations.AddConstraint(
+            model_name="connectedemailaccount",
+            constraint=models.UniqueConstraint(
+                Lower("email_address"),
+                "organization",
+                "connected_by",
+                "provider",
+                condition=Q(provider="CUSTOM"),
+                name="uniq_custom_connected_account_per_user_email",
+            ),
+        ),
         migrations.AlterField(
             model_name="connectedemailaccount",
             name="access_token",

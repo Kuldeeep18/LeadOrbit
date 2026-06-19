@@ -3,6 +3,7 @@ import hashlib
 
 from cryptography.fernet import Fernet, InvalidToken
 from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
 from django.db import models
 
 
@@ -13,14 +14,34 @@ def _get_mailbox_credentials_fernet():
     """
     Build a stable Fernet instance for mailbox credential encryption.
 
-    A dedicated environment variable can override the project SECRET_KEY, but
-    SECRET_KEY remains a safe fallback so local/dev environments still work.
+    A dedicated environment variable is required outside local/test
+    environments so persistent data encryption does not silently depend on the
+    general-purpose Django SECRET_KEY.
     """
-    secret_source = (
-        getattr(settings, "MAILBOX_CREDENTIALS_ENCRYPTION_KEY", "") or settings.SECRET_KEY
-    )
+    secret_source = getattr(settings, "MAILBOX_CREDENTIALS_ENCRYPTION_KEY", "")
+    if not secret_source:
+        if getattr(settings, "DEBUG", False):
+            secret_source = settings.SECRET_KEY
+        else:
+            raise ImproperlyConfigured(
+                "MAILBOX_CREDENTIALS_ENCRYPTION_KEY must be configured before storing mailbox credentials."
+            )
+
     digest = hashlib.sha256(str(secret_source).encode("utf-8")).digest()
     return Fernet(base64.urlsafe_b64encode(digest))
+
+
+def _is_encrypted_mailbox_credential(value):
+    """Return True only when the value is a valid encrypted mailbox token."""
+    if not isinstance(value, str) or not value.startswith(ENCRYPTED_VALUE_PREFIX):
+        return False
+
+    token = value[len(ENCRYPTED_VALUE_PREFIX) :]
+    try:
+        _get_mailbox_credentials_fernet().decrypt(token.encode("utf-8"))
+        return True
+    except InvalidToken:
+        return False
 
 
 def encrypt_mailbox_credential(value):
@@ -28,7 +49,7 @@ def encrypt_mailbox_credential(value):
     if value in (None, ""):
         return value
 
-    if isinstance(value, str) and value.startswith(ENCRYPTED_VALUE_PREFIX):
+    if _is_encrypted_mailbox_credential(value):
         return value
 
     token = _get_mailbox_credentials_fernet().encrypt(str(value).encode("utf-8"))
