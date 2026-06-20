@@ -89,6 +89,27 @@ class LeadImportTests(APITestCase):
         self.assertEqual(job.error_log[0]['error'], 'Invalid email format')
         self.assertEqual(job.error_log[1]['error'], 'Missing email address')
 
+    def test_import_rejects_oversized_csv_upload(self):
+        org = Organization.objects.create(name='Upload Limit Org')
+        user = _make_user(org, email='upload-limit@example.com')
+        self.client.force_authenticate(user)
+
+        oversized_csv = SimpleUploadedFile(
+            'too-large.csv',
+            b'a' * (10 * 1024 * 1024 + 1),
+            content_type='text/csv',
+        )
+
+        response = self.client.post(
+            '/api/v1/leads/import_csv/',
+            {'file': oversized_csv},
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('too large', response.data['error'])
+        self.assertFalse(LeadImportJob.objects.filter(organization=org).exists())
+
 
 class LeadIsolationAPITests(APITestCase):
     def setUp(self):
