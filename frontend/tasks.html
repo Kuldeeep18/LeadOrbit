@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="/theme-boot.js"></script>
+    <title>Tasks - LeadOrbit</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700&display=swap" rel="stylesheet">
+    <link href="/theme.css" rel="stylesheet">
+</head>
+
+<body>
+    <div class="app-shell">
+        <aside class="sidebar">
+            <div class="d-flex align-items-center mb-4 mt-2">
+                <div class="brand">LeadOrbit</div>
+            </div>
+            <ul class="nav nav-pills flex-column mb-auto">
+                <li class="nav-item mb-2">
+                    <a href="/dashboard.html" class="nav-link d-flex align-items-center">
+                        <i class="bi bi-grid-1x2 me-2"></i> Dashboard
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a href="/tasks.html" class="nav-link active d-flex align-items-center">
+                        <i class="bi bi-check2-square me-2"></i> Tasks
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a href="/leads.html" class="nav-link d-flex align-items-center">
+                        <i class="bi bi-people me-2"></i> Leads
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a href="/campaigns.html" class="nav-link d-flex align-items-center">
+                        <i class="bi bi-megaphone me-2"></i> Campaigns
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a href="/analytics.html" class="nav-link d-flex align-items-center">
+                        <i class="bi bi-bar-chart-line me-2"></i> Analytics
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a href="/settings.html" class="nav-link d-flex align-items-center">
+                        <i class="bi bi-gear me-2"></i> Settings
+                    </a>
+                </li>
+            </ul>
+            <div class="sidebar-footer small">
+                <span class="text-white opacity-75 user-display-name">Loading...</span>
+            </div>
+        </aside>
+
+        <main class="main-area">
+            <header class="top-header">
+                <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
+                    <div>
+                        <div class="page-title">Tasks Queue</div>
+                        <div class="title-meta">Execute manual steps to progress your campaigns.</div>
+                    </div>
+                    <div class="d-flex align-items-center gap-2">
+                        <button id="logout-btn" class="btn btn-sm btn-logout">Logout</button>
+                    </div>
+                </div>
+            </header>
+
+            <section class="content-wrap">
+                <div class="glass-card p-0">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle mb-0" id="tasks-table">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Lead</th>
+                                    <th>Campaign</th>
+                                    <th>Type</th>
+                                    <th>Task Details</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="tasks-list">
+                                <tr>
+                                    <td colspan="5" class="text-center py-4">Loading tasks...</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- Task Execution Modal -->
+    <div class="modal fade" id="taskModal" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="taskModalLabel">Execute Task</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label text-muted small">Lead</label>
+                        <div id="modalLeadInfo" class="fw-medium"></div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted small">Campaign</label>
+                        <div id="modalCampaignInfo"></div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label text-muted small">Task Instructions / Template</label>
+                        <div class="p-3 bg-light rounded font-monospace small" id="modalTemplateBody" style="white-space: pre-wrap;"></div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-outline-secondary" id="btnSkipTask">Skip Task</button>
+                    <button type="button" class="btn btn-primary" id="btnCompleteTask">Mark Complete</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module" src="/main.js"></script>
+    <script type="module">
+        import { fetchWithAuth } from '/api.js';
+        import { showToast } from '/toast.js';
+
+        let currentTaskId = null;
+        let taskModal = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            taskModal = new bootstrap.Modal(document.getElementById('taskModal'));
+            loadTasks();
+
+            document.getElementById('btnCompleteTask').addEventListener('click', () => handleTaskAction('complete'));
+            document.getElementById('btnSkipTask').addEventListener('click', () => handleTaskAction('skip'));
+        });
+
+        async function loadTasks() {
+            const tbody = document.getElementById('tasks-list');
+            try {
+                const res = await fetchWithAuth('/tasks/?status=PENDING');
+                if (!res.ok) throw new Error('Failed to fetch tasks');
+                const data = await res.json();
+                
+                tbody.innerHTML = '';
+                
+                if (data.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted">No pending tasks.</td></tr>';
+                    return;
+                }
+
+                data.forEach(task => {
+                    const tr = document.createElement('tr');
+                    
+                    let icon = 'bi-list-task';
+                    let badgeClass = 'bg-secondary';
+                    if (task.channel_type === 'LINKEDIN') {
+                        icon = 'bi-linkedin';
+                        badgeClass = 'bg-info';
+                    } else if (task.channel_type === 'WHATSAPP') {
+                        icon = 'bi-whatsapp';
+                        badgeClass = 'bg-success';
+                    }
+
+                    tr.innerHTML = `
+                        <td>
+                            <div class="fw-semibold">${task.lead_name || 'Unknown'}</div>
+                            <div class="text-muted small">${task.lead_email}</div>
+                        </td>
+                        <td>${task.campaign_name}</td>
+                        <td><span class="badge ${badgeClass}"><i class="bi ${icon} me-1"></i>${task.channel_type}</span></td>
+                        <td><div class="text-truncate" style="max-width: 250px;">${task.template_body || 'No details provided'}</div></td>
+                        <td>
+                            <button class="btn btn-sm btn-outline-primary btn-execute" data-task='${JSON.stringify(task).replace(/'/g, "&apos;")}'>
+                                Execute
+                            </button>
+                        </td>
+                    `;
+                    tbody.appendChild(tr);
+                });
+
+                document.querySelectorAll('.btn-execute').forEach(btn => {
+                    btn.addEventListener('click', (e) => {
+                        const task = JSON.parse(e.currentTarget.getAttribute('data-task'));
+                        openTaskModal(task);
+                    });
+                });
+
+            } catch (err) {
+                console.error(err);
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-danger">Error loading tasks.</td></tr>';
+            }
+        }
+
+        function openTaskModal(task) {
+            currentTaskId = task.id;
+            document.getElementById('modalLeadInfo').textContent = `${task.lead_name} (${task.lead_email})`;
+            document.getElementById('modalCampaignInfo').textContent = task.campaign_name;
+            document.getElementById('modalTemplateBody').textContent = task.template_body || 'No template provided.';
+            
+            document.getElementById('taskModalLabel').textContent = `Execute ${task.channel_type} Task`;
+            taskModal.show();
+        }
+
+        async function handleTaskAction(action) {
+            if (!currentTaskId) return;
+            
+            const btn = action === 'complete' ? document.getElementById('btnCompleteTask') : document.getElementById('btnSkipTask');
+            const originalText = btn.textContent;
+            btn.textContent = 'Processing...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetchWithAuth(`/tasks/${currentTaskId}/${action}/`, {
+                    method: 'POST'
+                });
+                
+                if (!res.ok) throw new Error(`Failed to ${action} task`);
+                
+                taskModal.hide();
+                loadTasks(); // Reload the list
+            } catch (err) {
+                console.error(err);
+                showToast(`Error: Could not ${action} the task.`, 'error');
+            } finally {
+                btn.textContent = originalText;
+                btn.disabled = false;
+            }
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+
+</html>

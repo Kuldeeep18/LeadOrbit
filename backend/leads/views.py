@@ -3,6 +3,9 @@ from rest_framework import viewsets, parsers, status
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from rest_framework.pagination import PageNumberPagination
+from django.http import StreamingHttpResponse
+import csv
 from users.permissions import IsOrgManager
 from .models import BlockedDomain, Lead, LeadImportJob, Tag, LeadTag
 from .serializers import BlockedDomainSerializer, LeadImportJobSerializer, LeadSerializer, TagSerializer
@@ -11,10 +14,22 @@ from .serializers import BlockedDomainSerializer, LeadImportJobSerializer, LeadS
 class LeadImportJobPagination(PageNumberPagination):
     page_size = 10
 
+class Echo:
+    """An object that implements just the write method of the file-like interface."""
+    def write(self, value):
+        """Write the value by returning it, instead of storing in a buffer."""
+        return value
+
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 25
+    page_size_query_param = 'page_size'
 
 class LeadViewSet(viewsets.ModelViewSet):
     serializer_class = LeadSerializer
     queryset = Lead.objects.all()
+    pagination_class = StandardResultsSetPagination
+
     manager_actions = frozenset({
         'create',
         'update',
@@ -34,6 +49,7 @@ class LeadViewSet(viewsets.ModelViewSet):
     def get_queryset(self):
         """
         Returns leads scoped to the current user's organization.
+        # Do not rely only on thread-local tenant middleware for JWT requests.
 
         Supported query parameters (Issue #244):
           ?tags=uuid1,uuid2         — leads that have ALL of the given tags
@@ -160,6 +176,39 @@ class LeadImportJobViewSet(viewsets.ReadOnlyModelViewSet):
 
     def get_queryset(self):
         return LeadImportJob.objects.filter(organization=self.request.user.organization).order_by('-created_at')
+
+    @action(detail=False, methods=['get'])
+    def export(self, request):
+        queryset = Lead.objects.filter(organization=request.user.organization).prefetch_related('lead_tags__tag')
+
+        def iter_items():
+            yield [
+                'first_name', 'last_name', 'email', 'company', 'phone',
+                'linkedin_url', 'score', 'tags', 'created_at'
+            ]
+            for lead in queryset:
+                tags = ", ".join([lt.tag.name for lt in lead.lead_tags.all()])
+                yield [
+                    lead.first_name or '',
+                    lead.last_name or '',
+                    lead.email or '',
+                    lead.company or '',
+                    lead.phone or '',
+                    lead.linkedin_url or '',
+                    lead.score,
+                    tags,
+                    lead.created_at.strftime('%Y-%m-%d %H:%M:%S') if lead.created_at else ''
+                ]
+
+        pseudo_buffer = Echo()
+        writer = csv.writer(pseudo_buffer)
+        
+        response = StreamingHttpResponse(
+            (writer.writerow(row) for row in iter_items()),
+            content_type="text/csv"
+        )
+        response['Content-Disposition'] = 'attachment; filename="leads_export.csv"'
+        return response
 
 class TagViewSet(viewsets.ModelViewSet):
     serializer_class = TagSerializer

@@ -152,7 +152,16 @@
                     </a>
                 </li>
                 <li class="nav-item mb-2">
+<<<<<<< HEAD
+                    <a href="/tasks.html" class="nav-link d-flex align-items-center">
+                        <i class="bi bi-check2-square me-2"></i> Tasks
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a href="/leads.html" class="nav-link active d-flex align-items-center" aria-current="page">
+=======
                     <a href="/leads.html" class="nav-link d-flex align-items-center">
+>>>>>>> origin/main
                         <i class="bi bi-people me-2" aria-hidden="true"></i> Leads
                     </a>
                 </li>
@@ -199,6 +208,9 @@
                         <button id="filter-toggle-btn" class="btn btn-sm btn-outline-secondary btn-filter-toggle" aria-label="Toggle filters" title="Filters">
                             <i class="bi bi-funnel me-1" aria-hidden="true"></i>Filters
                             <span class="filter-dot" id="filter-active-dot" aria-hidden="true"></span>
+                        </button>
+                        <button id="export-btn" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-download me-1"></i> Export CSV
                         </button>
                         <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#uploadModal">
                             <i class="bi bi-upload me-1" aria-hidden="true"></i> Import CSV
@@ -318,7 +330,10 @@
                     <div id="active-filters-row" class="d-flex flex-wrap gap-1 mt-2" style="display:none!important;"></div>
                 </div>
                 <!-- ─────────────────────────────────────────────────────────── -->
+<<<<<<< HEAD
+=======
 
+>>>>>>> origin/main
                 <div class="table-shell mb-4">
                     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 px-3 py-3 border-bottom">
                         <div>
@@ -352,6 +367,10 @@
                         </table>
                     </div>
                 </div>
+<<<<<<< HEAD
+
+=======
+>>>>>>> origin/main
 
                 <div class="table-shell">
                     <div class="table-responsive">
@@ -377,6 +396,14 @@
                             </tbody>
                         </table>
                     </div>
+                </div>
+
+                <div class="d-flex justify-content-between align-items-center mt-3" id="pagination-container" style="display: none !important;">
+                    <div class="text-muted small" id="pagination-info"></div>
+                    <nav>
+                        <ul class="pagination pagination-sm mb-0" id="pagination-controls">
+                        </ul>
+                    </nav>
                 </div>
             </section>
         </main>
@@ -447,7 +474,8 @@
 
     <script type="module" src="./main.js"></script>
     <script type="module">
-        import { fetchWithAuth } from './api.js';
+        import { fetchWithAuth } from '/api.js';
+        import { showToast } from '/toast.js';
 
         // ─── State ──────────────────────────────────────────────────────────
         let allLeads = [];           // full unfiltered list (client-side search backup)
@@ -455,6 +483,7 @@
         let allImportJobs = [];      // import job history
         let selectedTagIds = new Set(); // tags selected in the filter panel
         let activeFilters = {};      // last applied filter state
+        let allImportJobs = [];
 
         // ─── Utilities ──────────────────────────────────────────────────────
 
@@ -493,7 +522,10 @@
                 '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
             }[c]));
         }
+<<<<<<< HEAD
+=======
 
+>>>>>>> origin/main
         function formatTimestamp(value) {
             if (!value) return '-';
             const date = new Date(value);
@@ -510,7 +542,10 @@
         }
 
         // ─── Render ─────────────────────────────────────────────────────────
+<<<<<<< HEAD
+=======
 
+>>>>>>> origin/main
         function renderImportErrorRows(job) {
             const tbody = document.getElementById('import-errors-body');
             const errors = Array.isArray(job?.error_log) ? job.error_log : [];
@@ -542,6 +577,10 @@
             renderImportErrorRows(job);
             bootstrap.Modal.getOrCreateInstance(document.getElementById('importErrorsModal')).show();
         }
+<<<<<<< HEAD
+
+=======
+>>>>>>> origin/main
 
         function renderLeadRows(leads) {
             const tbody = document.getElementById('leads-table-body');
@@ -624,8 +663,8 @@
             });
         }
 
-        function renderStats(leads) {
-            document.getElementById('leads-count').textContent = leads.length;
+        function renderStats(leads, totalCount) {
+            document.getElementById('leads-count').textContent = totalCount !== undefined ? totalCount : leads.length;
             const active = leads.filter(l => !l.global_unsubscribe).length;
             document.getElementById('active-leads-count').textContent = active;
             document.getElementById('unsubscribed-count').textContent = leads.length - active;
@@ -635,6 +674,12 @@
             document.getElementById('avg-score').textContent = avgScore;
         }
 
+<<<<<<< HEAD
+        let debounceTimer;
+        let currentPage = 1;
+
+=======
+>>>>>>> origin/main
         // ─── Filter Panel ────────────────────────────────────────────────────
 
         async function loadTags() {
@@ -745,27 +790,50 @@
             }
         }
 
-        async function fetchLeadsWithFilters(params = {}) {
-            const qs = new URLSearchParams(params).toString();
-            const endpoint = qs ? `/leads/?${qs}` : '/leads/';
-            const res = await fetchWithAuth(endpoint);
-            if (!res.ok) throw new Error('Failed to fetch leads');
-            return res.json();
+        async function fetchLeads(page = 1) {
+            currentPage = page;
+            const q = (document.getElementById('lead-search').value || '').trim();
+            const filterParams = getFilterParams();
+            
+            const tbody = document.getElementById('leads-table-body');
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm text-primary me-2" role="status"></div>Loading...</td></tr>`;
+
+            try {
+                let url = '/leads/';
+                const params = new URLSearchParams(filterParams);
+                params.append('page', page);
+                if (q) params.append('search', q);
+                
+                url += '?' + params.toString();
+
+                const res = await fetchWithAuth(url);
+                if (res.ok) {
+                    const data = await res.json();
+                    const isPaginated = !!data.results;
+                    allLeads = isPaginated ? data.results : data;
+                    const totalCount = isPaginated ? data.count : allLeads.length;
+                    
+                    renderStats(allLeads, totalCount);
+                    
+                    if (allLeads.length === 0 && (q || Object.keys(filterParams).length > 0)) {
+                        // Empty state for search/filter
+                        tbody.innerHTML = `<tr><td colspan="7" class="text-center py-5"><div class="empty-state"><i class="bi bi-search display-4 text-secondary"></i><h5 class="mt-3 mb-2">No results found</h5><p class="text-muted mb-0">Try adjusting your search or filters.</p></div></td></tr>`;
+                    } else {
+                        renderLeadRows(allLeads);
+                    }
+                    
+                    renderPagination(totalCount, isPaginated ? data.next : null, isPaginated ? data.previous : null);
+                }
+            } catch (e) {
+                console.error('Error fetching leads:', e);
+            }
         }
 
         async function applyFilters() {
             const params = getFilterParams();
             activeFilters = params;
             updateFilterIndicator(params);
-
-            try {
-                const leads = await fetchLeadsWithFilters(params);
-                allLeads = leads;
-                renderStats(leads);
-                renderLeadRows(leads);
-            } catch (e) {
-                console.error('Error applying filters:', e);
-            }
+            await fetchLeads(1);
         }
 
         function clearFilters() {
@@ -776,6 +844,9 @@
             activeFilters = {};
             renderTagFilterChips();
             updateFilterIndicator({});
+<<<<<<< HEAD
+            fetchLeads(1);
+=======
         }
 
         // ─── Data loading ────────────────────────────────────────────────────
@@ -786,6 +857,7 @@
             allLeads = await res.json();
             renderStats(allLeads);
             renderLeadRows(allLeads);
+>>>>>>> origin/main
         }
 
         async function loadImportHistory() {
@@ -795,6 +867,8 @@
             allImportJobs = Array.isArray(payload) ? payload : (payload.results || []);
             renderImportHistory(allImportJobs);
         }
+<<<<<<< HEAD
+=======
 
         // ─── Text search (client-side, applied on top of server results) ────
 
@@ -818,21 +892,130 @@
             try {
                 await loadLeads();
                 await loadImportHistory();
+>>>>>>> origin/main
             } catch (e) {
                 console.error('Error fetching leads:', e);
             }
+        }
 
+<<<<<<< HEAD
+        function renderPagination(totalCount, nextUrl, prevUrl) {
+            const container = document.getElementById('pagination-container');
+            const info = document.getElementById('pagination-info');
+            const controls = document.getElementById('pagination-controls');
+            
+            if (totalCount === 0) {
+                container.style.setProperty('display', 'none', 'important');
+                return;
+            }
+            container.style.setProperty('display', 'flex', 'important');
+            
+            const pageSize = 25;
+            const start = (currentPage - 1) * pageSize + 1;
+            const end = Math.min(currentPage * pageSize, totalCount);
+            info.textContent = `Showing ${start}-${end} of ${totalCount} leads`;
+            
+            const totalPages = Math.ceil(totalCount / pageSize);
+            let html = '';
+            
+            html += `<li class="page-item ${!prevUrl ? 'disabled' : ''}">
+                <a class="page-link" href="#" data-page="${currentPage - 1}">Previous</a>
+            </li>`;
+            
+            for (let i = 1; i <= totalPages; i++) {
+                if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+                    html += `<li class="page-item ${i === currentPage ? 'active' : ''}">
+                        <a class="page-link" href="#" data-page="${i}">${i}</a>
+                    </li>`;
+                } else if (i === currentPage - 2 || i === currentPage + 2) {
+                    html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+                }
+            }
+            
+            html += `<li class="page-item ${!nextUrl ? 'disabled' : ''}">
+                <a class="page-link" href="#" data-page="${currentPage + 1}">Next</a>
+            </li>`;
+            
+            controls.innerHTML = html;
+            
+            controls.querySelectorAll('.page-link').forEach(link => {
+                link.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    const page = parseInt(e.target.dataset.page);
+                    if (page && page !== currentPage && page >= 1 && page <= totalPages) {
+                        fetchLeads(page);
+                    }
+                });
+            });
+        }
+
+        function applySearch() {
+            clearTimeout(debounceTimer);
+            debounceTimer = setTimeout(() => {
+                fetchLeads(1);
+            }, 300);
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                await loadTags();
+                await fetchLeads(1);
+                await loadImportHistory();
+            } catch (e) {
+                console.error('Error fetching data:', e);
+            }
+=======
             await loadTags();
+>>>>>>> origin/main
 
             document.getElementById('lead-search').addEventListener('input', applySearch);
             document.getElementById('refresh-history-btn').addEventListener('click', loadImportHistory);
 
             const filterPanel = document.getElementById('filter-panel');
-            document.getElementById('filter-toggle-btn').addEventListener('click', () => {
-                const isHidden = filterPanel.style.display === 'none';
-                filterPanel.style.display = isHidden ? 'block' : 'none';
-            });
+            if (filterPanel) {
+                document.getElementById('filter-toggle-btn').addEventListener('click', () => {
+                    const isHidden = filterPanel.style.display === 'none';
+                    filterPanel.style.display = isHidden ? 'block' : 'none';
+                });
+                document.getElementById('apply-filters-btn').addEventListener('click', applyFilters);
+                document.getElementById('clear-filters-btn').addEventListener('click', clearFilters);
+            }
 
+<<<<<<< HEAD
+            const exportBtn = document.getElementById('export-btn');
+            if (exportBtn) {
+                exportBtn.addEventListener('click', async () => {
+                    const originalHtml = exportBtn.innerHTML;
+                    exportBtn.disabled = true;
+                    exportBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Exporting...';
+                    
+                    try {
+                        const res = await fetchWithAuth('/leads/export/');
+                        if (res.ok) {
+                            const blob = await res.blob();
+                            const url = window.URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.style.display = 'none';
+                            a.href = url;
+                            a.download = 'leads_export.csv';
+                            document.body.appendChild(a);
+                            a.click();
+                            window.URL.revokeObjectURL(url);
+                            document.body.removeChild(a);
+                            showToast('Export successful!', 'success');
+                        } else {
+                            showToast('Failed to export leads.', 'error');
+                        }
+                    } catch (err) {
+                        console.error('Export error:', err);
+                        showToast(`Error: ${err.message}`, 'error');
+                    } finally {
+                        exportBtn.disabled = false;
+                        exportBtn.innerHTML = originalHtml;
+                    }
+                });
+            }
+=======
             document.getElementById('apply-filters-btn').addEventListener('click', applyFilters);
             document.getElementById('clear-filters-btn').addEventListener('click', async () => {
                 clearFilters();
@@ -845,6 +1028,7 @@
                     console.error('Error clearing filters:', e);
                 }
             });
+>>>>>>> origin/main
 
             document.getElementById('upload-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
@@ -867,15 +1051,22 @@
 
                     if (res.status === 202) {
                         statusEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>File uploaded. Processing now...</span>';
+<<<<<<< HEAD
+                        showToast('File uploaded. Processing now...', 'success');
+                        await fetchLeads(1);
+=======
                         await loadLeads();
+>>>>>>> origin/main
                         await loadImportHistory();
                         fileInput.value = '';
                         bootstrap.Modal.getOrCreateInstance(document.getElementById('uploadModal')).hide();
                     } else {
                         statusEl.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle me-1" aria-hidden="true"></i>Upload failed.</span>';
+                        showToast('Upload failed.', 'error');
                     }
                 } catch (err) {
                     statusEl.innerHTML = `<span class="text-danger">Error: ${err.message}</span>`;
+                    showToast(`Error: ${err.message}`, 'error');
                 } finally {
                     btn.disabled = false;
                     btn.innerHTML = '<i class="bi bi-cloud-upload me-1" aria-hidden="true"></i> Upload and Process';

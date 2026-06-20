@@ -36,6 +36,11 @@
                     </a>
                 </li>
                 <li class="nav-item mb-2">
+                    <a href="/tasks.html" class="nav-link d-flex align-items-center">
+                        <i class="bi bi-check2-square me-2"></i> Tasks
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
                     <a href="/leads.html" class="nav-link d-flex align-items-center">
                         <i class="bi bi-people me-2" aria-hidden="true"></i> Leads
                     </a>
@@ -192,7 +197,8 @@
 
     <script type="module" src="./main.js"></script>
     <script type="module">
-        import { fetchWithAuth, clearTokens } from './api.js';
+        import { fetchWithAuth, clearTokens } from '/api.js';
+        import { showToast } from '/toast.js';
 
         const apiBaseUrl = (localStorage.getItem('api_base_url') || '').replace(/\/$/, '');
         const isLocalhost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
@@ -309,7 +315,7 @@
                     if (organization_name) payload.organization_name = organization_name;
                     if (new_password) payload.new_password = new_password;
                     if (Object.keys(payload).length === 0 && gemini_api_key === '' && enable_ai_personalization === true) {
-                        alert('Nothing to update.');
+                        showToast('Nothing to update.', 'info');
                         return;
                     }
                     payload.gemini_api_key = gemini_api_key || null;
@@ -324,17 +330,17 @@
                         if (!res.ok) {
                             const err = await res.json().catch(() => ({}));
                             const msg = err.new_password?.[0] || err.organization_name?.[0] || err.detail || 'Failed to save settings.';
-                            alert(msg);
+                            showToast(msg, 'error');
                         } else {
                             const updated = await res.json();
                             if (updated.organization) {
                                 document.getElementById('org-name').value = updated.organization.name || organization_name;
                             }
                             document.getElementById('new-password').value = '';
-                            alert('Settings saved.');
+                            showToast('Settings saved.', 'success');
                         }
                     } catch (e) {
-                        alert('Could not save settings right now.');
+                        showToast('Could not save settings right now.', 'error');
                     } finally {
                         saveBtn.disabled = false;
                         saveBtn.textContent = 'Save Changes';
@@ -353,12 +359,12 @@
                                 const res = await fetchWithAuth('/leads/delete-all/', { method: 'DELETE' });
                                 const data = await res.json().catch(() => ({}));
                                 if (!res.ok) {
-                                    alert(data.detail || data.error || 'Could not delete leads right now.');
+                                    showToast(data.detail || data.error || 'Could not delete leads right now.', 'error');
                                     return;
                                 }
-                                alert(data.message || 'All leads were deleted.');
+                                showToast(data.message || 'All leads were deleted.', 'success');
                             } catch (e) {
-                                alert('Could not delete leads right now.');
+                                showToast('Could not delete leads right now.', 'error');
                             } finally {
                                 deleteLeadsBtn.disabled = false;
                                 deleteLeadsBtn.textContent = 'Delete All Leads';
@@ -375,25 +381,27 @@
                     showPromptModal('Delete Organization', `Type "${orgName}" to permanently delete this organization.`, `Enter "${orgName}"`, (typedName) => {
                         if (!typedName) return;
                         if (typedName.trim() !== orgName) {
-                            alert('Organization name did not match. Nothing was deleted.');
+                            showToast('Organization name did not match. Nothing was deleted.', 'error');
                             return;
                         }
+                        
                         showConfirmModal('Confirm Deletion', 'This will permanently delete the organization and sign you out. Continue?', 'Yes, Delete', () => {
                             deleteOrgBtn.disabled = true;
                             deleteOrgBtn.textContent = 'Deleting...';
+                            
                             (async () => {
                                 try {
                                     const res = await fetchWithAuth('/auth/delete-organization/', { method: 'DELETE' });
                                     const data = await res.json().catch(() => ({}));
                                     if (!res.ok) {
-                                        alert(data.detail || data.error || 'Could not delete organization right now.');
+                                        showToast(data.detail || data.error || 'Could not delete organization right now.', 'error');
                                         return;
                                     }
                                     clearTokens();
-                                    alert(data.message || 'Organization deleted. You have been signed out.');
+                                    showToast(data.message || 'Organization deleted. You have been signed out.', 'success');
                                     window.location.href = '/login.html';
                                 } catch (e) {
-                                    alert('Could not delete organization right now.');
+                                    showToast('Could not delete organization right now.', 'error');
                                 } finally {
                                     deleteOrgBtn.disabled = false;
                                     deleteOrgBtn.textContent = 'Delete Organization';
@@ -434,7 +442,7 @@
                 googleBtn.addEventListener('click', () => {
                     const token = localStorage.getItem('access_token');
                     if (!token) {
-                        alert('Please log in first to connect your Google account.');
+                        showToast('Please log in first to connect your Google account.', 'warning');
                         window.location.href = '/login.html';
                         return;
                     }
