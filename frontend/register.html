@@ -96,6 +96,7 @@
                         </div>
 
                         <form aria-label="Registration form">
+                            <div id="registerError" class="alert alert-danger d-none mb-3" role="alert"></div>
                             <div class="row mb-3">
                                 <div class="col-6">
                                     <label for="firstName" class="form-label text-white-50 small fw-semibold">First Name</label>
@@ -172,9 +173,14 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             const form = document.querySelector('form');
+            const errorBox = document.getElementById('registerError');
             if (form) {
                 form.addEventListener('submit', async (e) => {
                     e.preventDefault();
+                    if (errorBox) {
+                        errorBox.classList.add('d-none');
+                        errorBox.textContent = '';
+                    }
 
                     const first_name = document.getElementById('firstName').value;
                     const last_name = document.getElementById('lastName').value;
@@ -194,7 +200,10 @@
 
                         window.location.href = '/dashboard.html';
                     } catch (err) {
-                        alert('Registration failed. Please try again.');
+                        if (errorBox) {
+                            errorBox.textContent = err?.message || 'Registration failed. Please try again.';
+                            errorBox.classList.remove('d-none');
+                        }
                         const btn = form.querySelector('button[type="submit"]');
                         btn.disabled = false;
                         btn.textContent = 'Sign Up';
