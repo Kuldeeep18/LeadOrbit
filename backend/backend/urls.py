@@ -6,8 +6,11 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.views import TokenObtainPairView as BaseTokenObtainPairView
 from users.jwt import CustomTokenObtainSerializer
 
+from users.throttling import LoginRateThrottle
+
 class CustomTokenObtainPairView(BaseTokenObtainPairView):
     serializer_class = CustomTokenObtainSerializer
+    throttle_classes = [LoginRateThrottle]
 
 from users.views import AuthViewSet
 from leads.views import BlockedDomainViewSet, LeadImportJobViewSet, LeadViewSet, TagViewSet
@@ -21,7 +24,8 @@ from campaigns.views import (
     DashboardAnalyticsView,
     AIGenerateView,
     unsubscribe_view,
-    ClickTrackingView
+    ClickTrackingView,
+    ManualTaskViewSet
 )
 # ------------------------------------------------
 
@@ -43,6 +47,7 @@ router.register(r'tags', TagViewSet, basename='tags')
 router.register(r'blocked-domains', BlockedDomainViewSet, basename='blocked-domains')
 router.register(r'campaigns', CampaignViewSet, basename='campaigns')
 router.register(r'email-templates', EmailTemplateViewSet, basename='email-templates')
+router.register(r'tasks', ManualTaskViewSet, basename='tasks')
 
 urlpatterns = [
     path('', api_root, name='api_root'),

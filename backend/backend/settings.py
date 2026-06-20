@@ -136,7 +136,11 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
-    )
+    ),
+    'DEFAULT_THROTTLE_RATES': {
+        'login': '5/m',
+        'register': '3/h',
+    }
 }
 
 # Celery Configuration
@@ -159,6 +163,10 @@ CELERY_BEAT_SCHEDULE = {
     'poll-gmail-replies-every-5-minutes': {
         'task': 'campaigns.tasks.poll_gmail_for_replies',
         'schedule': 300.0,
+    },
+    'send-campaign-reports-daily': {
+        'task': 'campaigns.tasks.send_campaign_reports',
+        'schedule': 86400.0, # Every 24 hours
     },
 }
 

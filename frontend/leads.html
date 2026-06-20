@@ -152,7 +152,12 @@
                     </a>
                 </li>
                 <li class="nav-item mb-2">
-                    <a href="/leads.html" class="nav-link d-flex align-items-center">
+                    <a href="/tasks.html" class="nav-link d-flex align-items-center">
+                        <i class="bi bi-check2-square me-2" aria-hidden="true"></i> Tasks
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a href="/leads.html" class="nav-link active d-flex align-items-center">
                         <i class="bi bi-people me-2" aria-hidden="true"></i> Leads
                     </a>
                 </li>
@@ -876,6 +881,7 @@
                     }
                 } catch (err) {
                     statusEl.innerHTML = `<span class="text-danger">Error: ${err.message}</span>`;
+                    showToast(`Error: ${err.message}`, 'error');
                 } finally {
                     btn.disabled = false;
                     btn.innerHTML = '<i class="bi bi-cloud-upload me-1" aria-hidden="true"></i> Upload and Process';

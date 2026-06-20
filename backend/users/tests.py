@@ -5,7 +5,12 @@ from tenants.models import Organization
 from users.models import User
 
 
+from django.core.cache import cache
+
 class RegisterViewTests(APITestCase):
+    def setUp(self):
+        cache.clear()
+
     def test_register_rejects_duplicate_email_case_insensitive(self):
         organization = Organization.objects.create(name='Existing Org')
         User.objects.create_user(
@@ -104,3 +109,41 @@ class AuthMeViewTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertTrue(Organization.objects.filter(id=self.organization.id).exists())
         self.assertTrue(User.objects.filter(id=self.user.id).exists())
+
+from django.core.cache import cache
+
+class AuthRateLimitingTests(APITestCase):
+    def setUp(self):
+        cache.clear()
+
+    def test_login_rate_limiting(self):
+        payload = {
+            'email': 'nonexistent@example.com',
+            'password': 'WrongPassword123!'
+        }
+        for _ in range(5):
+            response = self.client.post('/api/v1/token/', payload, format='json')
+            self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+        
+        response = self.client.post('/api/v1/token/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertIn('Retry-After', response.headers)
+
+    def test_register_rate_limiting(self):
+        for i in range(3):
+            payload = {
+                'email': f'test{i}@example.com',
+                'password': 'StrongPassword123!',
+                'organization_name': f'Org {i}'
+            }
+            response = self.client.post('/api/v1/auth/register/', payload, format='json')
+            self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+            
+        payload = {
+            'email': 'test4@example.com',
+            'password': 'StrongPassword123!',
+            'organization_name': 'Org 4'
+        }
+        response = self.client.post('/api/v1/auth/register/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_429_TOO_MANY_REQUESTS)
+        self.assertIn('Retry-After', response.headers)

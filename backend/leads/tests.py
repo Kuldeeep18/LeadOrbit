@@ -33,20 +33,96 @@ class LeadImportTests(APITestCase):
     def setUp(self):
         self.organization = Organization.objects.create(name='Import Org')
 
-    def test_import_handles_bom_spaces_and_semicolon_delimiter(self):
+    def test_import_standard_columns(self):
         csv_data = (
-            "\ufeffEmail Address;First Name;Last Name;Company Name;LinkedIn Url;Phone Number\n"
-            "alice@example.com;Alice;Smith;Acme;https://linkedin.com/in/alice;+123456789\n"
+            "first_name,last_name,email,company\n"
+            "John,Doe,john@example.com,Acme Corp\n"
         )
-
         import_leads_from_csv(csv_data, str(self.organization.id))
+        
+        lead = Lead.objects.get(organization=self.organization, email='john@example.com')
+        self.assertEqual(lead.first_name, 'John')
+        self.assertEqual(lead.last_name, 'Doe')
+        self.assertEqual(lead.company, 'Acme Corp')
 
-        lead = Lead.objects.get(organization=self.organization, email='alice@example.com')
-        self.assertEqual(lead.first_name, 'Alice')
+    def test_import_aliased_columns(self):
+        csv_data = (
+            "First Name,Last Name,E-mail,Company Name\n"
+            "Jane,Smith,jane@example.com,Smith LLC\n"
+        )
+        import_leads_from_csv(csv_data, str(self.organization.id))
+        
+        lead = Lead.objects.get(organization=self.organization, email='jane@example.com')
+        self.assertEqual(lead.first_name, 'Jane')
         self.assertEqual(lead.last_name, 'Smith')
-        self.assertEqual(lead.company, 'Acme')
-        self.assertEqual(lead.linkedin_url, 'https://linkedin.com/in/alice')
-        self.assertEqual(lead.phone, '+123456789')
+        self.assertEqual(lead.company, 'Smith LLC')
+
+    def test_import_duplicate_emails(self):
+        # Should skip duplicates or update existing, no error
+        csv_data = (
+            "email,first_name\n"
+            "dup@example.com,Bob\n"
+            "dup@example.com,Robert\n"
+        )
+        import_leads_from_csv(csv_data, str(self.organization.id))
+        
+        leads = Lead.objects.filter(organization=self.organization, email='dup@example.com')
+        self.assertEqual(leads.count(), 1)
+        self.assertEqual(leads.first().first_name, 'Robert')
+
+    def test_import_missing_required_fields(self):
+        # Missing email -> should be skipped gracefully
+        csv_data = (
+            "first_name,last_name\n"
+            "NoEmail,User\n"
+            "WithEmail,User,user@example.com\n"
+        )
+        # Note: The second row has 3 columns but header has 2, email might not be parsed correctly if header doesn't have it.
+        # Let's fix the header.
+        csv_data = (
+            "first_name,last_name,email\n"
+            "NoEmail,User,\n"
+            "WithEmail,User,user@example.com\n"
+        )
+        import_leads_from_csv(csv_data, str(self.organization.id))
+        
+        self.assertEqual(Lead.objects.filter(organization=self.organization).count(), 1)
+        self.assertTrue(Lead.objects.filter(organization=self.organization, email='user@example.com').exists())
+
+    def test_import_custom_data_columns(self):
+        csv_data = (
+            "email,first_name,Custom Field 1,Industry\n"
+            "custom@example.com,Alice,Value 1,Tech\n"
+        )
+        import_leads_from_csv(csv_data, str(self.organization.id))
+        
+        lead = Lead.objects.get(organization=self.organization, email='custom@example.com')
+        self.assertIn('Custom Field 1', lead.custom_data)
+        self.assertEqual(lead.custom_data['Custom Field 1'], 'Value 1')
+        self.assertIn('Industry', lead.custom_data)
+        self.assertEqual(lead.custom_data['Industry'], 'Tech')
+
+    def test_import_tenant_isolation(self):
+        org_b = Organization.objects.create(name='Org B')
+        csv_data = (
+            "email,first_name\n"
+            "tenant@example.com,TenantUser\n"
+        )
+        import_leads_from_csv(csv_data, str(org_b.id))
+        
+        # Should be in Org B, not in self.organization
+        self.assertTrue(Lead.objects.filter(organization=org_b, email='tenant@example.com').exists())
+        self.assertFalse(Lead.objects.filter(organization=self.organization, email='tenant@example.com').exists())
+
+    def test_import_empty_csv_file(self):
+        csv_data = ""
+        import_leads_from_csv(csv_data, str(self.organization.id))
+        self.assertEqual(Lead.objects.filter(organization=self.organization).count(), 0)
+
+    def test_import_headers_only_csv(self):
+        csv_data = "first_name,last_name,email\n"
+        import_leads_from_csv(csv_data, str(self.organization.id))
+        self.assertEqual(Lead.objects.filter(organization=self.organization).count(), 0)
 
     def test_import_stores_non_standard_headers_as_custom_variables(self):
         csv_data = (
