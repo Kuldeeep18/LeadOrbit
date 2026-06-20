@@ -1516,3 +1516,31 @@ class GoogleOAuthStateTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_302_FOUND)
         self.assertIn('google_auth=error', response['Location'])
         self.assertIn('reason=no_user', response['Location'])
+
+    def test_campaign_leads_pagination_rejects_invalid_limit_and_clamps_values(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Pagination guardrail flow',
+            status='DRAFT',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='lead@example.com',
+        )
+        CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+        )
+
+        invalid_limit = self.client.get(f'/api/v1/campaigns/{campaign.id}/leads/', {'limit': 'abc'})
+        self.assertEqual(invalid_limit.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('Invalid numeric value', invalid_limit.data['error'])
+
+        clamped = self.client.get(
+            f'/api/v1/campaigns/{campaign.id}/leads/',
+            {'limit': '999999', 'offset': '-5'},
+        )
+        self.assertEqual(clamped.status_code, status.HTTP_200_OK)
+        self.assertEqual(clamped.data['limit'], 200)
+        self.assertEqual(clamped.data['offset'], 0)

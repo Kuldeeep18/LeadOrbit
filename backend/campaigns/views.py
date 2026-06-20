@@ -19,6 +19,25 @@ from .serializers import CampaignSerializer, SequenceStepSerializer, EmailTempla
 
 logger = logging.getLogger(__name__)
 
+
+def _parse_bounded_int(raw_value, *, default, minimum, maximum):
+    if raw_value is None:
+        return default, None
+
+    raw_value = str(raw_value).strip()
+    if not raw_value:
+        return default, None
+
+    try:
+        value = int(raw_value)
+    except (TypeError, ValueError):
+        return None, Response(
+            {"error": f"Invalid numeric value: {raw_value}"},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
+
+    return max(minimum, min(value, maximum)), None
+
 class CampaignViewSet(viewsets.ModelViewSet):
     serializer_class = CampaignSerializer
     queryset = Campaign.objects.all()
@@ -269,8 +288,22 @@ class CampaignViewSet(viewsets.ModelViewSet):
         """Get paginated list of enrolled leads with metrics."""
         campaign = self.get_object()
         status_filter = request.query_params.get('status')
-        limit = int(request.query_params.get('limit', 50))
-        offset = int(request.query_params.get('offset', 0))
+        limit, error_response = _parse_bounded_int(
+            request.query_params.get('limit'),
+            default=50,
+            minimum=1,
+            maximum=200,
+        )
+        if error_response:
+            return error_response
+        offset, error_response = _parse_bounded_int(
+            request.query_params.get('offset'),
+            default=0,
+            minimum=0,
+            maximum=10_000,
+        )
+        if error_response:
+            return error_response
 
         leads_qs = campaign.enrolled_leads.select_related('lead').order_by('-updated_at')
 
