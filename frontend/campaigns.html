@@ -39,6 +39,11 @@
                     </a>
                 </li>
                 <li class="nav-item mb-2">
+                    <a href="/tasks.html" class="nav-link d-flex align-items-center">
+                        <i class="bi bi-check2-square me-2"></i> Tasks
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
                     <a href="/leads.html" class="nav-link d-flex align-items-center">
                         <i class="bi bi-people me-2" aria-hidden="true"></i> Leads
                     </a>
@@ -168,7 +173,8 @@
 
     <script type="module" src="./main.js"></script>
     <script type="module">
-        import { fetchWithAuth } from './api.js';
+        import { fetchWithAuth } from '/api.js';
+        import { showToast } from '/toast.js';
 
         const STEP_LABELS = {
             EMAIL: 'Email',
@@ -194,6 +200,8 @@
         let searchQuery = '';
         let deleteCampaignId = null;
         let deleteCampaignName = '';
+        let currentPage = 1;
+        let totalCampaignsCount = 0;
 
         const escapeHtml = (value) => String(value ?? '')
             .replaceAll('&', '&amp;')
@@ -370,6 +378,9 @@
                                     <a href="/campaign-builder.html?id=${campaign.id}" class="btn btn-sm btn-outline-primary flex-grow-1">
                                        <i class="bi bi-pencil me-1" aria-hidden="true"></i> Edit
                                     </a>
+                                    <button class="btn btn-sm btn-outline-secondary btn-duplicate" data-duplicate-id="${campaign.id}" title="Duplicate Campaign">
+                                        <i class="bi bi-files"></i>
+                                    </button>
                                     ${actionButton}
                                     <button class="btn btn-sm btn-outline-danger flex-grow-1"
                                         data-delete-id="${campaign.id}"
@@ -381,6 +392,35 @@
                         </div>
                     </div>`;
             }).join('');
+
+            grid.querySelectorAll('.btn-duplicate').forEach(button => {
+                button.addEventListener('click', async () => {
+                    const campaignId = button.dataset.duplicateId;
+                    const originalHtml = button.innerHTML;
+                    button.disabled = true;
+                    button.innerHTML = '<span class="spinner-border spinner-border-sm"></span>';
+
+                    try {
+                        const res = await fetchWithAuth(`/campaigns/${campaignId}/duplicate/`, {
+                            method: 'POST',
+                        });
+
+                        if (!res.ok) {
+                            throw new Error('Failed to duplicate campaign.');
+                        }
+
+                        const newCampaign = await res.json();
+                        showToast('Campaign duplicated successfully.', 'success');
+                        setTimeout(() => {
+                            window.location.href = `/campaign-builder.html?id=${newCampaign.id}`;
+                        }, 500);
+                    } catch (error) {
+                        button.disabled = false;
+                        button.innerHTML = originalHtml;
+                        showToast(error.message || 'Could not duplicate campaign.', 'error');
+                    }
+                });
+            });
 
             grid.querySelectorAll('[data-action-id]').forEach(button => {
                 button.addEventListener('click', async () => {
@@ -409,7 +449,7 @@
                     } catch (error) {
                         button.disabled = false;
                         button.innerHTML = originalLabel;
-                        alert(error.message || 'Could not update campaign status.');
+                        showToast(error.message || 'Could not update campaign status.', 'error');
                     }
                 });
             });
@@ -439,11 +479,92 @@
             renderCampaignGrid();
         }
 
-        async function loadCampaigns() {
-            const res = await fetchWithAuth('/campaigns/');
-            if (!res.ok) throw new Error('Failed to load campaigns.');
-            allCampaigns = await res.json();
-            renderApp();
+        function renderPagination(totalCount, nextUrl, prevUrl) {
+            const container = document.getElementById('pagination-container');
+            const info = document.getElementById('pagination-info');
+            const controls = document.getElementById('pagination-controls');
+            
+            if (!container) return;
+
+            if (totalCount === 0) {
+                container.style.setProperty('display', 'none', 'important');
+                return;
+            }
+            container.style.setProperty('display', 'flex', 'important');
+            
+            const pageSize = 25;
+            const start = (currentPage - 1) * pageSize + 1;
+            const end = Math.min(currentPage * pageSize, totalCount);
+            if(info) info.textContent = `Showing ${start}-${end} of ${totalCount} campaigns`;
+            
+            const totalPages = Math.ceil(totalCount / pageSize);
+            let html = '';
+            
+            html += `<li class="page-item ${!prevUrl ? 'disabled' : ''}">
+                <a class="page-link" href="#" data-page="${currentPage - 1}">Previous</a>
+            </li>`;
+            
+            for (let i = 1; i <= totalPages; i++) {
+                if (i === 1 || i === totalPages || (i >= currentPage - 1 && i <= currentPage + 1)) {
+                    html += `<li class="page-item ${i === currentPage ? 'active' : ''}">
+                        <a class="page-link" href="#" data-page="${i}">${i}</a>
+                    </li>`;
+                } else if (i === currentPage - 2 || i === currentPage + 2) {
+                    html += `<li class="page-item disabled"><span class="page-link">...</span></li>`;
+                }
+            }
+            
+            html += `<li class="page-item ${!nextUrl ? 'disabled' : ''}">
+                <a class="page-link" href="#" data-page="${currentPage + 1}">Next</a>
+            </li>`;
+            
+            if(controls) {
+                controls.innerHTML = html;
+                controls.querySelectorAll('.page-link').forEach(link => {
+                    link.addEventListener('click', (e) => {
+                        e.preventDefault();
+                        const page = parseInt(e.target.dataset.page);
+                        if (page && page !== currentPage && page >= 1 && page <= totalPages) {
+                            loadCampaigns(page);
+                        }
+                    });
+                });
+            }
+        }
+
+        async function loadCampaigns(page = 1) {
+            currentPage = page;
+            const grid = document.getElementById('campaigns-grid');
+            if(grid) grid.innerHTML = '<div class="col-12 text-center py-5"><div class="spinner-border text-primary" role="status"></div><p class="text-muted mt-2 mb-0">Loading campaigns...</p></div>';
+
+            try {
+                let url = '/campaigns/';
+                const params = new URLSearchParams();
+                params.append('page', page);
+                if (searchQuery) params.append('search', searchQuery);
+                if (activeFilter && activeFilter !== 'all') params.append('status', activeFilter);
+                
+                url += '?' + params.toString();
+
+                const res = await fetchWithAuth(url);
+                if (!res.ok) throw new Error('Failed to load campaigns.');
+                
+                const data = await res.json();
+                const isPaginated = !!data.results;
+                allCampaigns = isPaginated ? data.results : data;
+                totalCampaignsCount = isPaginated ? data.count : allCampaigns.length;
+                
+                renderApp();
+                renderPagination(totalCampaignsCount, isPaginated ? data.next : null, isPaginated ? data.previous : null);
+            } catch (error) {
+                console.error(error);
+                if(grid) {
+                    grid.innerHTML = `
+                        <div class="col-12">
+                            <div class="alert alert-danger mb-0">Failed to load campaigns. Please refresh.</div>
+                        </div>`;
+                }
+            }
         }
 
         async function confirmDeleteCampaign() {

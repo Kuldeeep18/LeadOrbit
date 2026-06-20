@@ -10,14 +10,19 @@ from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.pagination import PageNumberPagination
 
 from leads.models import Lead
 from users.permissions import IsOrgManager
 
-from .models import Campaign, CampaignLead, SequenceStep, EmailTemplate
-from .serializers import CampaignSerializer, SequenceStepSerializer, EmailTemplateSerializer
+from .models import Campaign, CampaignLead, SequenceStep, EmailTemplate, ManualTask
+from .serializers import CampaignSerializer, SequenceStepSerializer, EmailTemplateSerializer, ManualTaskSerializer
 
 logger = logging.getLogger(__name__)
+
+class StandardResultsSetPagination(PageNumberPagination):
+    page_size = 25
+    page_size_query_param = 'page_size'
 
 class CampaignViewSet(viewsets.ModelViewSet):
     serializer_class = CampaignSerializer
@@ -33,6 +38,8 @@ class CampaignViewSet(viewsets.ModelViewSet):
         'resume',
     })
 
+    pagination_class = StandardResultsSetPagination
+
     def get_permissions(self):
         permissions = super().get_permissions()
         if self.action in self.manager_actions:
@@ -40,11 +47,25 @@ class CampaignViewSet(viewsets.ModelViewSet):
         return permissions
 
     def get_queryset(self):
-        return (
+        queryset = (
             Campaign.objects.filter(organization=self.request.user.organization)
             .select_related('connected_account')
             .prefetch_related('steps', 'enrolled_leads')
         )
+        
+        search = self.request.query_params.get('search')
+        status_param = self.request.query_params.get('status')
+        
+        if status_param and status_param != 'all':
+            queryset = queryset.filter(status=status_param)
+            
+        if search:
+            from django.db.models import Q
+            queryset = queryset.filter(
+                Q(name__icontains=search) | Q(status__icontains=search)
+            )
+            
+        return queryset.order_by('-created_at')
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization)
@@ -224,6 +245,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK,
         )
 
+
     @action(detail=True, methods=['get'])
     def metrics(self, request, pk=None):
         """Get comprehensive campaign performance metrics."""
@@ -329,6 +351,32 @@ class CampaignViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK,
         )
 
+    @action(detail=True, methods=['post'])
+    def duplicate(self, request, pk=None):
+        campaign = self.get_object()
+
+        new_campaign = Campaign.objects.create(
+            organization=campaign.organization,
+            name=f"{campaign.name} (Copy)",
+            status='DRAFT',
+            settings=campaign.settings,
+            connected_account=campaign.connected_account
+        )
+
+        for step in campaign.steps.all():
+            SequenceStep.objects.create(
+                organization=step.organization,
+                campaign=new_campaign,
+                step_order=step.step_order,
+                channel_type=step.channel_type,
+                delay_minutes=step.delay_minutes,
+                template_subject=step.template_subject,
+                template_body=step.template_body
+            )
+
+        serializer = self.get_serializer(new_campaign)
+        return Response(serializer.data, status=status.HTTP_201_CREATED)
+
 class SequenceStepViewSet(viewsets.ModelViewSet):
     serializer_class = SequenceStepSerializer
     queryset = SequenceStep.objects.all()
@@ -358,6 +406,49 @@ class EmailTemplateViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization)
+
+class ManualTaskViewSet(viewsets.ModelViewSet):
+    serializer_class = ManualTaskSerializer
+    queryset = ManualTask.objects.all()
+
+    def get_queryset(self):
+        return ManualTask.objects.filter(organization=self.request.user.organization)
+
+    @action(detail=True, methods=['post'])
+    def complete(self, request, pk=None):
+        task = self.get_object()
+        task.status = 'COMPLETED'
+        task.save(update_fields=['status'])
+        
+        # Resume Campaign Lead progression
+        clead = task.campaign_lead
+        clead.status = 'ACTIVE'
+        clead.next_execution_time = timezone.now()
+        clead.save(update_fields=['status', 'next_execution_time'])
+        
+        # Advance lead past the manual step
+        from campaigns.tasks import _advance_to_next_step
+        _advance_to_next_step(clead, task.step)
+        
+        return Response({"status": "task completed, lead advanced"})
+
+    @action(detail=True, methods=['post'])
+    def skip(self, request, pk=None):
+        task = self.get_object()
+        task.status = 'SKIPPED'
+        task.save(update_fields=['status'])
+        
+        # Resume Campaign Lead progression
+        clead = task.campaign_lead
+        clead.status = 'ACTIVE'
+        clead.next_execution_time = timezone.now()
+        clead.save(update_fields=['status', 'next_execution_time'])
+        
+        # Advance lead past the manual step
+        from campaigns.tasks import _advance_to_next_step
+        _advance_to_next_step(clead, task.step)
+        
+        return Response({"status": "task skipped, lead advanced"})
 
 from rest_framework.views import APIView
 from django.utils import timezone
