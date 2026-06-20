@@ -68,6 +68,7 @@ class LeadImportJobSerializer(serializers.ModelSerializer):
         fields = [
             'id',
             'filename',
+            'source_encoding',
             'total_rows',
             'imported_count',
             'failed_count',

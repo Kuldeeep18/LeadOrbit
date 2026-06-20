@@ -11,6 +11,8 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+CSV_ENCODING_FALLBACKS = ('utf-8-sig', 'cp1252', 'latin-1')
+
 STANDARD_FIELD_ALIASES = {
     'email': ('email', 'work_email', 'email_address'),
     'first_name': ('firstName', 'first_name', 'firstname', 'first name'),
@@ -64,8 +66,29 @@ def _extract_custom_variables(row):
     return custom_variables
 
 
+def decode_csv_contents(file_contents):
+    if isinstance(file_contents, str):
+        return file_contents.lstrip('\ufeff'), 'utf-8'
+
+    if isinstance(file_contents, (bytes, bytearray)):
+        raw = bytes(file_contents)
+    else:
+        raw = str(file_contents).encode('utf-8', errors='ignore')
+
+    if b'\x00' in raw:
+        raise UnicodeDecodeError('csv', raw, 0, 1, 'contains null bytes')
+
+    for encoding in CSV_ENCODING_FALLBACKS:
+        try:
+            return raw.decode(encoding).lstrip('\ufeff'), encoding
+        except UnicodeDecodeError:
+            continue
+
+    raise UnicodeDecodeError('csv', raw, 0, len(raw), 'Unable to decode CSV contents')
+
+
 @shared_task
-def import_leads_from_csv(file_contents, organization_id, job_id=None):
+def import_leads_from_csv(file_contents, organization_id, job_id=None, source_encoding=''):
     org = Organization.objects.get(id=organization_id)
     job = None
     if job_id:
@@ -75,7 +98,7 @@ def import_leads_from_csv(file_contents, organization_id, job_id=None):
             logger.warning("Lead import job %s was not found for organization %s", job_id, organization_id)
 
     # Parse the CSV contents
-    file_contents = file_contents.lstrip('\ufeff')
+    file_contents, detected_encoding = decode_csv_contents(file_contents)
     stream = io.StringIO(file_contents)
     sample = file_contents[:2048]
     try:
@@ -165,6 +188,7 @@ def import_leads_from_csv(file_contents, organization_id, job_id=None):
             leads_updated += 1
 
     if job:
+        job.source_encoding = source_encoding or detected_encoding
         job.total_rows = total_rows
         job.imported_count = leads_created + leads_updated
         job.failed_count = failed_count

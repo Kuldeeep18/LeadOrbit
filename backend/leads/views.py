@@ -102,11 +102,32 @@ class LeadViewSet(viewsets.ModelViewSet):
             filename=file_obj.name or 'lead-import.csv',
         )
         # Trigger async celery task
-        from .tasks import import_leads_from_csv
-        file_contents = file_obj.read().decode('utf-8')
+        from .tasks import decode_csv_contents, import_leads_from_csv
+        file_bytes = file_obj.read()
+        try:
+            file_contents, detected_encoding = decode_csv_contents(file_bytes)
+        except UnicodeDecodeError:
+            job.error_log = [{
+                'error': (
+                    'Unable to decode CSV file. Please save it as UTF-8, '
+                    'UTF-8 BOM, Windows-1252, or Latin-1 and try again.'
+                )
+            }]
+            job.save(update_fields=['error_log'])
+            return Response(
+                {"error": "Unable to decode CSV file. Please re-save it as UTF-8 or Windows-1252 and try again."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         # Ensure we pass the organization to the task
-        import_leads_from_csv.delay(file_contents, request.user.organization.id, str(job.id))
+        job.source_encoding = detected_encoding
+        job.save(update_fields=['source_encoding'])
+        import_leads_from_csv.delay(
+            file_contents,
+            request.user.organization.id,
+            str(job.id),
+            detected_encoding,
+        )
 
         return Response(
             {

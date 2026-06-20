@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -32,6 +34,8 @@ def _make_tag(org, name, color='#6366f1'):
 class LeadImportTests(APITestCase):
     def setUp(self):
         self.organization = Organization.objects.create(name='Import Org')
+        self.user = _make_user(self.organization)
+        self.client.force_authenticate(self.user)
 
     def test_import_handles_bom_spaces_and_semicolon_delimiter(self):
         csv_data = (
@@ -88,6 +92,24 @@ class LeadImportTests(APITestCase):
         self.assertTrue(Lead.objects.filter(organization=self.organization, email='valid@example.com').exists())
         self.assertEqual(job.error_log[0]['error'], 'Invalid email format')
         self.assertEqual(job.error_log[1]['error'], 'Missing email address')
+
+    @patch('leads.views.import_leads_from_csv.delay')
+    def test_import_csv_accepts_windows_encoded_files(self, mocked_delay):
+        upload = SimpleUploadedFile(
+            'windows.csv',
+            'email,first_name\njose@example.com,José\n'.encode('cp1252'),
+            content_type='text/csv',
+        )
+
+        response = self.client.post('/api/v1/leads/import_csv/', {'file': upload}, format='multipart')
+
+        self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+        mocked_delay.assert_called_once()
+        args = mocked_delay.call_args.args
+        self.assertIn('José', args[0])
+        self.assertEqual(args[3], 'cp1252')
+        job = LeadImportJob.objects.get(id=response.data['job_id'])
+        self.assertEqual(job.source_encoding, 'cp1252')
 
 
 class LeadIsolationAPITests(APITestCase):
