@@ -797,13 +797,13 @@ class ClickTrackingView(APIView):
         except (BadSignature, ValueError):
             return HttpResponseBadRequest("Invalid or tampered tracking token.")
 
-        # Analytics ko update karna
+        # Update analytics for the lead
         try:
             lead = CampaignLead.objects.get(id=campaign_lead_id)
             lead.last_clicked_at = timezone.now()
             lead.save(update_fields=['last_clicked_at'])
 
-            # Optional: Agar conditionally aage badhana hai sequence ko
+            # Optional: Conditionally advance the sequence to the next step
             if lead.current_step and lead.current_step.channel_type == 'CONDITION_CLICK':
                 from .tasks import _execute_condition_click_step
                 _execute_condition_click_step(lead, lead.current_step, now=timezone.now())
@@ -811,7 +811,7 @@ class ClickTrackingView(APIView):
         except CampaignLead.DoesNotExist:
             pass # Failsafe: Continue to redirect even if the lead was deleted
 
-        # Original Destination par redirect karna
+        # Redirect to the original destination URL
         decoded_dest = urllib.parse.unquote(dest_url)
         return HttpResponseRedirect(decoded_dest)
 # ------------------------------------------
