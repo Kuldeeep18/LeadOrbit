@@ -55,6 +55,8 @@ class AuthMeViewTests(APITestCase):
         self.user.refresh_from_db()
         self.assertEqual(self.organization.name, 'Org After')
         self.assertTrue(self.user.check_password('EvenStronger123!'))
+        self.assertNotIn('gemini_api_key', response.data['organization'])
+        self.assertNotIn('enable_ai_personalization', response.data['organization'])
 
     def test_patch_me_rejects_empty_payload(self):
         response = self.client.patch('/api/v1/auth/me/', {}, format='json')
