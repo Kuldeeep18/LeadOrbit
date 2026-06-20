@@ -55,6 +55,16 @@ class AuthMeViewTests(APITestCase):
         self.user.refresh_from_db()
         self.assertEqual(self.organization.name, 'Org After')
         self.assertTrue(self.user.check_password('EvenStronger123!'))
+        self.assertNotIn('gemini_api_key', response.data['organization'])
+
+    def test_me_response_does_not_expose_organization_api_key(self):
+        self.organization.gemini_api_key = 'super-secret-key'
+        self.organization.save(update_fields=['gemini_api_key'])
+
+        response = self.client.get('/api/v1/auth/me/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertNotIn('gemini_api_key', response.data['organization'])
 
     def test_patch_me_rejects_empty_payload(self):
         response = self.client.patch('/api/v1/auth/me/', {}, format='json')
