@@ -4,6 +4,7 @@ Django settings for backend project.
 from pathlib import Path
 import os
 import re
+import warnings
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -48,7 +49,14 @@ def _normalize_google_redirect_uri(raw_uri: str, backend_base_url: str) -> str:
     # Canonicalize callback path so Google/login/token-exchange always match.
     return f'{scheme}://{host}/api/v1/auth/google/callback'
 
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-fallback-key-change-me')
+SECRET_KEY = os.getenv('SECRET_KEY', '').strip()
+if not SECRET_KEY:
+    SECRET_KEY = 'django-insecure-fallback-key-change-me'
+    warnings.warn(
+        'SECRET_KEY is not set in the environment; using a local development fallback.',
+        RuntimeWarning,
+        stacklevel=2,
+    )
 DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes')
 ALLOWED_HOSTS = ['*']
 CORS_ALLOWED_ORIGINS = [
