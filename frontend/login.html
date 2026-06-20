@@ -152,6 +152,7 @@
     <script type="module" src="./main.js"></script>
     <script type="module">
         import { login } from './api.js';
+        import { showToast } from './toast.js';
 
         document.addEventListener('DOMContentLoaded', () => {
             const form = document.querySelector('form');
@@ -167,7 +168,7 @@
                         await login(email, password);
                         window.location.href = '/dashboard.html';
                     } catch (err) {
-                        alert('Login failed. Please check your credentials.');
+                        showToast('Login failed. Please check your credentials.', 'error');
                         const btn = form.querySelector('button[type="submit"]');
                         btn.disabled = false;
                         btn.textContent = 'Sign In';

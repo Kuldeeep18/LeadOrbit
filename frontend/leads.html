@@ -152,7 +152,12 @@
                     </a>
                 </li>
                 <li class="nav-item mb-2">
-                    <a href="/leads.html" class="nav-link d-flex align-items-center">
+                    <a href="/tasks.html" class="nav-link d-flex align-items-center">
+                        <i class="bi bi-check2-square me-2" aria-hidden="true"></i> Tasks
+                    </a>
+                </li>
+                <li class="nav-item mb-2">
+                    <a href="/leads.html" class="nav-link active d-flex align-items-center">
                         <i class="bi bi-people me-2" aria-hidden="true"></i> Leads
                     </a>
                 </li>
@@ -199,6 +204,9 @@
                         <button id="filter-toggle-btn" class="btn btn-sm btn-outline-secondary btn-filter-toggle" aria-label="Toggle filters" title="Filters">
                             <i class="bi bi-funnel me-1" aria-hidden="true"></i>Filters
                             <span class="filter-dot" id="filter-active-dot" aria-hidden="true"></span>
+                        </button>
+                        <button id="export-btn" class="btn btn-sm btn-outline-primary">
+                            <i class="bi bi-download me-1"></i> Export CSV
                         </button>
                         <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#uploadModal">
                             <i class="bi bi-upload me-1" aria-hidden="true"></i> Import CSV
@@ -448,6 +456,7 @@
     <script type="module" src="./main.js"></script>
     <script type="module">
         import { fetchWithAuth } from './api.js';
+        import { showToast } from './toast.js';
 
         // ─── State ──────────────────────────────────────────────────────────
         let allLeads = [];           // full unfiltered list (client-side search backup)
@@ -846,6 +855,40 @@
                 }
             });
 
+            const exportBtn = document.getElementById('export-btn');
+            if (exportBtn) {
+                exportBtn.addEventListener('click', async () => {
+                    const originalHtml = exportBtn.innerHTML;
+                    exportBtn.disabled = true;
+                    exportBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Exporting...';
+                    
+                    try {
+                        const res = await fetchWithAuth('/leads/export/');
+                        if (res.ok) {
+                            const blob = await res.blob();
+                            const url = window.URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.style.display = 'none';
+                            a.href = url;
+                            a.download = 'leads_export.csv';
+                            document.body.appendChild(a);
+                            a.click();
+                            window.URL.revokeObjectURL(url);
+                            document.body.removeChild(a);
+                            showToast('Export successful!', 'success');
+                        } else {
+                            showToast('Failed to export leads.', 'error');
+                        }
+                    } catch (err) {
+                        console.error('Export error:', err);
+                        showToast(`Error: ${err.message}`, 'error');
+                    } finally {
+                        exportBtn.disabled = false;
+                        exportBtn.innerHTML = originalHtml;
+                    }
+                });
+            }
+
             document.getElementById('upload-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
                 const fileInput = document.getElementById('csv-file');
@@ -867,15 +910,18 @@
 
                     if (res.status === 202) {
                         statusEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>File uploaded. Processing now...</span>';
+                        showToast('File uploaded. Processing now...', 'success');
                         await loadLeads();
                         await loadImportHistory();
                         fileInput.value = '';
                         bootstrap.Modal.getOrCreateInstance(document.getElementById('uploadModal')).hide();
                     } else {
                         statusEl.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle me-1" aria-hidden="true"></i>Upload failed.</span>';
+                        showToast('Upload failed.', 'error');
                     }
                 } catch (err) {
                     statusEl.innerHTML = `<span class="text-danger">Error: ${err.message}</span>`;
+                    showToast(`Error: ${err.message}`, 'error');
                 } finally {
                     btn.disabled = false;
                     btn.innerHTML = '<i class="bi bi-cloud-upload me-1" aria-hidden="true"></i> Upload and Process';
