@@ -1,21 +1,23 @@
-import logging from datetime 
-import timedelta from celery 
-import shared_task from django.conf 
-import settings as django_settings from django.utils 
-import timezone from .ai 
-import _apply_merge_tags, personalize_email from .gmail_service
-import build_unsubscribe_url, check_for_replies, send_gmail from .sms_service 
-import send_sms, initiate_call from .models 
-import CampaignLead, SequenceStep from leads.models 
-import BlockedDomain, normalize_domain
+import logging
+import re
+from datetime import timedelta
 
+from celery import shared_task
+from django.conf import settings as django_settings
+from django.utils import timezone
+from leads.models import BlockedDomain, normalize_domain
+
+from .ai import _apply_merge_tags, personalize_email
+from .gmail_service import build_unsubscribe_url, check_for_replies, send_gmail
+from .models import CampaignLead, SequenceStep
+from .sms_service import initiate_call, send_sms
 
 import urllib.parse
-from bs4 import BeautifulSoup
 from django.core.signing import Signer
 
 
 logger = logging.getLogger(__name__)
+HREF_PATTERN = re.compile(r'(<a\b[^>]*\bhref=["\'])([^"\']+)(["\'])', re.IGNORECASE)
 
 def _get_campaign_steps(campaign):
     """
@@ -430,7 +432,6 @@ def rewrite_email_links(html_body, campaign_lead_id, step_id):
     if not html_body:
         return html_body
 
-    soup = BeautifulSoup(html_body, 'html.parser')
     signer = Signer()
     
     token_payload = f"{campaign_lead_id}:{step_id}"
@@ -438,19 +439,19 @@ def rewrite_email_links(html_body, campaign_lead_id, step_id):
     
     base_url = getattr(django_settings, 'BACKEND_BASE_URL', 'http://127.0.0.1:8000').rstrip('/')
     tracking_endpoint = f"{base_url}/api/v1/clicks/track/"
-    
-    for a_tag in soup.find_all('a', href=True):
-        original_url = a_tag.get('href', '')
-        
+
+    def replace_href(match):
+        prefix, original_url, suffix = match.groups()
+        original_url = (original_url or '').strip()
+
         if not original_url or original_url.startswith(('mailto:', 'tel:')) or tracking_endpoint in original_url:
-            continue
-            
+            return match.group(0)
+
         encoded_dest = urllib.parse.quote(original_url, safe='')
-        
         tracking_url = f"{tracking_endpoint}?t={signed_token}&dest={encoded_dest}"
-        a_tag['href'] = tracking_url
-        
-    return str(soup)
+        return f"{prefix}{tracking_url}{suffix}"
+
+    return HREF_PATTERN.sub(replace_href, html_body)
 # -----------------------------------
 
 
