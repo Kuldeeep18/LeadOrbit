@@ -5,6 +5,7 @@ from rest_framework.permissions import AllowAny, IsAuthenticated
 from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import ValidationError as DjangoValidationError
 from .models import User
+from .permissions import IsOrgAdmin
 from .serializers import UserSerializer, RegisterSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -33,6 +34,11 @@ class AuthViewSet(viewsets.GenericViewSet):
             enable_ai_personalization = payload.get('enable_ai_personalization')
 
             if organization_name is not None:
+                if not IsOrgAdmin().has_permission(request, self):
+                    return Response(
+                        {'detail': 'Only organization admins can update organization settings.'},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
                 clean_name = str(organization_name).strip()
                 if not clean_name:
                     return Response(
@@ -43,11 +49,21 @@ class AuthViewSet(viewsets.GenericViewSet):
                 request.user.organization.save(update_fields=['name'])
                 updates_made = True
             if gemini_api_key is not None:
+                if not IsOrgAdmin().has_permission(request, self):
+                    return Response(
+                        {'detail': 'Only organization admins can update organization settings.'},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
                 request.user.organization.gemini_api_key = str(gemini_api_key).strip() or None
                 request.user.organization.save(update_fields=['gemini_api_key'])
                 updates_made = True
 
             if enable_ai_personalization is not None:
+                if not IsOrgAdmin().has_permission(request, self):
+                    return Response(
+                        {'detail': 'Only organization admins can update organization settings.'},
+                        status=status.HTTP_403_FORBIDDEN,
+                    )
                 request.user.organization.enable_ai_personalization = bool(enable_ai_personalization)
                 request.user.organization.save(update_fields=['enable_ai_personalization'])
                 updates_made = True
@@ -67,7 +83,7 @@ class AuthViewSet(viewsets.GenericViewSet):
         serializer = UserSerializer(request.user)
         return Response(serializer.data)
 
-    @action(detail=False, methods=['delete'], permission_classes=[IsAuthenticated], url_path='delete-organization')
+    @action(detail=False, methods=['delete'], permission_classes=[IsAuthenticated, IsOrgAdmin], url_path='delete-organization')
     def delete_organization(self, request):
         request.user.organization.delete()
         return Response(

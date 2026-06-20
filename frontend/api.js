@@ -24,7 +24,7 @@ const redirectToLogin = () => {
     window.location.href = '/login.html';
 };
 
-const refreshAccessToken = async () => {
+export const refreshAccessToken = async () => {
     const refresh = getRefreshToken();
     if (!refresh) {
         throw new Error('Missing refresh token');
