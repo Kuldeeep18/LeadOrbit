@@ -600,7 +600,7 @@ class DashboardAnalyticsView(APIView):
 
         # ── Recent activity (real data) ──
         recent = []
-        for cl in CampaignLead.objects.filter(organization=org).order_by('-updated_at')[:10]:
+        for cl in CampaignLead.objects.filter(organization=org).select_related('lead', 'campaign').order_by('-updated_at')[:10]:
             action = cl.status.lower()
             lead_name = cl.lead.email if cl.lead else 'Unknown'
             recent.append({

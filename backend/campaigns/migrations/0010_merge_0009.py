@@ -1,0 +1,11 @@
+from django.db import migrations
+
+
+class Migration(migrations.Migration):
+
+    dependencies = [
+        ("campaigns", "0009_campaign_cached_counters"),
+        ("campaigns", "0009_campaignlead_bounce_metadata"),
+    ]
+
+    operations = []
