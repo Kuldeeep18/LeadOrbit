@@ -152,12 +152,16 @@
                     </a>
                 </li>
                 <li class="nav-item mb-2">
+<<<<<<< HEAD
                     <a href="/tasks.html" class="nav-link d-flex align-items-center">
                         <i class="bi bi-check2-square me-2"></i> Tasks
                     </a>
                 </li>
                 <li class="nav-item mb-2">
                     <a href="/leads.html" class="nav-link active d-flex align-items-center" aria-current="page">
+=======
+                    <a href="/leads.html" class="nav-link d-flex align-items-center">
+>>>>>>> origin/main
                         <i class="bi bi-people me-2" aria-hidden="true"></i> Leads
                     </a>
                 </li>
@@ -184,6 +188,7 @@
 
         <main class="main-area">
             <header class="top-header">
+
                 <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
                     <button id="hamburger-btn" class="btn d-lg-none p-1" aria-label="Toggle menu">
                         <i class="bi bi-list fs-4" aria-hidden="true"></i>
@@ -214,6 +219,17 @@
                     </div>
                 </div>
             </header>
+            
+            <nav aria-label="breadcrumb" class="mt-2 px-3">
+                <ol class="breadcrumb small">
+                    <li class="breadcrumb-item">
+                        <a href="dashboard.html">Dashboard</a>
+                    </li>
+                    <li class="breadcrumb-item active" aria-current="page">
+                         Leads
+                    </li>
+                </ol>
+            </nav>
 
             <!-- Breadcrumb Navigation -->
             <nav aria-label="breadcrumb" class="container mt-3">
@@ -314,6 +330,10 @@
                     <div id="active-filters-row" class="d-flex flex-wrap gap-1 mt-2" style="display:none!important;"></div>
                 </div>
                 <!-- ─────────────────────────────────────────────────────────── -->
+<<<<<<< HEAD
+=======
+
+>>>>>>> origin/main
                 <div class="table-shell mb-4">
                     <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 px-3 py-3 border-bottom">
                         <div>
@@ -347,7 +367,10 @@
                         </table>
                     </div>
                 </div>
+<<<<<<< HEAD
 
+=======
+>>>>>>> origin/main
 
                 <div class="table-shell">
                     <div class="table-responsive">
@@ -457,6 +480,7 @@
         // ─── State ──────────────────────────────────────────────────────────
         let allLeads = [];           // full unfiltered list (client-side search backup)
         let allTags = [];            // all org tags (for the filter panel)
+        let allImportJobs = [];      // import job history
         let selectedTagIds = new Set(); // tags selected in the filter panel
         let activeFilters = {};      // last applied filter state
         let allImportJobs = [];
@@ -474,7 +498,6 @@
         function contrastColor(hex) {
             try {
                 const { r, g, b } = hexToRgb(hex);
-                // Perceived luminance (WCAG formula)
                 const lum = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
                 return lum > 0.55 ? '#1e293b' : '#ffffff';
             } catch {
@@ -499,6 +522,10 @@
                 '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
             }[c]));
         }
+<<<<<<< HEAD
+=======
+
+>>>>>>> origin/main
         function formatTimestamp(value) {
             if (!value) return '-';
             const date = new Date(value);
@@ -515,6 +542,10 @@
         }
 
         // ─── Render ─────────────────────────────────────────────────────────
+<<<<<<< HEAD
+=======
+
+>>>>>>> origin/main
         function renderImportErrorRows(job) {
             const tbody = document.getElementById('import-errors-body');
             const errors = Array.isArray(job?.error_log) ? job.error_log : [];
@@ -546,7 +577,10 @@
             renderImportErrorRows(job);
             bootstrap.Modal.getOrCreateInstance(document.getElementById('importErrorsModal')).show();
         }
+<<<<<<< HEAD
 
+=======
+>>>>>>> origin/main
 
         function renderLeadRows(leads) {
             const tbody = document.getElementById('leads-table-body');
@@ -640,9 +674,12 @@
             document.getElementById('avg-score').textContent = avgScore;
         }
 
+<<<<<<< HEAD
         let debounceTimer;
         let currentPage = 1;
 
+=======
+>>>>>>> origin/main
         // ─── Filter Panel ────────────────────────────────────────────────────
 
         async function loadTags() {
@@ -728,7 +765,6 @@
                 dot.classList.remove('visible');
             }
 
-            // Active filter summary chips
             const row = document.getElementById('active-filters-row');
             const chips = [];
 
@@ -808,7 +844,20 @@
             activeFilters = {};
             renderTagFilterChips();
             updateFilterIndicator({});
+<<<<<<< HEAD
             fetchLeads(1);
+=======
+        }
+
+        // ─── Data loading ────────────────────────────────────────────────────
+
+        async function loadLeads() {
+            const res = await fetchWithAuth('/leads/');
+            if (!res.ok) return;
+            allLeads = await res.json();
+            renderStats(allLeads);
+            renderLeadRows(allLeads);
+>>>>>>> origin/main
         }
 
         async function loadImportHistory() {
@@ -818,11 +867,38 @@
             allImportJobs = Array.isArray(payload) ? payload : (payload.results || []);
             renderImportHistory(allImportJobs);
         }
+<<<<<<< HEAD
+=======
+
+        // ─── Text search (client-side, applied on top of server results) ────
+
+        function applySearch() {
+            const q = (document.getElementById('lead-search').value || '').trim().toLowerCase();
+            if (!q) {
+                renderLeadRows(allLeads);
+                return;
+            }
+            const filtered = allLeads.filter(lead => {
+                const row = `${lead.first_name || ''} ${lead.last_name || ''} ${lead.email || ''} ${lead.company || ''}`.toLowerCase();
+                const tagNames = (lead.tags || []).map(t => t.name.toLowerCase()).join(' ');
+                return row.includes(q) || tagNames.includes(q);
+            });
+            renderLeadRows(filtered);
+        }
+
+        // ─── Bootstrap ──────────────────────────────────────────────────────
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                await loadLeads();
+                await loadImportHistory();
+>>>>>>> origin/main
             } catch (e) {
                 console.error('Error fetching leads:', e);
             }
         }
 
+<<<<<<< HEAD
         function renderPagination(totalCount, nextUrl, prevUrl) {
             const container = document.getElementById('pagination-container');
             const info = document.getElementById('pagination-info');
@@ -888,6 +964,9 @@
             } catch (e) {
                 console.error('Error fetching data:', e);
             }
+=======
+            await loadTags();
+>>>>>>> origin/main
 
             document.getElementById('lead-search').addEventListener('input', applySearch);
             document.getElementById('refresh-history-btn').addEventListener('click', loadImportHistory);
@@ -902,6 +981,7 @@
                 document.getElementById('clear-filters-btn').addEventListener('click', clearFilters);
             }
 
+<<<<<<< HEAD
             const exportBtn = document.getElementById('export-btn');
             if (exportBtn) {
                 exportBtn.addEventListener('click', async () => {
@@ -935,6 +1015,20 @@
                     }
                 });
             }
+=======
+            document.getElementById('apply-filters-btn').addEventListener('click', applyFilters);
+            document.getElementById('clear-filters-btn').addEventListener('click', async () => {
+                clearFilters();
+                try {
+                    const leads = await fetchLeadsWithFilters({});
+                    allLeads = leads;
+                    renderStats(leads);
+                    renderLeadRows(leads);
+                } catch (e) {
+                    console.error('Error clearing filters:', e);
+                }
+            });
+>>>>>>> origin/main
 
             document.getElementById('upload-form').addEventListener('submit', async (e) => {
                 e.preventDefault();
@@ -957,8 +1051,12 @@
 
                     if (res.status === 202) {
                         statusEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>File uploaded. Processing now...</span>';
+<<<<<<< HEAD
                         showToast('File uploaded. Processing now...', 'success');
                         await fetchLeads(1);
+=======
+                        await loadLeads();
+>>>>>>> origin/main
                         await loadImportHistory();
                         fileInput.value = '';
                         bootstrap.Modal.getOrCreateInstance(document.getElementById('uploadModal')).hide();

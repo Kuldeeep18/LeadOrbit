@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from rest_framework.pagination import PageNumberPagination
 from django.http import StreamingHttpResponse
 import csv
+from users.permissions import IsOrgManager
 from .models import BlockedDomain, Lead, LeadImportJob, Tag, LeadTag
 from .serializers import BlockedDomainSerializer, LeadImportJobSerializer, LeadSerializer, TagSerializer
 
@@ -28,6 +29,22 @@ class LeadViewSet(viewsets.ModelViewSet):
     serializer_class = LeadSerializer
     queryset = Lead.objects.all()
     pagination_class = StandardResultsSetPagination
+
+    manager_actions = frozenset({
+        'create',
+        'update',
+        'partial_update',
+        'destroy',
+        'delete_all',
+        'import_csv',
+        'assign_tags',
+    })
+
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.action in self.manager_actions:
+            permissions.append(IsOrgManager())
+        return permissions
 
     def get_queryset(self):
         """
@@ -196,6 +213,13 @@ class LeadImportJobViewSet(viewsets.ReadOnlyModelViewSet):
 class TagViewSet(viewsets.ModelViewSet):
     serializer_class = TagSerializer
     queryset = Tag.objects.all()
+    manager_actions = frozenset({'create', 'update', 'partial_update', 'destroy'})
+
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.action in self.manager_actions:
+            permissions.append(IsOrgManager())
+        return permissions
 
     def get_queryset(self):
         return Tag.objects.filter(organization=self.request.user.organization)
