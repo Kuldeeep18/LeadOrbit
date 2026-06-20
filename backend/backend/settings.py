@@ -129,7 +129,9 @@ USE_I18N = True
 USE_TZ = True
 STATIC_URL = 'static/'
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
+MAX_CSV_UPLOAD_SIZE = int(
+    os.getenv("MAX_CSV_UPLOAD_SIZE", 10 * 1024 * 1024)
+)
 REST_FRAMEWORK = {
     'DEFAULT_AUTHENTICATION_CLASSES': (
         'rest_framework_simplejwt.authentication.JWTAuthentication',
