@@ -2,10 +2,10 @@ import json
 import logging
 import re
 
-import requests
+import requests    
 from django.conf import settings
 
-logger = logging.getLogger(__name__)
+logger = logging.getLogger(__name__)  
 MERGE_TAG_PATTERN = re.compile(r'{{\s*([a-zA-Z0-9_]+)\s*}}')
 
 

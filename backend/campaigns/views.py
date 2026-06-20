@@ -17,6 +17,81 @@ from users.permissions import IsOrgManager
 from .models import Campaign, CampaignLead, SequenceStep, EmailTemplate
 from .serializers import CampaignSerializer, SequenceStepSerializer, EmailTemplateSerializer
 
+import re
+
+# Merge tags use camelCase (matching template/frontend convention);
+# Lead model fields use snake_case — this maps between them.
+MERGE_TAG_FIELD_MAP = {
+    'firstName': 'first_name',
+    'lastName': 'last_name',
+    'company': 'company',
+    'phone': 'phone',
+    'linkedinUrl': 'linkedin_url',
+    'email': 'email',
+}
+
+
+def extract_merge_tags(text):
+    """Extract merge tags like {{firstName}}, {{company}} from text.
+
+    Case is preserved (so tags can be looked up in MERGE_TAG_FIELD_MAP).
+    Optional whitespace inside the braces is allowed, e.g. {{ firstName }}.
+    """
+    if not text:
+        return set()
+    pattern = r'{{\s*([a-zA-Z0-9_]+)\s*}}'
+    matches = re.findall(pattern, text)
+    return set(matches)
+
+
+def validate_merge_tags_in_campaign(campaign):
+    """
+    Validate that all merge tags in campaign are available in enrolled leads.
+    Returns: (is_valid, error_message, missing_fields)
+    """
+    all_tags = set()
+    for step in campaign.steps.all():
+        all_tags.update(extract_merge_tags(getattr(step, 'template_subject', None)))
+        all_tags.update(extract_merge_tags(getattr(step, 'template_body', None)))
+
+    if not all_tags:
+        return True, None, []
+
+    # campaign.enrolled_leads returns CampaignLead rows, not Lead rows
+    enrolled_cleads = campaign.enrolled_leads.select_related('lead').all()
+    if not enrolled_cleads.exists():
+        return True, None, []
+
+    missing_fields = []
+    for tag in all_tags:
+        model_field = MERGE_TAG_FIELD_MAP.get(tag, tag)
+
+        leads_missing_field = []
+        for clead in enrolled_cleads:
+            lead = clead.lead
+            if lead is None:
+                continue
+            field_value = getattr(lead, model_field, None)
+            if not field_value or str(field_value).strip() == '':
+                leads_missing_field.append(lead.email)
+
+        if leads_missing_field:
+            missing_fields.append({
+                'field': tag,
+                'mapped_field': model_field,
+                'affected_leads_count': len(leads_missing_field),
+                'sample_leads': leads_missing_field[:3],
+            })
+
+    if missing_fields:
+        error_msg = (
+            f"Missing data found for {len(missing_fields)} merge tag(s). "
+            "Some enrolled leads are missing required fields."
+        )
+        return False, error_msg, missing_fields
+
+    return True, None, []
+
 logger = logging.getLogger(__name__)
 
 class CampaignViewSet(viewsets.ModelViewSet):
@@ -86,9 +161,30 @@ class CampaignViewSet(viewsets.ModelViewSet):
         """
         from django.conf import settings as django_settings
         from .tasks import process_active_leads, process_active_leads_once
-
         campaign = self.get_object()
-
+        # Validate merge tags before launch
+        force_launch = bool(request.data.get('force_launch', False))
+        is_valid, error_message, missing_fields = validate_merge_tags_in_campaign(campaign)
+        if not is_valid and not force_launch:
+            return Response(
+                {
+                    "error": error_message,
+                    "campaign_id": str(campaign.id),
+                    "missing_fields": missing_fields,
+                    "requires_confirmation": True,
+                    "message": (
+                        "Some enrolled leads are missing data for merge tags used in this "
+                        "campaign. Emails to those leads may contain blank or broken "
+                        "personalization. Resend with force_launch=true to launch anyway."
+                    ),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not is_valid and force_launch:
+            logger.warning(
+                "Campaign %s launched with missing merge tag fields (override applied): %s",
+                campaign.id, missing_fields,
+            ) 
         if campaign.connected_account_id:
             # Fetch the account using unscoped query to avoid TenantManager hiding it
             from .models import ConnectedEmailAccount

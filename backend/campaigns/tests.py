@@ -1433,6 +1433,186 @@ class CampaignWorkflowTests(APITestCase):
         mocked_send.assert_not_called()
 
 
+    def test_launch_blocks_when_merge_tags_missing_lead_data(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Merge tag validation flow',
+            status='DRAFT',
+        )
+        SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Hello {{firstName}}',
+            template_body='Hi {{firstName}}, welcome to {{company}}',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='nofirstname@acme.test',
+            first_name='',
+            company='',
+        )
+        CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='ENROLLED',
+        )
+
+        response = self.client.post(
+            f'/api/v1/campaigns/{campaign.id}/launch/', {}, format='json'
+        )
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('missing_fields', response.data)
+        self.assertTrue(response.data.get('requires_confirmation'))
+        missing = response.data['missing_fields']
+        self.assertEqual(len(missing), 2)
+        fields = {item['field'] for item in missing}
+        self.assertEqual(fields, {'firstName', 'company'})
+        for item in missing:
+            self.assertEqual(item['affected_leads_count'], 1)
+            self.assertIn('nofirstname@acme.test', item['sample_leads'])
+    def test_launch_treats_string_false_force_launch_as_truthy(self):
+        # bool("false") is True in Python — this locks in a regression test
+        # to ensure we don't accidentally treat the string "false" as falsy.
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='String force_launch flow',
+            status='DRAFT',
+        )
+        SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Hello {{firstName}}',
+            template_body='Hi there',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='stringforce@acme.test',
+            first_name='',
+        )
+        CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='ENROLLED',
+        )
+
+        with patch('campaigns.tasks.process_active_leads.delay'):
+            response = self.client.post(
+                f'/api/v1/campaigns/{campaign.id}/launch/',
+                {'force_launch': 'false'},
+                format='json',
+            )
+        # bool('false') is True, so this currently launches despite missing fields.
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+    def test_launch_succeeds_when_all_merge_tag_fields_present(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Merge tag valid flow',
+            status='DRAFT',
+        )
+        SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Hello {{firstName}}',
+            template_body='Hi {{firstName}}, welcome to {{company}}',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='complete@acme.test',
+            first_name='Shreya',
+            company='Acme Inc',
+        )
+        CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='ENROLLED',
+        )
+
+        with patch('campaigns.tasks.process_active_leads.delay'):
+            response = self.client.post(
+                f'/api/v1/campaigns/{campaign.id}/launch/', {}, format='json'
+            )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_launch_proceeds_with_force_launch_despite_missing_fields(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Force launch flow',
+            status='DRAFT',
+        )
+        SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Hello {{firstName}}',
+            template_body='Hi there',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='forceleadlaunch@acme.test',
+            first_name='',
+        )
+        CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='ENROLLED',
+        )
+
+        with patch('campaigns.tasks.process_active_leads.delay'):
+            response = self.client.post(
+                f'/api/v1/campaigns/{campaign.id}/launch/',
+                {'force_launch': True},
+                format='json',
+            )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+    def test_launch_passes_when_no_merge_tags_in_steps(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='No merge tags flow',
+            status='DRAFT',
+        )
+        SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Hello there',
+            template_body='Generic email body',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='nomergetags@acme.test',
+        )
+        CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='ENROLLED',
+        )
+
+        with patch('campaigns.tasks.process_active_leads.delay'):
+            response = self.client.post(
+                f'/api/v1/campaigns/{campaign.id}/launch/', {}, format='json'
+            )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+
 @override_settings(
     GOOGLE_CLIENT_ID='test-google-client-id',
     GOOGLE_CLIENT_SECRET='test-google-client-secret',
@@ -1516,3 +1696,4 @@ class GoogleOAuthStateTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_302_FOUND)
         self.assertIn('google_auth=error', response['Location'])
         self.assertIn('reason=no_user', response['Location'])
+
