@@ -1,6 +1,7 @@
 import logging
 
 
+import re
 import urllib.parse
 from django.core.signing import Signer, BadSignature
 from django.http import HttpResponseRedirect, HttpResponseBadRequest
@@ -18,6 +19,31 @@ from .models import Campaign, CampaignLead, SequenceStep, EmailTemplate
 from .serializers import CampaignSerializer, SequenceStepSerializer, EmailTemplateSerializer
 
 logger = logging.getLogger(__name__)
+HREF_PATTERN = re.compile(r'<a\b[^>]*\bhref=["\']([^"\']+)["\']', re.IGNORECASE)
+
+
+def _extract_valid_click_destinations(step):
+    html_body = (step.template_body or '').strip()
+    if not html_body:
+        return set()
+
+    destinations = set()
+    for match in HREF_PATTERN.finditer(html_body):
+        href = (match.group(1) or '').strip()
+        if not href or href.startswith(('mailto:', 'tel:')):
+            continue
+        destinations.add(urllib.parse.unquote(href))
+
+    return destinations
+
+
+def _is_valid_click_destination(dest_url, step):
+    decoded_dest = urllib.parse.unquote(dest_url or '').strip()
+    parsed_dest = urllib.parse.urlparse(decoded_dest)
+    if parsed_dest.scheme not in {'http', 'https'} or not parsed_dest.netloc:
+        return False
+
+    return decoded_dest in _extract_valid_click_destinations(step)
 
 class CampaignViewSet(viewsets.ModelViewSet):
     serializer_class = CampaignSerializer
@@ -797,9 +823,19 @@ class ClickTrackingView(APIView):
         except (BadSignature, ValueError):
             return HttpResponseBadRequest("Invalid or tampered tracking token.")
 
-        # Analytics ko update karna
         try:
             lead = CampaignLead.objects.get(id=campaign_lead_id)
+            step = SequenceStep.objects.get(id=step_id, campaign=lead.campaign)
+        except CampaignLead.DoesNotExist:
+            return HttpResponseBadRequest("Unknown campaign lead.")
+        except SequenceStep.DoesNotExist:
+            return HttpResponseBadRequest("Unknown campaign step.")
+
+        if not _is_valid_click_destination(dest_url, step):
+            return HttpResponseBadRequest("Invalid click destination.")
+
+        # Analytics ko update karna
+        try:
             lead.last_clicked_at = timezone.now()
             lead.save(update_fields=['last_clicked_at'])
 

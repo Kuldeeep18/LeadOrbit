@@ -1,6 +1,6 @@
 from datetime import timedelta
 from unittest.mock import patch
-from urllib.parse import parse_qs, urlparse
+from urllib.parse import parse_qs, quote, urlparse
 
 from django.core import signing
 from django.test import override_settings
@@ -1431,6 +1431,70 @@ class CampaignWorkflowTests(APITestCase):
         self.assertIsNone(campaign_lead.next_execution_time)
         self.assertEqual(campaign.status, 'COMPLETED')
         mocked_send.assert_not_called()
+
+
+@override_settings(BACKEND_BASE_URL='https://backend.example.test')
+class ClickTrackingSecurityTests(APITestCase):
+    def setUp(self):
+        self.organization = Organization.objects.create(name='Click Org')
+        self.user = User.objects.create_user(
+            email='click-owner@acme.test',
+            password='StrongPass123!',
+            organization=self.organization,
+            role='ADMIN',
+        )
+        self.client.force_authenticate(self.user)
+
+        self.campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Click campaign',
+            status='ACTIVE',
+        )
+        self.step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=self.campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_body='<p><a href="https://example.test/offer">Open offer</a></p>',
+        )
+        self.lead = Lead.objects.create(
+            organization=self.organization,
+            email='lead@acme.test',
+        )
+        self.campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=self.campaign,
+            lead=self.lead,
+            current_step=self.step,
+            status='ACTIVE',
+        )
+        self.signed_token = signing.Signer().sign(f'{self.campaign_lead.id}:{self.step.id}')
+
+    def test_click_tracking_redirects_only_to_link_in_email_body(self):
+        response = self.client.get(
+            '/api/v1/clicks/track/',
+            {
+                't': self.signed_token,
+                'dest': quote('https://example.test/offer', safe=''),
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
+        self.assertEqual(response['Location'], 'https://example.test/offer')
+
+    def test_click_tracking_rejects_external_redirects_not_in_email_body(self):
+        response = self.client.get(
+            '/api/v1/clicks/track/',
+            {
+                't': self.signed_token,
+                'dest': quote('https://evil.test/phish', safe=''),
+            },
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.campaign_lead.refresh_from_db()
+        self.assertIsNone(self.campaign_lead.last_clicked_at)
 
 
 @override_settings(
