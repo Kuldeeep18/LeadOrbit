@@ -48,9 +48,21 @@ def _normalize_google_redirect_uri(raw_uri: str, backend_base_url: str) -> str:
     # Canonicalize callback path so Google/login/token-exchange always match.
     return f'{scheme}://{host}/api/v1/auth/google/callback'
 
+
+def _parse_allowed_hosts(raw_hosts: str, debug: bool) -> list[str]:
+    parsed_hosts = [host.strip() for host in (raw_hosts or '').split(',') if host.strip()]
+    if not parsed_hosts:
+        return ['*'] if debug else ['localhost', '127.0.0.1']
+
+    if debug:
+        return parsed_hosts
+
+    filtered_hosts = [host for host in parsed_hosts if host != '*']
+    return filtered_hosts or ['localhost', '127.0.0.1']
+
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-fallback-key-change-me')
 DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes')
-ALLOWED_HOSTS = ['*']
+ALLOWED_HOSTS = _parse_allowed_hosts(os.getenv('ALLOWED_HOSTS', ''), DEBUG)
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
