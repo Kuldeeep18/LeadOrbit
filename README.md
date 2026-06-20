@@ -55,7 +55,7 @@ Execution status by step type:
 
 - Backend: Django 5, Django REST Framework, Simple JWT, Celery, `django-cors-headers`
 - Frontend: static HTML pages, ES modules, Bootstrap 5, Chart.js
-- Database: SQLite by default at `backend/db.sqlite3`
+- Database: SQLite by default for local development, PostgreSQL via `DATABASE_URL` in production
 - Integrations: Google OAuth/Gmail API, OpenRouter, Gemini, Twilio
 - Python target: `3.11.9` via [`runtime.txt`](runtime.txt)
 
@@ -107,6 +107,7 @@ DEBUG=True
 SECRET_KEY=change-me
 BACKEND_BASE_URL=http://127.0.0.1:8000
 FRONTEND_BASE_URL=http://127.0.0.1:8080
+DATABASE_URL=sqlite:///backend/db.sqlite3
 
 CELERY_TASK_ALWAYS_EAGER=true
 CELERY_BROKER_URL=redis://localhost:6379/0
@@ -127,6 +128,12 @@ GOOGLE_REDIRECT_URI=http://127.0.0.1:8000/api/v1/auth/google/callback
 TWILIO_ACCOUNT_SID=
 TWILIO_AUTH_TOKEN=
 TWILIO_PHONE_NUMBER=
+```
+
+Production database setup:
+
+```env
+DATABASE_URL=postgresql://postgres:postgres@localhost:5432/leadorbit
 ```
 
 ### 3. Run migrations
@@ -281,7 +288,7 @@ Execution status by step type:
 
 - Backend: Django 5, Django REST Framework, Simple JWT, Celery, `django-cors-headers`
 - Frontend: static HTML pages, ES modules, Bootstrap 5, Chart.js
-- Database: SQLite by default at `backend/db.sqlite3`
+- Database: SQLite by default for local development, PostgreSQL via `DATABASE_URL` in production
 - Integrations: Google OAuth/Gmail API, OpenRouter, Gemini, Twilio
 - Python target: `3.11.9` via [`runtime.txt`](runtime.txt)
 
