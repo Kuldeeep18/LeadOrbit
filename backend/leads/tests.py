@@ -1,4 +1,5 @@
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -250,6 +251,25 @@ class LeadIsolationAPITests(APITestCase):
         self.assertIn('results', response.data)
         self.assertEqual(response.data['count'], 1)
         self.assertEqual(response.data['results'][0]['filename'], 'orga.csv')
+
+    @override_settings(MAX_CSV_UPLOAD_SIZE=10)
+    def test_import_csv_rejects_oversized_files(self):
+        self.client.force_authenticate(self.manager_a)
+        large_file = SimpleUploadedFile(
+            'oversized.csv',
+            b'email\n' + b'a' * 11,
+            content_type='text/csv',
+        )
+
+        response = self.client.post(
+            '/api/v1/leads/import_csv/',
+            {'file': large_file},
+            format='multipart',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('maximum upload size', response.data['error'])
+        self.assertFalse(LeadImportJob.objects.filter(filename='oversized.csv').exists())
 
 
 # ── New tests for Issue #244 ───────────────────────────────────────────────────
