@@ -1,5 +1,6 @@
+import base64
 from datetime import timedelta
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from urllib.parse import parse_qs, urlparse
 
 from django.core import signing
@@ -9,6 +10,7 @@ from rest_framework import status
 from rest_framework.test import APITestCase
 
 from campaigns.models import Campaign, CampaignLead, ConnectedEmailAccount, SequenceStep
+from campaigns import gmail_service
 from campaigns.ai import personalize_email
 from campaigns.tasks import (
     _execute_condition_event_step,
@@ -1516,3 +1518,165 @@ class GoogleOAuthStateTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_302_FOUND)
         self.assertIn('google_auth=error', response['Location'])
         self.assertIn('reason=no_user', response['Location'])
+
+
+@override_settings(
+    GOOGLE_CLIENT_ID='client-id',
+    GOOGLE_CLIENT_SECRET='client-secret',
+    GOOGLE_SCOPES=['scope-a', 'scope-b'],
+    BACKEND_BASE_URL='https://backend.example',
+)
+class GmailServiceTests(APITestCase):
+    def setUp(self):
+        self.organization = Organization.objects.create(name='Mail Org')
+        self.user = User.objects.create_user(
+            email='mail-owner@example.test',
+            password='StrongPass123!',
+            organization=self.organization,
+            role='ADMIN',
+        )
+        self.account = ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=self.user,
+            email_address='sender@example.test',
+            provider='GOOGLE',
+            access_token='token',
+            refresh_token='refresh',
+        )
+        self.lead = Lead.objects.create(
+            organization=self.organization,
+            email='recipient@example.test',
+        )
+
+    def _mock_service(self, mock_build):
+        mock_service = MagicMock()
+        send_call = mock_service.users.return_value.messages.return_value.send
+        send_result = MagicMock()
+        send_result.execute.return_value = {'id': 'msg-123'}
+        send_call.return_value = send_result
+        mock_service.users.return_value.messages.return_value.get.return_value.execute.return_value = {'threadId': 'thread-1'}
+        mock_service.users.return_value.threads.return_value.get.return_value.execute.return_value = {
+            'messages': [
+                {'id': 'msg-123', 'snippet': 'original'},
+                {'id': 'reply-456', 'snippet': 'thanks for the update'},
+            ]
+        }
+        mock_build.return_value = mock_service
+        return send_call, mock_service
+
+    def test_build_unsubscribe_url_uses_backend_base_url(self):
+        url = gmail_service.build_unsubscribe_url(self.lead)
+
+        self.assertTrue(url.startswith('https://backend.example/api/v1/unsubscribe/'))
+        self.assertIn(str(self.lead.id), url)
+
+    @patch('campaigns.gmail_service.build')
+    def test_send_gmail_appends_unsubscribe_footer(self, mock_build):
+        send_call, _ = self._mock_service(mock_build)
+
+        message_id = gmail_service.send_gmail(
+            self.account,
+            'recipient@example.test',
+            'Hello',
+            '<p>Body</p>',
+            unsubscribe_url='https://backend.example/unsub',
+        )
+
+        self.assertEqual(message_id, 'msg-123')
+        raw = send_call.call_args.kwargs['body']['raw']
+        payload = base64.urlsafe_b64decode(raw.encode()).decode()
+        self.assertIn('List-Unsubscribe', payload)
+        self.assertIn('unsubscribe here', payload)
+
+    @patch('campaigns.gmail_service.build')
+    def test_send_gmail_omits_unsubscribe_header_when_not_requested(self, mock_build):
+        send_call, _ = self._mock_service(mock_build)
+
+        gmail_service.send_gmail(
+            self.account,
+            'recipient@example.test',
+            'Hello',
+            '<p>Body</p>',
+        )
+
+        raw = send_call.call_args.kwargs['body']['raw']
+        payload = base64.urlsafe_b64decode(raw.encode()).decode()
+        self.assertNotIn('List-Unsubscribe', payload)
+
+    @patch('campaigns.gmail_service.build')
+    def test_send_gmail_passes_thread_id_to_gmail_api(self, mock_build):
+        send_call, _ = self._mock_service(mock_build)
+
+        gmail_service.send_gmail(
+            self.account,
+            'recipient@example.test',
+            'Hello',
+            '<p>Body</p>',
+            thread_id='thread-xyz',
+        )
+
+        self.assertEqual(send_call.call_args.kwargs['body']['threadId'], 'thread-xyz')
+
+    @patch('campaigns.gmail_service.Credentials')
+    @patch('google.auth.transport.requests.Request')
+    def test_get_credentials_refreshes_expired_token_and_persists_account(self, mock_request, mock_credentials):
+        creds = MagicMock()
+        creds.expired = True
+        creds.refresh_token = 'refresh'
+        creds.token = 'refreshed-token'
+        creds.expiry = timezone.now() + timedelta(hours=2)
+
+        def refresh_side_effect(_request):
+            creds.token = 'refreshed-token'
+
+        creds.refresh.side_effect = refresh_side_effect
+        mock_credentials.return_value = creds
+        mock_request.return_value = object()
+
+        result = gmail_service._get_credentials(self.account)
+
+        self.assertIs(result, creds)
+        self.account.refresh_from_db()
+        self.assertEqual(self.account.access_token, 'refreshed-token')
+        self.assertIsNotNone(self.account.token_expiry)
+        creds.refresh.assert_called_once()
+
+    @patch('campaigns.gmail_service.Credentials')
+    def test_get_credentials_skips_refresh_when_token_is_fresh(self, mock_credentials):
+        creds = MagicMock()
+        creds.expired = False
+        creds.refresh_token = 'refresh'
+        mock_credentials.return_value = creds
+
+        result = gmail_service._get_credentials(self.account)
+
+        self.assertIs(result, creds)
+        creds.refresh.assert_not_called()
+
+    @patch('campaigns.gmail_service.build')
+    def test_check_for_replies_returns_reply_snippet(self, mock_build):
+        _, _ = self._mock_service(mock_build)
+
+        replies = gmail_service.check_for_replies(self.account, ['msg-123'])
+
+        self.assertEqual(replies, {'msg-123': 'thanks for the update'})
+
+    @patch('campaigns.gmail_service.build')
+    def test_check_for_replies_ignores_messages_without_thread_id(self, mock_build):
+        mock_service = MagicMock()
+        mock_service.users.return_value.messages.return_value.get.return_value.execute.return_value = {}
+        mock_build.return_value = mock_service
+
+        replies = gmail_service.check_for_replies(self.account, ['msg-123'])
+
+        self.assertEqual(replies, {})
+
+    @patch('campaigns.gmail_service.build')
+    def test_check_for_replies_returns_empty_dict_when_service_errors(self, mock_build):
+        mock_service = MagicMock()
+        mock_service.users.return_value.messages.return_value.get.return_value.execute.side_effect = RuntimeError('boom')
+        mock_build.return_value = mock_service
+
+        replies = gmail_service.check_for_replies(self.account, ['msg-123'])
+
+        self.assertEqual(replies, {})
