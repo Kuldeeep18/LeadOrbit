@@ -1121,6 +1121,65 @@ class CampaignWorkflowTests(APITestCase):
         campaign.refresh_from_db()
         self.assertEqual(campaign.status, 'ACTIVE')
 
+    def test_campaign_leads_action_clamps_limit_and_offset(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Campaign leads pagination',
+            status='ACTIVE',
+        )
+        lead_one = Lead.objects.create(
+            organization=self.organization,
+            email='lead-one@acme.test',
+        )
+        lead_two = Lead.objects.create(
+            organization=self.organization,
+            email='lead-two@acme.test',
+        )
+        CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead_one,
+        )
+        CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead_two,
+        )
+
+        response = self.client.get(
+            f'/api/v1/campaigns/{campaign.id}/leads/?limit=999999&offset=-5',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['limit'], 200)
+        self.assertEqual(response.data['offset'], 0)
+        self.assertEqual(response.data['total_leads'], 2)
+        self.assertEqual(len(response.data['leads']), 2)
+
+    def test_campaign_leads_action_rejects_non_numeric_limit(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Campaign leads bad pagination',
+            status='ACTIVE',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='lead-pagination@acme.test',
+        )
+        CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+        )
+
+        response = self.client.get(
+            f'/api/v1/campaigns/{campaign.id}/leads/?limit=abc',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data['param'], 'limit')
+        self.assertIn('integer', response.data['error'])
+
     def test_condition_time_is_mapped_to_delay_minutes(self):
         payload = {
             'name': 'Condition delay mapping',
