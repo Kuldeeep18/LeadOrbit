@@ -190,6 +190,9 @@ ENABLE_AUTO_REPLY_DETECTION = os.getenv(
 # Limit synchronous processing inside launch API calls to keep requests responsive.
 LAUNCH_IMMEDIATE_PASSES = int(os.getenv('LAUNCH_IMMEDIATE_PASSES', '1' if DEBUG else '0'))
 
+# CSV import safety cap to avoid loading oversized files into memory.
+MAX_CSV_UPLOAD_SIZE = int(os.getenv('MAX_CSV_UPLOAD_SIZE', str(10 * 1024 * 1024)))
+
 # Email backend (console for dev)
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
