@@ -284,6 +284,19 @@
                             <input type="date" id="filter-date-before" class="form-control form-control-sm" aria-label="Created before date">
                         </div>
 
+                        <div class="col-6 col-md-2">
+                            <label for="filter-score-min" class="form-label fw-semibold" style="font-size:0.82rem;">
+                                <i class="bi bi-graph-up me-1"></i>Min score
+                            </label>
+                            <input type="number" id="filter-score-min" class="form-control form-control-sm" placeholder="0" aria-label="Minimum lead score">
+                        </div>
+                        <div class="col-6 col-md-2">
+                            <label for="filter-score-max" class="form-label fw-semibold" style="font-size:0.82rem;">
+                                <i class="bi bi-graph-down me-1"></i>Max score
+                            </label>
+                            <input type="number" id="filter-score-max" class="form-control form-control-sm" placeholder="999" aria-label="Maximum lead score">
+                        </div>
+
                         <!-- Status / Pipeline stage -->
                         <div class="col-12 col-md-1 d-flex flex-column gap-1" style="min-width:120px;">
                             <label class="form-label fw-semibold mb-1" style="font-size:0.82rem;">
@@ -301,6 +314,18 @@
                                 <input class="form-check-input" type="radio" name="filter-status" id="status-unsub" value="unsubscribed">
                                 <label class="form-check-label small" for="status-unsub">Unsubscribed</label>
                             </div>
+                        </div>
+
+                        <div class="col-12 col-md-2">
+                            <label for="filter-sort-by" class="form-label fw-semibold" style="font-size:0.82rem;">
+                                <i class="bi bi-sort-down me-1"></i>Sort by
+                            </label>
+                            <select id="filter-sort-by" class="form-select form-select-sm" aria-label="Sort leads by">
+                                <option value="">Created newest</option>
+                                <option value="-score">Highest score</option>
+                                <option value="score">Lowest score</option>
+                                <option value="created_at">Oldest</option>
+                            </select>
                         </div>
                     </div>
 
@@ -702,8 +727,17 @@
             const before = document.getElementById('filter-date-before').value;
             if (before) params.created_before = before;
 
+            const minScore = document.getElementById('filter-score-min').value;
+            if (minScore !== '') params.min_score = minScore;
+
+            const maxScore = document.getElementById('filter-score-max').value;
+            if (maxScore !== '') params.max_score = maxScore;
+
             const statusEl = document.querySelector('input[name="filter-status"]:checked');
             if (statusEl && statusEl.value) params.status = statusEl.value;
+
+            const sortBy = document.getElementById('filter-sort-by').value;
+            if (sortBy) params.sort_by = sortBy;
 
             return params;
         }
@@ -733,8 +767,17 @@
             if (params.created_before) {
                 chips.push(`<span class="filter-active-badge"><i class="bi bi-calendar-x me-1"></i>Before ${params.created_before}</span>`);
             }
+            if (params.min_score || params.max_score) {
+                const min = params.min_score || '0';
+                const max = params.max_score || '∞';
+                chips.push(`<span class="filter-active-badge"><i class="bi bi-graph-up me-1"></i>Score ${min} - ${max}</span>`);
+            }
             if (params.status) {
                 chips.push(`<span class="filter-active-badge"><i class="bi bi-person-check me-1"></i>${params.status.charAt(0).toUpperCase() + params.status.slice(1)}</span>`);
+            }
+            if (params.sort_by) {
+                const label = params.sort_by === '-score' ? 'Highest score' : params.sort_by === 'score' ? 'Lowest score' : params.sort_by === 'created_at' ? 'Oldest' : params.sort_by;
+                chips.push(`<span class="filter-active-badge"><i class="bi bi-sort-down me-1"></i>${label}</span>`);
             }
 
             if (chips.length) {
@@ -772,6 +815,9 @@
             selectedTagIds.clear();
             document.getElementById('filter-date-after').value = '';
             document.getElementById('filter-date-before').value = '';
+            document.getElementById('filter-score-min').value = '';
+            document.getElementById('filter-score-max').value = '';
+            document.getElementById('filter-sort-by').value = '';
             document.querySelector('input[name="filter-status"][value=""]').checked = true;
             activeFilters = {};
             renderTagFilterChips();
