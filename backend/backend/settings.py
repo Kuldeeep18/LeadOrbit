@@ -4,7 +4,11 @@ Django settings for backend project.
 from pathlib import Path
 import os
 import re
+import secrets
+import sys
+import warnings
 from dotenv import load_dotenv
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 # Prefer local project .env values for local development runs.
@@ -48,8 +52,26 @@ def _normalize_google_redirect_uri(raw_uri: str, backend_base_url: str) -> str:
     # Canonicalize callback path so Google/login/token-exchange always match.
     return f'{scheme}://{host}/api/v1/auth/google/callback'
 
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-fallback-key-change-me')
-DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes')
+DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 'yes')
+
+
+def _get_secret_key() -> str:
+    secret_key = os.getenv('SECRET_KEY') or _read_local_env_value('SECRET_KEY', '')
+    if secret_key:
+        return secret_key
+
+    if DEBUG or 'test' in sys.argv:
+        warnings.warn(
+            'SECRET_KEY is not set. Using a temporary development key; set SECRET_KEY in .env for persistence.',
+            RuntimeWarning,
+            stacklevel=2,
+        )
+        return secrets.token_urlsafe(64)
+
+    raise ImproperlyConfigured('SECRET_KEY must be set when DEBUG is False.')
+
+
+SECRET_KEY = _get_secret_key()
 ALLOWED_HOSTS = ['*']
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
