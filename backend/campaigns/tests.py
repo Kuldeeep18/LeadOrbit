@@ -8,7 +8,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from campaigns.models import Campaign, CampaignLead, ConnectedEmailAccount, SequenceStep
+from campaigns.models import Campaign, CampaignLead, ConnectedEmailAccount, DailySendCount, SequenceStep
 from campaigns.ai import personalize_email
 from campaigns.tasks import (
     _execute_condition_event_step,
@@ -1430,6 +1430,59 @@ class CampaignWorkflowTests(APITestCase):
         self.assertIsNone(campaign_lead.current_step)
         self.assertIsNone(campaign_lead.next_execution_time)
         self.assertEqual(campaign.status, 'COMPLETED')
+        mocked_send.assert_not_called()
+
+    def test_send_email_step_respects_campaign_daily_limit(self):
+        account = ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=self.user,
+            email_address='sender@acme.test',
+            provider='GOOGLE',
+            access_token='token',
+            refresh_token='refresh',
+        )
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Daily limit test',
+            status='ACTIVE',
+            connected_account=account,
+            settings={'daily_limit': 1},
+        )
+        email_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Hello',
+            template_body='Hi there',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='limit@acme.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=email_step,
+            status='ACTIVE',
+            next_execution_time=timezone.now() - timedelta(minutes=1),
+        )
+        DailySendCount.objects.create(
+            organization=self.organization,
+            connected_account=account,
+            send_date=timezone.now().date(),
+            count=1,
+        )
+
+        with patch('campaigns.tasks.send_gmail') as mocked_send:
+            send_email_step(campaign_lead.id, email_step.id)
+
+        campaign_lead.refresh_from_db()
+        self.assertEqual(campaign_lead.current_step_id, email_step.id)
+        self.assertIsNotNone(campaign_lead.next_execution_time)
+        self.assertGreater(campaign_lead.next_execution_time, timezone.now())
         mocked_send.assert_not_called()
 
 

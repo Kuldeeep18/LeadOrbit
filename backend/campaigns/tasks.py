@@ -1,21 +1,89 @@
-import logging from datetime 
-import timedelta from celery 
-import shared_task from django.conf 
-import settings as django_settings from django.utils 
-import timezone from .ai 
-import _apply_merge_tags, personalize_email from .gmail_service
-import build_unsubscribe_url, check_for_replies, send_gmail from .sms_service 
-import send_sms, initiate_call from .models 
-import CampaignLead, SequenceStep from leads.models 
-import BlockedDomain, normalize_domain
-
-
+import logging
 import urllib.parse
+from datetime import datetime, timedelta
+
 from bs4 import BeautifulSoup
 from django.core.signing import Signer
+from django.db import transaction
+from django.conf import settings as django_settings
+from django.utils import timezone
+from celery import shared_task
+
+from .ai import _apply_merge_tags, personalize_email
+from .gmail_service import build_unsubscribe_url, check_for_replies, send_gmail
+from .sms_service import send_sms, initiate_call
+from .models import CampaignLead, SequenceStep, DailySendCount
+from leads.models import BlockedDomain, normalize_domain
 
 
 logger = logging.getLogger(__name__)
+
+
+def _get_daily_send_limit(campaign):
+    settings = campaign.settings if isinstance(campaign.settings, dict) else {}
+    raw_limit = settings.get('daily_limit')
+    try:
+        if raw_limit in (None, ''):
+            return None
+        limit = int(raw_limit)
+        return limit if limit > 0 else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _get_today_send_count(organization, connected_account, send_date):
+    if not connected_account:
+        return 0
+    record = DailySendCount.objects.filter(
+        organization=organization,
+        connected_account=connected_account,
+        send_date=send_date,
+    ).only('count').first()
+    return record.count if record else 0
+
+
+def _reserve_daily_send_slot(campaign, connected_account, now=None):
+    now = now or timezone.now()
+    limit = _get_daily_send_limit(campaign)
+    if not limit or not connected_account:
+        return True, None
+
+    send_date = now.date()
+    with transaction.atomic():
+        counter, _ = DailySendCount.objects.select_for_update().get_or_create(
+            organization=campaign.organization,
+            connected_account=connected_account,
+            send_date=send_date,
+            defaults={'count': 0},
+        )
+        if counter.count >= limit:
+            return False, counter.count
+
+        counter.count += 1
+        counter.save(update_fields=['count'])
+        return True, counter.count
+
+
+def _release_daily_send_slot(campaign, connected_account, now=None):
+    now = now or timezone.now()
+    if not connected_account:
+        return
+
+    send_date = now.date()
+    with transaction.atomic():
+        counter = DailySendCount.objects.select_for_update().filter(
+            organization=campaign.organization,
+            connected_account=connected_account,
+            send_date=send_date,
+        ).first()
+        if counter and counter.count > 0:
+            counter.count -= 1
+            counter.save(update_fields=['count'])
+
+
+def _start_of_next_day(now=None):
+    now = now or timezone.now()
+    return timezone.make_aware(datetime.combine((now + timedelta(days=1)).date(), datetime.min.time()))
 
 def _get_campaign_steps(campaign):
     """
@@ -481,6 +549,16 @@ def send_email_step(campaign_lead_id, step_id):
         if _skip_blocked_domain_lead(clead):
             return
 
+        reserved, current_count = _reserve_daily_send_slot(clead.campaign, clead.campaign.connected_account, now=timezone.now())
+        if not reserved:
+            clead.next_execution_time = _start_of_next_day(timezone.now())
+            clead.save(update_fields=['next_execution_time'])
+            logger.info(
+                f"Daily limit reached for campaign {clead.campaign.name}; "
+                f"rescheduling {clead.lead.email} for {clead.next_execution_time}."
+            )
+            return
+
         # Atomic guard: claim this send by nullifying next_execution_time.
         # Only one concurrent caller can win; prevents duplicate sends.
         claimed = CampaignLead.objects.filter(
@@ -489,6 +567,7 @@ def send_email_step(campaign_lead_id, step_id):
             next_execution_time__isnull=False,
         ).update(next_execution_time=None)
         if not claimed:
+            _release_daily_send_slot(clead.campaign, clead.campaign.connected_account, now=timezone.now())
             logger.info(
                 f"Skipping duplicate send for {clead.lead.email} on step {step.step_order}"
             )
@@ -515,6 +594,7 @@ def send_email_step(campaign_lead_id, step_id):
                 logger.info(f"Gmail SENT to {clead.lead.email} | msg_id={message_id}")
             except Exception as gmail_err:
                 logger.error(f"Gmail API send failed for {clead.lead.email}: {gmail_err}")
+                _release_daily_send_slot(clead.campaign, account, now=timezone.now())
                 # Restore next_execution_time so the lead can be retried later.
                 clead.next_execution_time = timezone.now() + timedelta(minutes=15)
                 clead.save(update_fields=['next_execution_time'])
@@ -525,6 +605,11 @@ def send_email_step(campaign_lead_id, step_id):
         _advance_to_next_step(clead, step)
 
     except Exception as e:
+        try:
+            if 'clead' in locals() and 'account' in locals():
+                _release_daily_send_slot(clead.campaign, account, now=timezone.now())
+        except Exception:
+            pass
         logger.error(f"Failed to send email step: {e}")
 
 

@@ -1,7 +1,8 @@
 from rest_framework import serializers
 from django.db.models import Q
+from django.utils import timezone
 
-from .models import Campaign, CampaignLead, ConnectedEmailAccount, SequenceStep, EmailTemplate
+from .models import Campaign, CampaignLead, ConnectedEmailAccount, DailySendCount, SequenceStep, EmailTemplate
 
 DELAY_UNIT_TO_MINUTES = {
     'minutes': 1,
@@ -29,6 +30,8 @@ class CampaignSerializer(serializers.ModelSerializer):
     enrolled_lead_ids = serializers.SerializerMethodField()
     connected_account = serializers.SerializerMethodField()
     connected_account_id = serializers.UUIDField(write_only=True, required=False, allow_null=True)
+    daily_limit = serializers.SerializerMethodField()
+    sends_today = serializers.SerializerMethodField()
 
     class Meta:
         model = Campaign
@@ -45,6 +48,8 @@ class CampaignSerializer(serializers.ModelSerializer):
             'reply_count',
             'clicked_count',
             'bounced_count',
+            'daily_limit',
+            'sends_today',
             'created_at',
             'connected_account',
             'connected_account_id',
@@ -64,6 +69,27 @@ class CampaignSerializer(serializers.ModelSerializer):
             'email': obj.connected_account.email_address,
             'provider': obj.connected_account.provider,
         }
+
+    def get_daily_limit(self, obj):
+        settings = obj.settings if isinstance(obj.settings, dict) else {}
+        raw_limit = settings.get('daily_limit')
+        try:
+            if raw_limit in (None, ''):
+                return None
+            limit = int(raw_limit)
+            return limit if limit > 0 else None
+        except (TypeError, ValueError):
+            return None
+
+    def get_sends_today(self, obj):
+        if not obj.connected_account_id:
+            return 0
+        send_count = DailySendCount.objects.filter(
+            organization=obj.organization,
+            connected_account=obj.connected_account,
+            send_date=timezone.now().date(),
+        ).only('count').first()
+        return send_count.count if send_count else 0
 
     def validate_connected_account_id(self, value):
         if value is None:

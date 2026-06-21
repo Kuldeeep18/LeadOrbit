@@ -213,6 +213,12 @@
             return 0;
         }
 
+        function getDailyLimit(campaign) {
+            const rawLimit = campaign.daily_limit ?? campaign.settings?.daily_limit;
+            const limit = Number(rawLimit);
+            return Number.isFinite(limit) && limit > 0 ? limit : null;
+        }
+
         function getStepPreview(campaign) {
             const source = Array.isArray(campaign.settings?.steps) && campaign.settings.steps.length > 0
                 ? campaign.settings.steps
@@ -319,6 +325,8 @@
                 const status = normalizeStatus(campaign.status);
                 const stepCount = getStepCount(campaign);
                 const previewSteps = getStepPreview(campaign);
+                const dailyLimit = getDailyLimit(campaign);
+                const sendsToday = Number(campaign.sends_today) || 0;
                 const previewHtml = previewSteps.length > 0
                     ? previewSteps.map(label => `<span class="step-chip"><i class="bi bi-dot" aria-hidden="true"></i>${escapeHtml(label)}</span>`).join('')
                     : '<span class="text-muted small">No sequence steps configured</span>';
@@ -362,6 +370,11 @@
                                         <div class="metric-label">Mode</div>
                                         <div class="metric-value">${status === 'ACTIVE' ? 'Live' : 'Idle'}</div>
                                     </div>
+                                    ${dailyLimit ? `
+                                    <div class="metric-box">
+                                        <div class="metric-label">Today</div>
+                                        <div class="metric-value">${sendsToday}/${dailyLimit}</div>
+                                    </div>` : ''}
                                 </div>
 
                                 <div class="step-preview">${previewHtml}</div>

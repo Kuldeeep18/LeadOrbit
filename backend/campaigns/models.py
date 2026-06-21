@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from django.utils import timezone
 from tenants.models import TenantModel
 from leads.models import Lead
 import uuid
@@ -49,6 +50,25 @@ class Campaign(TenantModel):
 
     def __str__(self):
         return self.name
+
+
+class DailySendCount(TenantModel):
+    connected_account = models.ForeignKey(
+        ConnectedEmailAccount,
+        on_delete=models.CASCADE,
+        related_name='daily_send_counts',
+    )
+    send_date = models.DateField(default=timezone.now)
+    count = models.PositiveIntegerField(default=0)
+
+    class Meta:
+        unique_together = ('organization', 'connected_account', 'send_date')
+        indexes = [
+            models.Index(fields=['connected_account', 'send_date']),
+        ]
+
+    def __str__(self):
+        return f"{self.connected_account.email_address} @ {self.send_date}: {self.count}"
 
 class SequenceStep(TenantModel):
     CHANNEL_CHOICES = (
