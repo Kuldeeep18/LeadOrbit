@@ -43,6 +43,7 @@ class Lead(TenantModel):
 
 class LeadImportJob(TenantModel):
     filename = models.CharField(max_length=255)
+    source_encoding = models.CharField(max_length=64, blank=True, default='')
     total_rows = models.IntegerField(default=0)
     imported_count = models.IntegerField(default=0)
     failed_count = models.IntegerField(default=0)

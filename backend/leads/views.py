@@ -4,6 +4,12 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from users.permissions import IsOrgManager
+
+try:
+    import chardet
+except ImportError:  # pragma: no cover - optional dependency in older environments
+    chardet = None
+
 from .models import BlockedDomain, Lead, LeadImportJob, Tag, LeadTag
 from .serializers import BlockedDomainSerializer, LeadImportJobSerializer, LeadSerializer, TagSerializer
 
@@ -11,6 +17,29 @@ from .serializers import BlockedDomainSerializer, LeadImportJobSerializer, LeadS
 class LeadImportJobPagination(PageNumberPagination):
     page_size = 10
 
+
+def _decode_csv_upload(raw_bytes):
+    candidates = ['utf-8-sig']
+    detected_encoding = None
+
+    if chardet is not None:
+        detection = chardet.detect(raw_bytes)
+        detected_encoding = (detection or {}).get('encoding') or ''
+        confidence = (detection or {}).get('confidence') or 0
+        if detected_encoding and confidence >= 0.5:
+            candidates.append(detected_encoding)
+
+    candidates.append('latin-1')
+
+    last_error = None
+    for encoding in candidates:
+        try:
+            return raw_bytes.decode(encoding), encoding
+        except (UnicodeDecodeError, LookupError) as exc:
+            last_error = exc
+            continue
+
+    raise UnicodeDecodeError('csv', raw_bytes, 0, len(raw_bytes), f'Unable to decode CSV upload: {last_error}')
 
 class LeadViewSet(viewsets.ModelViewSet):
     serializer_class = LeadSerializer
@@ -97,13 +126,16 @@ class LeadViewSet(viewsets.ModelViewSet):
         if not file_obj:
             return Response({"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST)
 
+        raw_bytes = file_obj.read()
+        file_contents, source_encoding = _decode_csv_upload(raw_bytes)
+
         job = LeadImportJob.objects.create(
             organization=request.user.organization,
             filename=file_obj.name or 'lead-import.csv',
+            source_encoding=source_encoding,
         )
         # Trigger async celery task
         from .tasks import import_leads_from_csv
-        file_contents = file_obj.read().decode('utf-8')
 
         # Ensure we pass the organization to the task
         import_leads_from_csv.delay(file_contents, request.user.organization.id, str(job.id))
