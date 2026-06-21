@@ -1,18 +1,18 @@
-import logging from datetime 
-import timedelta from celery 
-import shared_task from django.conf 
-import settings as django_settings from django.utils 
-import timezone from .ai 
-import _apply_merge_tags, personalize_email from .gmail_service
-import build_unsubscribe_url, check_for_replies, send_gmail from .sms_service 
-import send_sms, initiate_call from .models 
-import CampaignLead, SequenceStep from leads.models 
-import BlockedDomain, normalize_domain
-
-
+import logging
 import urllib.parse
+from datetime import timedelta
+
 from bs4 import BeautifulSoup
+from celery import shared_task
+from django.conf import settings as django_settings
 from django.core.signing import Signer
+from django.utils import timezone
+
+from .ai import _apply_merge_tags, personalize_email
+from .gmail_service import build_unsubscribe_url, check_for_replies, send_gmail
+from .models import CampaignLead, SequenceStep
+from .sms_service import initiate_call, send_sms
+from leads.models import BlockedDomain, normalize_domain
 
 
 logger = logging.getLogger(__name__)
