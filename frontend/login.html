@@ -96,6 +96,10 @@
                         </div>
 
                         <form aria-label="Login form">
+                            <div id="login-error" class="alert alert-danger alert-dismissible fade d-none" role="alert">
+                                <span id="login-error-message"></span>
+                                <button type="button" class="btn-close" aria-label="Dismiss" id="login-error-close"></button>
+                            </div>
                             <div class="mb-3">
                                 <label for="floatingInput" class="form-label text-white-50 small fw-semibold">Email Address</label>
                                 <div class="input-group">
@@ -155,22 +159,52 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             const form = document.querySelector('form');
+            const errorBox = document.getElementById('login-error');
+            const errorMessage = document.getElementById('login-error-message');
+            const dismissButton = document.getElementById('login-error-close');
+            const submitButton = form?.querySelector('button[type="submit"]');
+
+            const clearError = () => {
+                if (!errorBox || !errorMessage) {
+                    return;
+                }
+                errorMessage.textContent = '';
+                errorBox.classList.add('d-none');
+                errorBox.classList.remove('show');
+            };
+
+            const showError = (message) => {
+                if (!errorBox || !errorMessage) {
+                    alert(message);
+                    return;
+                }
+                errorMessage.textContent = message;
+                errorBox.classList.remove('d-none');
+                errorBox.classList.add('show');
+            };
+
+            dismissButton?.addEventListener('click', clearError);
+
             if (form) {
                 form.addEventListener('submit', async (e) => {
                     e.preventDefault();
+                    clearError();
                     const email = document.getElementById('floatingInput').value;
                     const password = document.getElementById('floatingPassword').value;
                     try {
-                        const btn = form.querySelector('button[type="submit"]');
-                        btn.disabled = true;
-                        btn.textContent = 'Signing In...';
+                        if (submitButton) {
+                            submitButton.disabled = true;
+                            submitButton.textContent = 'Signing In...';
+                        }
                         await login(email, password);
                         window.location.href = '/dashboard.html';
                     } catch (err) {
-                        alert('Login failed. Please check your credentials.');
-                        const btn = form.querySelector('button[type="submit"]');
-                        btn.disabled = false;
-                        btn.textContent = 'Sign In';
+                        showError(err?.message || 'Login failed. Please check your credentials.');
+                    } finally {
+                        if (submitButton) {
+                            submitButton.disabled = false;
+                            submitButton.textContent = 'Sign In';
+                        }
                     }
                 });
             }

@@ -133,7 +133,16 @@ export const login = async (email, password) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
     });
-    if (!res.ok) throw new Error("Login failed");
+    if (!res.ok) {
+        let message = 'Login failed. Please check your credentials.';
+        try {
+            const data = await res.json();
+            message = data.detail || data.non_field_errors?.[0] || data.email?.[0] || message;
+        } catch {
+            // Keep the generic fallback when the backend does not return JSON.
+        }
+        throw new Error(message);
+    }
     const data = await res.json();
     setTokens(data.access, data.refresh);
     return data;
