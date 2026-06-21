@@ -136,6 +136,21 @@ class PasswordResetFlowTests(APITestCase):
         self.assertEqual(sent_kwargs['recipient_list'], ['forgot@example.com'])
         self.assertIn('/password-reset.html?uid=', sent_kwargs['message'])
 
+    @patch('users.views.send_mail')
+    def test_password_reset_request_is_generic_for_unknown_email(self, mocked_send_mail):
+        response = self.client.post(
+            '/api/v1/auth/password-reset/',
+            {'email': 'missing@example.com'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.data.get('detail'),
+            'If the email exists, a reset link has been sent.',
+        )
+        mocked_send_mail.assert_not_called()
+
     def test_password_reset_confirm_updates_password(self):
         uid = urlsafe_base64_encode(force_bytes(self.user.pk))
         token = default_token_generator.make_token(self.user)

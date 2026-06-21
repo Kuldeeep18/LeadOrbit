@@ -1,7 +1,10 @@
+import logging
+
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework.throttling import AnonRateThrottle
 from django.conf import settings
 from django.contrib.auth.tokens import default_token_generator
 from django.contrib.auth.password_validation import validate_password
@@ -19,6 +22,8 @@ from .serializers import (
 )
 from rest_framework_simplejwt.tokens import RefreshToken
 
+logger = logging.getLogger(__name__)
+
 class AuthViewSet(viewsets.GenericViewSet):
     @action(detail=False, methods=['post'], permission_classes=[AllowAny])
     def register(self, request):
@@ -33,7 +38,13 @@ class AuthViewSet(viewsets.GenericViewSet):
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(detail=False, methods=['post'], permission_classes=[AllowAny], url_path='password-reset')
+    @action(
+        detail=False,
+        methods=['post'],
+        permission_classes=[AllowAny],
+        throttle_classes=[AnonRateThrottle],
+        url_path='password-reset',
+    )
     def password_reset(self, request):
         serializer = PasswordResetRequestSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
@@ -41,28 +52,37 @@ class AuthViewSet(viewsets.GenericViewSet):
         email = serializer.validated_data['email'].strip()
         user = User.objects.filter(email__iexact=email).first()
         if user:
-            uid = urlsafe_base64_encode(force_bytes(user.pk))
-            token = default_token_generator.make_token(user)
-            frontend_base = getattr(settings, 'FRONTEND_BASE_URL', '').rstrip('/') or 'http://localhost:8080'
-            reset_link = f'{frontend_base}/password-reset.html?uid={uid}&token={token}'
-            send_mail(
-                subject='LeadOrbit password reset',
-                message=(
-                    'We received a request to reset your LeadOrbit password.\n\n'
-                    f'Reset it here: {reset_link}\n\n'
-                    'If you did not request this, you can ignore this email.'
-                ),
-                from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@leadorbit.local'),
-                recipient_list=[user.email],
-                fail_silently=False,
-            )
+            try:
+                uid = urlsafe_base64_encode(force_bytes(user.pk))
+                token = default_token_generator.make_token(user)
+                frontend_base = getattr(settings, 'FRONTEND_BASE_URL', '').rstrip('/') or 'http://localhost:8080'
+                reset_link = f'{frontend_base}/password-reset.html?uid={uid}&token={token}'
+                send_mail(
+                    subject='LeadOrbit password reset',
+                    message=(
+                        'We received a request to reset your LeadOrbit password.\n\n'
+                        f'Reset it here: {reset_link}\n\n'
+                        'If you did not request this, you can ignore this email.'
+                    ),
+                    from_email=getattr(settings, 'DEFAULT_FROM_EMAIL', 'no-reply@leadorbit.local'),
+                    recipient_list=[user.email],
+                    fail_silently=False,
+                )
+            except Exception:
+                logger.exception('Password reset email delivery failed for %s', user.email)
 
         return Response(
             {'detail': 'If the email exists, a reset link has been sent.'},
             status=status.HTTP_200_OK,
         )
 
-    @action(detail=False, methods=['post'], permission_classes=[AllowAny], url_path='password-reset/confirm')
+    @action(
+        detail=False,
+        methods=['post'],
+        permission_classes=[AllowAny],
+        throttle_classes=[AnonRateThrottle],
+        url_path='password-reset/confirm',
+    )
     def password_reset_confirm(self, request):
         serializer = PasswordResetConfirmSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
