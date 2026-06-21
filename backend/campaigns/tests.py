@@ -1433,6 +1433,68 @@ class CampaignWorkflowTests(APITestCase):
         mocked_send.assert_not_called()
 
 
+class CampaignCounterSignalTests(APITestCase):
+    def setUp(self):
+        self.organization = Organization.objects.create(name='Signal Org')
+        self.lead = Lead.objects.create(
+            organization=self.organization,
+            email='signal-lead@acme.test',
+        )
+        self.campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Signal Campaign',
+            status='ACTIVE',
+        )
+
+    def test_campaignlead_create_updates_cached_counts_incrementally(self):
+        with patch('campaigns.signals._update_campaign_counters', side_effect=AssertionError('full recount should not run')):
+            CampaignLead.objects.create(
+                organization=self.organization,
+                campaign=self.campaign,
+                lead=self.lead,
+                status='ACTIVE',
+                last_opened_at=timezone.now(),
+            )
+
+        self.campaign.refresh_from_db()
+        self.assertEqual(self.campaign.leads_count, 1)
+        self.assertEqual(self.campaign.sent_count, 1)
+        self.assertEqual(self.campaign.open_count, 1)
+        self.assertEqual(self.campaign.reply_count, 0)
+        self.assertEqual(self.campaign.clicked_count, 0)
+        self.assertEqual(self.campaign.bounced_count, 0)
+
+    def test_campaignlead_update_and_delete_apply_delta_changes(self):
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=self.campaign,
+            lead=self.lead,
+            status='ENROLLED',
+        )
+
+        campaign_lead.status = 'REPLIED'
+        campaign_lead.last_opened_at = timezone.now()
+        campaign_lead.last_clicked_at = timezone.now()
+        campaign_lead.save()
+
+        self.campaign.refresh_from_db()
+        self.assertEqual(self.campaign.leads_count, 1)
+        self.assertEqual(self.campaign.sent_count, 1)
+        self.assertEqual(self.campaign.open_count, 1)
+        self.assertEqual(self.campaign.reply_count, 1)
+        self.assertEqual(self.campaign.clicked_count, 1)
+        self.assertEqual(self.campaign.bounced_count, 0)
+
+        campaign_lead.delete()
+        self.campaign.refresh_from_db()
+        self.assertEqual(self.campaign.leads_count, 0)
+        self.assertEqual(self.campaign.sent_count, 0)
+        self.assertEqual(self.campaign.open_count, 0)
+        self.assertEqual(self.campaign.reply_count, 0)
+        self.assertEqual(self.campaign.clicked_count, 0)
+        self.assertEqual(self.campaign.bounced_count, 0)
+
+
 @override_settings(
     GOOGLE_CLIENT_ID='test-google-client-id',
     GOOGLE_CLIENT_SECRET='test-google-client-secret',
