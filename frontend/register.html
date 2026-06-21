@@ -96,6 +96,10 @@
                         </div>
 
                         <form aria-label="Registration form">
+                            <div id="register-error" class="alert alert-danger alert-dismissible fade d-none" role="alert">
+                                <span id="register-error-message"></span>
+                                <button type="button" class="btn-close" aria-label="Dismiss" id="register-error-close"></button>
+                            </div>
                             <div class="row mb-3">
                                 <div class="col-6">
                                     <label for="firstName" class="form-label text-white-50 small fw-semibold">First Name</label>
@@ -104,6 +108,7 @@
                                         <input type="text" class="form-control form-control-lg fs-6 custom-input" id="firstName" autocomplete="given-name"
                                             placeholder="Jane" required style="border-left: none !important;">
                                     </div>
+                                    <div class="invalid-feedback d-block small d-none" id="firstNameError"></div>
                                 </div>
                                 <div class="col-6">
                                     <label for="lastName" class="form-label text-white-50 small fw-semibold">Last Name</label>
@@ -112,6 +117,7 @@
                                         <input type="text" class="form-control form-control-lg fs-6 custom-input" id="lastName"  autocomplete="family-name"
                                             placeholder="Doe" required style="border-left: none !important;">
                                     </div>
+                                    <div class="invalid-feedback d-block small d-none" id="lastNameError"></div>
                                 </div>
                             </div>
 
@@ -122,6 +128,7 @@
                                     <input type="email" class="form-control form-control-lg fs-6 custom-input" id="emailAddress"  autocomplete="email"
                                         placeholder="name@example.com" required style="border-left: none !important;">
                                 </div>
+                                <div class="invalid-feedback d-block small d-none" id="emailError"></div>
                             </div>
                             <div class="mb-4">
     <label for="password"
@@ -148,6 +155,7 @@
             <i class="bi bi-eye" aria-hidden="true"></i>
         </button>
     </div>
+    <div class="invalid-feedback d-block small d-none" id="passwordError"></div>
 </div>
 
                             <div class="d-grid mb-3">
@@ -172,9 +180,89 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             const form = document.querySelector('form');
+            const errorBox = document.getElementById('register-error');
+            const errorMessage = document.getElementById('register-error-message');
+            const dismissButton = document.getElementById('register-error-close');
+            const submitButton = form?.querySelector('button[type="submit"]');
+            const inputs = {
+                first_name: document.getElementById('firstName'),
+                last_name: document.getElementById('lastName'),
+                email: document.getElementById('emailAddress'),
+                password: document.getElementById('password'),
+            };
+            const fieldErrors = {
+                first_name: document.getElementById('firstNameError'),
+                last_name: document.getElementById('lastNameError'),
+                email: document.getElementById('emailError'),
+                password: document.getElementById('passwordError'),
+            };
+
+            const clearErrorBox = () => {
+                if (!errorBox || !errorMessage) {
+                    return;
+                }
+                errorMessage.textContent = '';
+                errorBox.classList.add('d-none');
+                errorBox.classList.remove('show');
+            };
+
+            const clearFieldError = (field) => {
+                const input = inputs[field];
+                const error = fieldErrors[field];
+                if (input) {
+                    input.classList.remove('is-invalid');
+                }
+                if (error) {
+                    error.textContent = '';
+                    error.classList.add('d-none');
+                }
+            };
+
+            const clearErrors = () => {
+                clearErrorBox();
+                Object.keys(inputs).forEach(clearFieldError);
+            };
+
+            const showGeneralError = (message) => {
+                if (!errorBox || !errorMessage) {
+                    alert(message);
+                    return;
+                }
+                errorMessage.textContent = message;
+                errorBox.classList.remove('d-none');
+                errorBox.classList.add('show');
+            };
+
+            const showFieldErrors = (responseData) => {
+                if (!responseData || typeof responseData !== 'object') {
+                    return false;
+                }
+
+                const keys = ['first_name', 'last_name', 'email', 'password'];
+                let handled = false;
+
+                keys.forEach((key) => {
+                    const messages = responseData[key];
+                    const input = inputs[key];
+                    const error = fieldErrors[key];
+                    if (!messages || !input || !error) {
+                        return;
+                    }
+                    input.classList.add('is-invalid');
+                    error.textContent = Array.isArray(messages) ? messages.join(' ') : String(messages);
+                    error.classList.remove('d-none');
+                    handled = true;
+                });
+
+                return handled;
+            };
+
+            dismissButton?.addEventListener('click', clearErrorBox);
+
             if (form) {
                 form.addEventListener('submit', async (e) => {
                     e.preventDefault();
+                    clearErrors();
 
                     const first_name = document.getElementById('firstName').value;
                     const last_name = document.getElementById('lastName').value;
@@ -184,9 +272,10 @@
                     const organization_name = first_name + "'s Organization";
 
                     try {
-                        const btn = form.querySelector('button[type="submit"]');
-                        btn.disabled = true;
-                        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Signing up...';
+                        if (submitButton) {
+                            submitButton.disabled = true;
+                            submitButton.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Signing up...';
+                        }
 
                         await register({
                             first_name, last_name, email, password, organization_name
@@ -194,10 +283,17 @@
 
                         window.location.href = '/dashboard.html';
                     } catch (err) {
-                        alert('Registration failed. Please try again.');
-                        const btn = form.querySelector('button[type="submit"]');
-                        btn.disabled = false;
-                        btn.textContent = 'Sign Up';
+                        const handledFields = showFieldErrors(err?.responseData);
+                        if (!handledFields) {
+                            showGeneralError(err?.message || 'Registration failed. Please try again.');
+                        } else if (err?.message && err.message !== 'Registration failed. Please try again.') {
+                            showGeneralError(err.message);
+                        }
+                    } finally {
+                        if (submitButton) {
+                            submitButton.disabled = false;
+                            submitButton.textContent = 'Sign Up';
+                        }
                     }
                 });
             }
