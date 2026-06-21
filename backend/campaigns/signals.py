@@ -27,10 +27,14 @@ def _update_campaign_counters(campaign):
     
     # Opened: leads with last_opened_at not null
     open_count = qs.filter(last_opened_at__isnull=False).count()
-    
-    # Replied: leads with status 'REPLIED'
-    reply_count = qs.filter(status='REPLIED').count()
-    
+
+    #Replied: leads with status 'REPLIED', OR leads that have a recorded
+    # reply timestamp but are still active (e.g. routed into a CONDITION_REPLY
+    # "yes" branch where the sequence continues instead of terminating).
+    reply_count = qs.filter(
+        Q(status='REPLIED') | Q(last_replied_at__isnull=False)
+    ).count()
+
     # Clicked: leads with last_clicked_at not null
     clicked_count = qs.filter(last_clicked_at__isnull=False).count()
     
