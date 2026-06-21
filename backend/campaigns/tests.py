@@ -1464,6 +1464,9 @@ class CampaignCounterSignalTests(APITestCase):
         self.assertEqual(self.campaign.clicked_count, 0)
         self.assertEqual(self.campaign.bounced_count, 0)
 
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.score, 7)
+
     def test_campaignlead_update_and_delete_apply_delta_changes(self):
         campaign_lead = CampaignLead.objects.create(
             organization=self.organization,
@@ -1485,6 +1488,9 @@ class CampaignCounterSignalTests(APITestCase):
         self.assertEqual(self.campaign.clicked_count, 1)
         self.assertEqual(self.campaign.bounced_count, 0)
 
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.score, 22)
+
         campaign_lead.delete()
         self.campaign.refresh_from_db()
         self.assertEqual(self.campaign.leads_count, 0)
@@ -1493,6 +1499,9 @@ class CampaignCounterSignalTests(APITestCase):
         self.assertEqual(self.campaign.reply_count, 0)
         self.assertEqual(self.campaign.clicked_count, 0)
         self.assertEqual(self.campaign.bounced_count, 0)
+
+        self.lead.refresh_from_db()
+        self.assertEqual(self.lead.score, 0)
 
 
 @override_settings(
