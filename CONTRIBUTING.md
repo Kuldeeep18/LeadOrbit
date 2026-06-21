@@ -37,7 +37,13 @@ pip install -r requirements.txt
 
 ### 5. Configure Environment Variables
 
-Create a `backend/.env` file and add the required environment variables as described in the README.
+Copy `backend/.env.example` to `backend/.env` and fill in the required values.
+
+```bash
+cp backend/.env.example backend/.env
+```
+
+Use the file as the source of truth for local setup, and keep `backend/.env` out of version control.
 
 ### 6. Run Database Migrations
 
