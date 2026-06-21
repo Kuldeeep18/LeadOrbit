@@ -171,6 +171,12 @@ SIMPLE_JWT = {
     'USER_ID_CLAIM': 'user_id',
 }
 
+# Redis URL used by the rate limiter; falls back to the Celery broker when available.
+RATE_LIMIT_REDIS_URL = os.getenv(
+    'RATE_LIMIT_REDIS_URL',
+    os.getenv('REDIS_URL', os.getenv('CELERY_BROKER_URL', '')),
+)
+
 # Allow all origins in development
 CORS_ALLOW_ALL_ORIGINS = True
 
