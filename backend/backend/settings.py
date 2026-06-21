@@ -161,7 +161,10 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': 300.0,
     },
 }
-
+REDIS_URL = os.getenv(
+    "REDIS_URL",
+    "redis://localhost:6379/2"
+)
 # SimpleJWT Configuration
 from datetime import timedelta
 SIMPLE_JWT = {
