@@ -3,7 +3,7 @@ Django signals to automatically maintain cached counters on Campaign model.
 This ensures real-time consistency when CampaignLead records are modified.
 """
 
-from django.db.models import F
+from django.db.models import Count, F, Q
 from django.db.models.signals import post_save, post_delete, pre_save
 from django.dispatch import receiver
 from .models import CampaignLead, Campaign
@@ -49,8 +49,6 @@ def _update_campaign_counters(campaign):
     Recalculate and update all cached counters for a campaign.
     Called when a CampaignLead changes.
     """
-    from django.db.models import Q
-    
     qs = CampaignLead.objects.filter(campaign=campaign)
     
     # Total enrolled leads
@@ -114,19 +112,20 @@ def _calculate_lead_score(lead):
     """
     Derive a simple engagement score for a lead from related CampaignLead rows.
     """
-    qs = CampaignLead.objects.filter(lead=lead)
-    open_count = qs.filter(last_opened_at__isnull=False).count()
-    click_count = qs.filter(last_clicked_at__isnull=False).count()
-    reply_count = qs.filter(status='REPLIED').count()
-    bounced_count = qs.filter(status='BOUNCED').count()
-    active_count = qs.filter(status='ACTIVE').count()
+    agg = CampaignLead.objects.filter(lead=lead).aggregate(
+        open_count=Count('id', filter=Q(last_opened_at__isnull=False)),
+        click_count=Count('id', filter=Q(last_clicked_at__isnull=False)),
+        reply_count=Count('id', filter=Q(status='REPLIED')),
+        bounced_count=Count('id', filter=Q(status='BOUNCED')),
+        active_count=Count('id', filter=Q(status='ACTIVE')),
+    )
 
     score = (
-        (open_count * 5)
-        + (click_count * 7)
-        + (reply_count * 10)
-        + (active_count * 2)
-        - (bounced_count * 5)
+        (agg['open_count'] * 5)
+        + (agg['click_count'] * 7)
+        + (agg['reply_count'] * 10)
+        + (agg['active_count'] * 2)
+        - (agg['bounced_count'] * 5)
         - (5 if lead.global_unsubscribe else 0)
     )
     return max(score, 0)
@@ -176,21 +175,17 @@ def update_campaign_counters_on_delete(sender, instance, **kwargs):
     When a CampaignLead is deleted, recalculate campaign counters.
     We need to check if the campaign still exists (it might have been cascade deleted).
     """
-    try:
-        _apply_campaign_counter_delta(
-            instance.campaign_id,
-            {
-                key: -value
-                for key, value in _campaignlead_counter_flags(
-                    instance.status,
-                    instance.last_opened_at,
-                    instance.last_clicked_at,
-                ).items()
-            },
-        )
-    except Exception:
-        # Campaign was already deleted or update was not possible.
-        pass
+    _apply_campaign_counter_delta(
+        instance.campaign_id,
+        {
+            key: -value
+            for key, value in _campaignlead_counter_flags(
+                instance.status,
+                instance.last_opened_at,
+                instance.last_clicked_at,
+            ).items()
+        },
+    )
     try:
         lead = Lead.objects.get(id=instance.lead_id)
         _update_lead_score(lead)

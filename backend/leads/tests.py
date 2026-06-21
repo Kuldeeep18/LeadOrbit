@@ -1,6 +1,8 @@
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import status
 from rest_framework.test import APITestCase
+from django.utils import timezone
+from datetime import timedelta
 
 from leads.models import BlockedDomain, Lead, Tag, LeadTag, LeadImportJob
 from leads.tasks import import_leads_from_csv
@@ -394,6 +396,12 @@ class LeadFilterTests(APITestCase):
         LeadTag.objects.create(lead=self.lead_vip, tag=self.tag_vip, organization=self.org)
         LeadTag.objects.create(lead=self.lead_cold, tag=self.tag_cold, organization=self.org)
 
+        now = timezone.now()
+        Lead.objects.filter(id=self.lead_active.id).update(created_at=now - timedelta(days=4))
+        Lead.objects.filter(id=self.lead_unsub.id).update(created_at=now - timedelta(days=3))
+        Lead.objects.filter(id=self.lead_vip.id).update(created_at=now - timedelta(days=2))
+        Lead.objects.filter(id=self.lead_cold.id).update(created_at=now - timedelta(days=1))
+
     def _get(self, **params):
         self.client.force_authenticate(self.user)
         return self.client.get('/api/v1/leads/', params)
@@ -454,6 +462,15 @@ class LeadFilterTests(APITestCase):
         resp = self._get()
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         self.assertEqual(len(resp.data), 4)
+
+    def test_no_filter_defaults_to_newest_first(self):
+        resp = self._get()
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        emails = [l['email'] for l in resp.data]
+        self.assertEqual(
+            emails,
+            ['cold@example.com', 'vip@example.com', 'unsub@example.com', 'active@example.com'],
+        )
 
     def test_filter_does_not_leak_other_org_leads(self):
         other_org = Organization.objects.create(name='Spy Org')

@@ -22,9 +22,20 @@ class Command(BaseCommand):
             leads = leads.filter(id=lead_id)
 
         processed = 0
+        pending_updates = []
+        batch_size = 500
         for lead in leads.iterator():
             lead.score = _calculate_lead_score(lead)
-            lead.save(update_fields=['score'])
             processed += 1
+            pending_updates.append(lead)
+
+            if len(pending_updates) >= batch_size:
+                Lead.objects.bulk_update(pending_updates, ['score'])
+                self.stdout.write(f'Processed {processed} lead(s)...')
+                pending_updates.clear()
+
+        if pending_updates:
+            Lead.objects.bulk_update(pending_updates, ['score'])
+            self.stdout.write(f'Processed {processed} lead(s)...')
 
         self.stdout.write(self.style.SUCCESS(f'Successfully backfilled scores for {processed} lead(s).'))

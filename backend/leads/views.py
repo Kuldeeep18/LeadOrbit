@@ -96,7 +96,7 @@ class LeadViewSet(viewsets.ModelViewSet):
         if sort_by in {'score', '-score', 'created_at', '-created_at', 'email', '-email'}:
             return qs.order_by(sort_by).distinct()
 
-        return qs.distinct()
+        return qs.order_by('-created_at').distinct()
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization)
