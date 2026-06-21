@@ -11,7 +11,7 @@ class UserSerializer(serializers.ModelSerializer):
     organization = OrganizationSerializer(read_only=True)
     class Meta:
         model = User
-        fields = ['id', 'email', 'role', 'organization', 'is_active']
+        fields = ['id', 'email', 'role', 'organization', 'is_active', 'is_email_verified']
 
 class RegisterSerializer(serializers.Serializer):
     email = serializers.EmailField()
@@ -32,5 +32,6 @@ class RegisterSerializer(serializers.Serializer):
             password=validated_data['password'],
             organization=org,
             role='ADMIN',  # First user in org is admin
+            is_email_verified=False,
         )
         return user

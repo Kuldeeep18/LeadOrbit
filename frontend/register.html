@@ -192,9 +192,9 @@
                             first_name, last_name, email, password, organization_name
                         });
 
-                        window.location.href = '/dashboard.html';
+                        window.location.href = `/email-verification.html?email=${encodeURIComponent(email)}`;
                     } catch (err) {
-                        alert('Registration failed. Please try again.');
+                        alert(err?.message || 'Registration failed. Please try again.');
                         const btn = form.querySelector('button[type="submit"]');
                         btn.disabled = false;
                         btn.textContent = 'Sign Up';
