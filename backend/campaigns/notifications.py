@@ -17,7 +17,6 @@ def _init_firebase():
         return True
     try:
         import firebase_admin
-        from firebase_admin import credentials
         
         # For development, use default credentials or a service account
         # In production, set GOOGLE_APPLICATION_CREDENTIALS env var

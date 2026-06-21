@@ -1,4 +1,3 @@
-from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -401,21 +400,21 @@ class LeadFilterTests(APITestCase):
     def test_filter_by_status_active(self):
         resp = self._get(status='active')
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        emails = {l['email'] for l in resp.data}
+        emails = {lead_data['email'] for lead_data in resp.data}
         self.assertNotIn('unsub@example.com', emails)
         self.assertIn('active@example.com', emails)
 
     def test_filter_by_status_unsubscribed(self):
         resp = self._get(status='unsubscribed')
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        emails = {l['email'] for l in resp.data}
+        emails = {lead_data['email'] for lead_data in resp.data}
         self.assertIn('unsub@example.com', emails)
         self.assertNotIn('active@example.com', emails)
 
     def test_filter_by_single_tag(self):
         resp = self._get(tags=str(self.tag_vip.id))
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        emails = {l['email'] for l in resp.data}
+        emails = {lead_data['email'] for lead_data in resp.data}
         self.assertIn('vip@example.com', emails)
         self.assertNotIn('cold@example.com', emails)
         self.assertNotIn('active@example.com', emails)
@@ -425,7 +424,7 @@ class LeadFilterTests(APITestCase):
         LeadTag.objects.create(lead=self.lead_vip, tag=self.tag_cold, organization=self.org)
         resp = self._get(tags=f'{self.tag_vip.id},{self.tag_cold.id}')
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        emails = {l['email'] for l in resp.data}
+        emails = {lead_data['email'] for lead_data in resp.data}
         # lead_vip has both tags — should appear
         self.assertIn('vip@example.com', emails)
         # lead_cold only has tag_cold — should NOT appear (missing tag_vip)
@@ -445,7 +444,7 @@ class LeadFilterTests(APITestCase):
     def test_combined_tag_and_status_filter(self):
         resp = self._get(tags=str(self.tag_vip.id), status='active')
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        emails = {l['email'] for l in resp.data}
+        emails = {lead_data['email'] for lead_data in resp.data}
         self.assertIn('vip@example.com', emails)
         self.assertNotIn('unsub@example.com', emails)
         self.assertNotIn('cold@example.com', emails)
@@ -459,5 +458,5 @@ class LeadFilterTests(APITestCase):
         other_org = Organization.objects.create(name='Spy Org')
         _make_lead(other_org, 'spy@example.com')
         resp = self._get()
-        emails = {l['email'] for l in resp.data}
+        emails = {lead_data['email'] for lead_data in resp.data}
         self.assertNotIn('spy@example.com', emails)
