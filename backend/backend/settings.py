@@ -48,6 +48,10 @@ def _normalize_google_redirect_uri(raw_uri: str, backend_base_url: str) -> str:
     # Canonicalize callback path so Google/login/token-exchange always match.
     return f'{scheme}://{host}/api/v1/auth/google/callback'
 
+
+def _allow_all_cors_origins(debug: bool) -> bool:
+    return debug
+
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-fallback-key-change-me')
 DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes')
 ALLOWED_HOSTS = ['*']
@@ -171,8 +175,8 @@ SIMPLE_JWT = {
     'USER_ID_CLAIM': 'user_id',
 }
 
-# Allow all origins in development
-CORS_ALLOW_ALL_ORIGINS = True
+# Allow all origins only in development.
+CORS_ALLOW_ALL_ORIGINS = _allow_all_cors_origins(DEBUG)
 
 # Gemini API Key
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', _read_local_env_value('GEMINI_API_KEY', ''))
