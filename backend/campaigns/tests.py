@@ -1432,6 +1432,37 @@ class CampaignWorkflowTests(APITestCase):
         self.assertEqual(campaign.status, 'COMPLETED')
         mocked_send.assert_not_called()
 
+    def test_campaign_counter_signals_use_incremental_updates(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Signal performance test',
+            status='ACTIVE',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='signal-test@acme.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='ACTIVE',
+        )
+
+        with self.assertNumQueries(3):
+            campaign_lead.status = 'REPLIED'
+            campaign_lead.last_replied_at = timezone.now()
+            campaign_lead.save()
+
+        campaign.refresh_from_db()
+        campaign_lead.refresh_from_db()
+        self.assertEqual(campaign.leads_count, 1)
+        self.assertEqual(campaign.sent_count, 1)
+        self.assertEqual(campaign.reply_count, 1)
+        self.assertEqual(campaign.clicked_count, 0)
+        self.assertEqual(campaign.bounced_count, 0)
+        self.assertEqual(campaign_lead.status, 'REPLIED')
+
 
 @override_settings(
     GOOGLE_CLIENT_ID='test-google-client-id',
