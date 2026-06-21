@@ -1271,16 +1271,17 @@ class CampaignWorkflowTests(APITestCase):
             name='Other Corp Campaign',
             status='ACTIVE',
         )
-        other_lead = Lead.objects.create(
-            organization=org2,
-            email='otherlead@othercorp.test',
-        )
-        CampaignLead.objects.create(
-            organization=org2,
-            campaign=other_campaign,
-            lead=other_lead,
-            status='REPLIED',
-        )
+        for index in range(5):
+            other_lead = Lead.objects.create(
+                organization=org2,
+                email=f'otherlead{index}@othercorp.test',
+            )
+            CampaignLead.objects.create(
+                organization=org2,
+                campaign=other_campaign,
+                lead=other_lead,
+                status='REPLIED',
+            )
 
         # Acme user should see zero data (org2's data must not leak)
         response = self.client.get('/api/v1/analytics/dashboard/')
@@ -1293,11 +1294,13 @@ class CampaignWorkflowTests(APITestCase):
 
         # org2 user should only see their own data
         self.client.force_authenticate(other_user)
-        response = self.client.get('/api/v1/analytics/dashboard/')
+        with self.assertNumQueries(8):
+            response = self.client.get('/api/v1/analytics/dashboard/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertEqual(response.data['total_leads'], 1)
+        self.assertEqual(response.data['total_leads'], 5)
         self.assertEqual(response.data['active_campaigns'], 1)
-        self.assertEqual(response.data['replied'], 1)
+        self.assertEqual(response.data['replied'], 5)
+        self.assertEqual(len(response.data['recent_activity']), 5)
 
     def test_dashboard_analytics_requires_authentication(self):
         self.client.force_authenticate(user=None)
