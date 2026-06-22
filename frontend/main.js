@@ -4,6 +4,11 @@ import { fetchWithAuth, clearTokens, refreshAccessToken } from './api.js';
 const THEME_STORAGE_KEY = 'theme';
 const LEADORBIT_VERSION = 'v1.0.0-beta';
 const LEADORBIT_REPO_URL = 'https://github.com/Kuldeeep18/LeadOrbit';
+const ATTENTION_TITLE = 'Come back to LeadOrbit!';
+
+let originalPageTitle = document.title;
+let originalFaviconHref = null;
+let pageAttentionActive = false;
 
 // ==========================================
 // THEME MANAGEMENT
@@ -150,6 +155,75 @@ function scheduleSessionWarning() {
     clearTokens();
     window.location.href = '/login.html';
     }, Math.max(0, logoutDelay));
+}
+
+// ==========================================
+// PAGE ATTENTION NOTIFICATIONS
+// ==========================================
+
+function getFaviconLink() {
+    return document.querySelector('link[rel~="icon"]');
+}
+
+function restoreFavicon() {
+    const faviconLink = getFaviconLink();
+    if (faviconLink && originalFaviconHref) {
+        faviconLink.href = originalFaviconHref;
+    }
+}
+
+function drawAttentionBadge() {
+    const faviconLink = getFaviconLink();
+    if (!faviconLink) return;
+
+    if (!originalFaviconHref) {
+        originalFaviconHref = faviconLink.href;
+    }
+
+    const badgeImage = new Image();
+    badgeImage.onload = () => {
+        if (!pageAttentionActive) return;
+
+        const size = 64;
+        const canvas = document.createElement('canvas');
+        canvas.width = size;
+        canvas.height = size;
+
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return;
+
+        ctx.clearRect(0, 0, size, size);
+        ctx.drawImage(badgeImage, 0, 0, size, size);
+        ctx.beginPath();
+        ctx.fillStyle = '#ef4444';
+        ctx.arc(size * 0.72, size * 0.28, size * 0.16, 0, Math.PI * 2);
+        ctx.fill();
+
+        faviconLink.href = canvas.toDataURL('image/png');
+    };
+
+    badgeImage.onerror = restoreFavicon;
+    badgeImage.src = originalFaviconHref;
+}
+
+function setPageAttention(active) {
+    pageAttentionActive = active;
+    document.title = active ? ATTENTION_TITLE : originalPageTitle;
+
+    if (active) {
+        drawAttentionBadge();
+    } else {
+        restoreFavicon();
+    }
+}
+
+function initPageAttention() {
+    const syncAttentionState = () => {
+        setPageAttention(document.hidden);
+    };
+
+    document.addEventListener('visibilitychange', syncAttentionState);
+    syncAttentionState();
 }
 
 
@@ -310,6 +384,7 @@ function injectProjectFooter() {
 
 // Apply theme on load
 applyTheme(getTheme());
+initPageAttention();
 
 // ==========================================
 // ACTIVE NAVIGATION LINK
