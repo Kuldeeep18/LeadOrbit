@@ -1,3 +1,6 @@
+from unittest.mock import patch
+
+from django.test import SimpleTestCase, override_settings
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -104,3 +107,17 @@ class AuthMeViewTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertTrue(Organization.objects.filter(id=self.organization.id).exists())
         self.assertTrue(User.objects.filter(id=self.user.id).exists())
+
+
+@override_settings(GEMINI_API_KEY='', GOOGLE_CLIENT_ID='', GOOGLE_CLIENT_SECRET='')
+class StartupValidationTests(SimpleTestCase):
+    @patch('builtins.print')
+    def test_warn_missing_startup_env_vars_prints_bold_warning(self, mock_print):
+        from backend.startup import warn_missing_startup_env_vars
+
+        warn_missing_startup_env_vars()
+
+        mock_print.assert_called_once()
+        warning_message = mock_print.call_args.args[0]
+        self.assertIn('[LeadOrbit startup warning]', warning_message)
+        self.assertIn('Missing environment variables: GEMINI_API_KEY, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET', warning_message)
