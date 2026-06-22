@@ -21,6 +21,7 @@ class LeadViewSet(viewsets.ModelViewSet):
         'partial_update',
         'destroy',
         'delete_all',
+        'bulk_delete',
         'import_csv',
         'assign_tags',
     })
@@ -83,11 +84,51 @@ class LeadViewSet(viewsets.ModelViewSet):
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization)
 
+    def _scoped_delete_queryset(self):
+        return Lead.objects.filter(organization=self.request.user.organization)
+
     @action(detail=False, methods=['delete'], url_path='delete-all')
     def delete_all(self, request):
-        deleted_count, _ = self.get_queryset().delete()
+        deleted_count, _ = self._scoped_delete_queryset().delete()
         return Response(
             {"message": f"Successfully deleted {deleted_count} leads."},
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=False, methods=['post'], url_path='bulk-delete')
+    def bulk_delete(self, request):
+        raw_ids = request.data.get('lead_ids', [])
+        if not isinstance(raw_ids, list):
+            return Response(
+                {"error": "'lead_ids' must be a list of lead IDs."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        lead_ids = [str(lead_id).strip() for lead_id in raw_ids if str(lead_id).strip()]
+        lead_ids = list(dict.fromkeys(lead_ids))
+
+        if not lead_ids:
+            return Response(
+                {"error": "Select at least one lead to delete."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if len(lead_ids) > 500:
+            return Response(
+                {"error": "You can delete at most 500 leads at a time."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        org_leads = self._scoped_delete_queryset().filter(id__in=lead_ids)
+        if org_leads.count() != len(lead_ids):
+            return Response(
+                {"error": "One or more selected leads do not belong to your organization."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        deleted_count, _ = org_leads.delete()
+        return Response(
+            {"message": f"Successfully deleted {deleted_count} leads.", "deleted_count": deleted_count},
             status=status.HTTP_200_OK,
         )
 

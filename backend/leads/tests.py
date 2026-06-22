@@ -164,6 +164,74 @@ class LeadIsolationAPITests(APITestCase):
         self.assertFalse(Lead.objects.filter(id=self.lead_a.id).exists())
         self.assertTrue(Lead.objects.filter(id=self.lead_b.id).exists())
 
+    def test_bulk_delete_removes_only_selected_organization_leads(self):
+        extra_lead = Lead.objects.create(
+            organization=self.org_a,
+            email='a-extra@example.com',
+            first_name='Lead',
+            last_name='Extra',
+        )
+        other_org_lead = Lead.objects.create(
+            organization=self.org_b,
+            email='b-extra@example.com',
+            first_name='Lead',
+            last_name='Other',
+        )
+
+        self.client.force_authenticate(self.user_a)
+        response = self.client.post(
+            '/api/v1/leads/bulk-delete/',
+            {'lead_ids': [str(self.lead_a.id), str(extra_lead.id)]},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['deleted_count'], 2)
+        self.assertFalse(Lead.objects.filter(id=self.lead_a.id).exists())
+        self.assertFalse(Lead.objects.filter(id=extra_lead.id).exists())
+        self.assertTrue(Lead.objects.filter(id=other_org_lead.id).exists())
+
+    def test_bulk_delete_rejects_leads_outside_the_users_organization(self):
+        other_org_lead = Lead.objects.create(
+            organization=self.org_b,
+            email='foreign-delete@example.com',
+            first_name='Lead',
+            last_name='Foreign',
+        )
+
+        self.client.force_authenticate(self.user_a)
+        response = self.client.post(
+            '/api/v1/leads/bulk-delete/',
+            {'lead_ids': [str(self.lead_a.id), str(other_org_lead.id)]},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(Lead.objects.filter(id=self.lead_a.id).exists())
+        self.assertTrue(Lead.objects.filter(id=other_org_lead.id).exists())
+
+    def test_bulk_delete_rejects_more_than_500_leads(self):
+        leads = []
+        for index in range(501):
+            leads.append(
+                Lead.objects.create(
+                    organization=self.org_a,
+                    email=f'bulk-{index}@example.com',
+                    first_name='Bulk',
+                    last_name=str(index),
+                )
+            )
+
+        self.client.force_authenticate(self.user_a)
+        response = self.client.post(
+            '/api/v1/leads/bulk-delete/',
+            {'lead_ids': [str(lead.id) for lead in leads]},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertTrue(Lead.objects.filter(id=leads[0].id).exists())
+
     def test_member_can_list_but_cannot_create_leads(self):
         self.client.force_authenticate(self.member_a)
 

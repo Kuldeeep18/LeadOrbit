@@ -115,6 +115,38 @@
             position: relative;
         }
 
+        .lead-selection-toolbar {
+            background: var(--panel);
+            border: 1px solid var(--line);
+            border-bottom: 0;
+            border-radius: 14px 14px 0 0;
+            padding: 0.9rem 1rem;
+        }
+
+        .lead-select-col {
+            width: 44px;
+        }
+
+        .lead-select-cell,
+        .lead-select-head {
+            text-align: center;
+        }
+
+        .lead-select-cell .form-check,
+        .lead-select-head .form-check {
+            min-height: 1rem;
+            margin: 0;
+            padding: 0;
+            display: inline-flex;
+            justify-content: center;
+        }
+
+        .lead-select-cell .form-check-input,
+        .lead-select-head .form-check-input {
+            float: none;
+            margin: 0;
+        }
+
         .filter-dot {
             display: none;
             position: absolute;
@@ -354,10 +386,32 @@
                 </div>
 
                 <div class="table-shell">
+                    <div class="lead-selection-toolbar d-flex flex-wrap align-items-center justify-content-between gap-3">
+                        <div>
+                            <div class="fw-bold">Lead list</div>
+                            <div class="text-muted small">Select leads and remove them in one action.</div>
+                        </div>
+                        <div class="d-flex flex-wrap align-items-center gap-2">
+                            <div class="form-check mb-0">
+                                <input class="form-check-input" type="checkbox" id="select-all-leads-checkbox" aria-label="Select all visible leads">
+                                <label class="form-check-label small fw-semibold" for="select-all-leads-checkbox">Select all visible</label>
+                            </div>
+                            <button type="button" id="bulk-delete-btn" class="btn btn-sm btn-outline-danger" disabled>
+                                <i class="bi bi-trash3 me-1" aria-hidden="true"></i>
+                                Delete Selected
+                                <span class="badge text-bg-light text-danger ms-1" id="bulk-delete-count">0</span>
+                            </button>
+                        </div>
+                    </div>
                     <div class="table-responsive">
                         <table class="table table-hover mb-0 align-middle">
                             <thead class="table-light">
                                 <tr>
+                                    <th class="lead-select-head">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="lead-select-all-table" aria-label="Select all visible leads">
+                                        </div>
+                                    </th>
                                     <th>Name</th>
                                     <th>Email</th>
                                     <th>Phone</th>
@@ -369,7 +423,7 @@
                             </thead>
                             <tbody id="leads-table-body">
                                 <tr>
-                                    <td colspan="7" class="text-center py-4 text-muted">
+                                    <td colspan="8" class="text-center py-4 text-muted">
                                         <div class="spinner-border spinner-border-sm text-primary me-2" role="status" aria-label="Loading leads"></div>
                                         Loading leads...
                                     </td>
@@ -445,6 +499,29 @@
         </div>
     </div>
 
+    <div class="modal fade" id="bulkDeleteModal" tabindex="-1" aria-labelledby="bulkDeleteModalLabel" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content rounded-3 shadow">
+                <div class="modal-header border-0">
+                    <div>
+                        <h5 class="modal-title fw-bold" id="bulkDeleteModalLabel">Delete selected leads</h5>
+                        <div class="text-muted small" id="bulk-delete-modal-count"></div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="mb-0">This will permanently remove the selected leads from your organization. This action cannot be undone.</p>
+                </div>
+                <div class="modal-footer border-0">
+                    <button type="button" class="btn btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="button" class="btn btn-danger" id="confirm-bulk-delete-btn">
+                        <i class="bi bi-trash3 me-1" aria-hidden="true"></i> Delete Leads
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <script type="module" src="./main.js"></script>
     <script type="module">
         import { fetchWithAuth } from './api.js';
@@ -454,7 +531,9 @@
         let allTags = [];            // all org tags (for the filter panel)
         let allImportJobs = [];      // import job history
         let selectedTagIds = new Set(); // tags selected in the filter panel
+        let selectedLeadIds = new Set(); // leads selected for bulk actions
         let activeFilters = {};      // last applied filter state
+        let renderedLeadIds = [];    // lead ids currently visible in the table
 
         // ─── Utilities ──────────────────────────────────────────────────────
 
@@ -509,6 +588,105 @@
             });
         }
 
+        function getLeadId(lead) {
+            return String(lead?.id || '');
+        }
+
+        function updateBulkActionControls() {
+            const count = selectedLeadIds.size;
+            const deleteBtn = document.getElementById('bulk-delete-btn');
+            const countBadge = document.getElementById('bulk-delete-count');
+            const tableSelectAll = document.getElementById('lead-select-all-table');
+            const toolbarSelectAll = document.getElementById('select-all-leads-checkbox');
+
+            if (deleteBtn) {
+                deleteBtn.disabled = count === 0;
+            }
+            if (countBadge) {
+                countBadge.textContent = count;
+            }
+
+            const visibleIds = renderedLeadIds;
+            const visibleSelected = visibleIds.filter(id => selectedLeadIds.has(id)).length;
+            const allVisibleSelected = visibleIds.length > 0 && visibleSelected === visibleIds.length;
+            const someVisibleSelected = visibleSelected > 0 && visibleSelected < visibleIds.length;
+
+            [tableSelectAll, toolbarSelectAll].forEach(checkbox => {
+                if (!checkbox) return;
+                checkbox.disabled = visibleIds.length === 0;
+                checkbox.checked = allVisibleSelected;
+                checkbox.indeterminate = someVisibleSelected;
+            });
+
+            document.querySelectorAll('#leads-table-body tr[data-lead-id]').forEach(row => {
+                row.classList.toggle('table-active', selectedLeadIds.has(row.dataset.leadId));
+            });
+            document.querySelectorAll('.lead-select-checkbox').forEach(checkbox => {
+                checkbox.checked = selectedLeadIds.has(checkbox.dataset.leadId);
+            });
+        }
+
+        function setVisibleLeadSelection(checked) {
+            renderedLeadIds.forEach(id => {
+                if (checked) {
+                    selectedLeadIds.add(id);
+                } else {
+                    selectedLeadIds.delete(id);
+                }
+            });
+            updateBulkActionControls();
+        }
+
+        function showBulkDeleteModal() {
+            const count = selectedLeadIds.size;
+            if (!count) return;
+
+            const countLabel = document.getElementById('bulk-delete-modal-count');
+            if (countLabel) {
+                countLabel.textContent = `${count} lead${count === 1 ? '' : 's'} selected`;
+            }
+
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('bulkDeleteModal')).show();
+        }
+
+        async function confirmBulkDelete() {
+            const deleteBtn = document.getElementById('confirm-bulk-delete-btn');
+            const originalLabel = deleteBtn ? deleteBtn.innerHTML : '';
+            const ids = [...selectedLeadIds];
+            if (!ids.length) return;
+
+            if (deleteBtn) {
+                deleteBtn.disabled = true;
+                deleteBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Deleting...';
+            }
+
+            try {
+                const res = await fetchWithAuth('/leads/bulk-delete/', {
+                    method: 'POST',
+                    body: JSON.stringify({ lead_ids: ids }),
+                });
+                const data = await res.json().catch(() => ({}));
+
+                if (!res.ok) {
+                    alert(data.error || data.detail || 'Could not delete the selected leads right now.');
+                    return;
+                }
+
+                selectedLeadIds.clear();
+                bootstrap.Modal.getOrCreateInstance(document.getElementById('bulkDeleteModal')).hide();
+                await loadLeads();
+                await loadImportHistory();
+            } catch (e) {
+                alert('Could not delete the selected leads right now.');
+            } finally {
+                if (deleteBtn) {
+                    deleteBtn.disabled = false;
+                    deleteBtn.innerHTML = originalLabel;
+                }
+                updateBulkActionControls();
+            }
+        }
+
         // ─── Render ─────────────────────────────────────────────────────────
 
         function renderImportErrorRows(job) {
@@ -545,10 +723,11 @@
 
         function renderLeadRows(leads) {
             const tbody = document.getElementById('leads-table-body');
+            renderedLeadIds = leads.map(getLeadId).filter(Boolean);
             if (leads.length === 0) {
                 tbody.innerHTML = `
 <tr>
-    <td colspan="7" class="text-center py-5">
+    <td colspan="8" class="text-center py-5">
         <div class="empty-state">
             <i class="bi bi-people display-4 text-secondary" aria-hidden="true"></i>
             <h5 class="mt-3 mb-2">No leads found</h5>
@@ -559,11 +738,17 @@
         </div>
     </td>
 </tr>`;
+                updateBulkActionControls();
                 return;
             }
 
             tbody.innerHTML = leads.map(lead => `
-                <tr>
+                <tr data-lead-id="${escapeHtml(getLeadId(lead))}" class="${selectedLeadIds.has(getLeadId(lead)) ? 'table-active' : ''}">
+                    <td class="lead-select-cell">
+                        <div class="form-check">
+                            <input class="form-check-input lead-select-checkbox" type="checkbox" data-lead-id="${escapeHtml(getLeadId(lead))}" aria-label="Select lead ${escapeHtml(lead.email || '')}" ${selectedLeadIds.has(getLeadId(lead)) ? 'checked' : ''}>
+                        </div>
+                    </td>
                     <td class="fw-semibold">${escapeHtml(lead.first_name || '')} ${escapeHtml(lead.last_name || '')}</td>
                     <td>
                         <span>${escapeHtml(lead.email)}</span>
@@ -587,6 +772,20 @@
             document.querySelectorAll('.copy-email-btn').forEach(btn => {
                 btn.addEventListener('click', () => copyToClipboard(btn.dataset.email, btn));
             });
+
+            document.querySelectorAll('.lead-select-checkbox').forEach(checkbox => {
+                checkbox.addEventListener('change', () => {
+                    const leadId = checkbox.dataset.leadId;
+                    if (checkbox.checked) {
+                        selectedLeadIds.add(leadId);
+                    } else {
+                        selectedLeadIds.delete(leadId);
+                    }
+                    updateBulkActionControls();
+                });
+            });
+
+            updateBulkActionControls();
         }
 
         function renderImportHistory(jobs) {
@@ -826,11 +1025,28 @@
 
             document.getElementById('lead-search').addEventListener('input', applySearch);
             document.getElementById('refresh-history-btn').addEventListener('click', loadImportHistory);
+            document.getElementById('bulk-delete-btn').addEventListener('click', showBulkDeleteModal);
+            document.getElementById('confirm-bulk-delete-btn').addEventListener('click', confirmBulkDelete);
 
             const filterPanel = document.getElementById('filter-panel');
             document.getElementById('filter-toggle-btn').addEventListener('click', () => {
                 const isHidden = filterPanel.style.display === 'none';
                 filterPanel.style.display = isHidden ? 'block' : 'none';
+            });
+
+            const selectAllTable = document.getElementById('lead-select-all-table');
+            const selectAllToolbar = document.getElementById('select-all-leads-checkbox');
+            [selectAllTable, selectAllToolbar].forEach(checkbox => {
+                if (!checkbox) return;
+                checkbox.addEventListener('change', () => {
+                    setVisibleLeadSelection(checkbox.checked);
+                    [selectAllTable, selectAllToolbar].forEach(other => {
+                        if (other) {
+                            other.checked = checkbox.checked;
+                            other.indeterminate = false;
+                        }
+                    });
+                });
             });
 
             document.getElementById('apply-filters-btn').addEventListener('click', applyFilters);
