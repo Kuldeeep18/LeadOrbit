@@ -1319,6 +1319,27 @@ class CampaignWorkflowTests(APITestCase):
         lead.refresh_from_db()
         self.assertFalse(lead.global_unsubscribe)
 
+    def test_unsubscribe_get_uses_organization_branding_when_available(self):
+        self.organization.unsubscribe_title = 'Stay in touch'
+        self.organization.unsubscribe_message = 'We will miss you, but you can leave anytime.'
+        self.organization.brand_logo_url = 'https://cdn.example.test/logo.png'
+        self.organization.save(update_fields=['unsubscribe_title', 'unsubscribe_message', 'brand_logo_url'])
+
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='branded@acme.test',
+        )
+        token = generate_unsubscribe_token(lead.id)
+
+        response = self.client.get(f'/api/v1/unsubscribe/{lead.id}/{token}/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        html = response.content.decode('utf-8')
+        self.assertIn('Stay in touch', html)
+        self.assertIn('We will miss you, but you can leave anytime.', html)
+        self.assertIn('https://cdn.example.test/logo.png', html)
+        self.assertIn('brand-logo', html)
+
     def test_unsubscribe_post_marks_lead_unsubscribed(self):
         lead = Lead.objects.create(
             organization=self.organization,

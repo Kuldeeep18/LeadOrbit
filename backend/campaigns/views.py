@@ -2,6 +2,7 @@ import logging
 
 
 import urllib.parse
+from html import escape
 from django.core.signing import Signer, BadSignature
 from django.http import HttpResponseRedirect, HttpResponseBadRequest
 # ------------------------------------------
@@ -719,20 +720,23 @@ from .utils import verify_unsubscribe_token
 
 
 def _unsubscribe_page(title, message, extra_html=''):
+    safe_title = escape(title)
+    safe_message = escape(message)
     return (
         '<!DOCTYPE html>'
         '<html lang="en">'
         '<head>'
         '<meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        f'<title>{title} | LeadOrbit</title>'
+        f'<title>{safe_title} | LeadOrbit</title>'
         '<style>body{margin:0;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Ubuntu,sans-serif;background:#f8fafc;color:#111827;}'
         '.container{max-width:720px;margin:72px auto;padding:32px;background:#ffffff;border:1px solid #e5e7eb;border-radius:24px;box-shadow:0 20px 80px rgba(15,23,42,.08);}'
         'h1{margin-top:0;font-size:2rem;color:#0f172a;}p{font-size:1rem;line-height:1.7;color:#475569;}'
         'button{margin-top:12px;border:0;border-radius:999px;background:#1d4ed8;color:#fff;font-weight:700;padding:12px 20px;cursor:pointer;}'
+        '.brand-logo{display:block;max-height:72px;max-width:220px;object-fit:contain;margin:0 0 18px 0;}'
         '</style>'
         '</head>'
-        f'<body><div class="container"><h1>{title}</h1><p>{message}</p>{extra_html}</div></body>'
+        f'<body><div class="container">{extra_html}<h1>{safe_title}</h1><p>{safe_message}</p></div></body>'
         '</html>'
     )
 
@@ -755,6 +759,20 @@ def unsubscribe_view(request, lead_id, token):
             status=404,
         )
 
+    organization = lead.organization
+    custom_title = organization.unsubscribe_title or 'Confirm unsubscribe'
+    custom_message = (
+        organization.unsubscribe_message
+        or 'Please confirm that you want to unsubscribe from future emails sent through LeadOrbit.'
+    )
+    brand_logo_url = (organization.brand_logo_url or '').strip()
+    brand_logo_html = ''
+    if brand_logo_url:
+        brand_logo_html = (
+            f'<img class="brand-logo" src="{escape(brand_logo_url)}" '
+            f'alt="{escape(organization.name)} logo">'
+        )
+
     if request.method != 'POST':
         csrf_token = get_token(request)
         form = (
@@ -763,20 +781,17 @@ def unsubscribe_view(request, lead_id, token):
             '<button type="submit">Confirm unsubscribe</button>'
             '</form>'
         )
-        html = _unsubscribe_page(
-            'Confirm unsubscribe',
-            'Please confirm that you want to unsubscribe from future emails sent through LeadOrbit.',
-            form,
-        )
+        html = _unsubscribe_page(custom_title, custom_message, brand_logo_html + form)
         return HttpResponse(html, content_type='text/html')
 
     lead.global_unsubscribe = True
     lead.save(update_fields=["global_unsubscribe"])
 
     html = _unsubscribe_page(
-        'Unsubscribed',
-        'You have been unsubscribed from all future emails sent through LeadOrbit.',
-        '<p>If you received this link by mistake, no further action is needed.</p>',
+        organization.unsubscribe_title or 'Unsubscribed',
+        organization.unsubscribe_message
+        or 'You have been unsubscribed from all future emails sent through LeadOrbit.',
+        brand_logo_html + '<p>If you received this link by mistake, no further action is needed.</p>',
     )
 
     return HttpResponse(html, content_type='text/html')
