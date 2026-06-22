@@ -148,9 +148,10 @@ class CampaignWorkflowTests(APITestCase):
         self.assertEqual(account.imap_password, 'imap-pass')
 
         with connection.cursor() as cursor:
+            param = account.id.hex if connection.vendor == 'sqlite' else str(account.id)
             cursor.execute(
                 "SELECT smtp_password, imap_password FROM campaigns_connectedemailaccount WHERE id = %s",
-                [str(account.id)],
+                [param],
             )
             stored_smtp_password, stored_imap_password = cursor.fetchone()
 

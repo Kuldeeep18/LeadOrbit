@@ -50,6 +50,11 @@ def _normalize_google_redirect_uri(raw_uri: str, backend_base_url: str) -> str:
 
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-fallback-key-change-me')
 DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes')
+TESTING = 'test' in sys.argv
+MAILBOX_CREDENTIALS_ENCRYPTION_KEY = os.getenv(
+    'MAILBOX_CREDENTIALS_ENCRYPTION_KEY',
+    'fallback-insecure-key-for-local-dev-and-testing' if (DEBUG or TESTING) else '',
+)
 ALLOWED_HOSTS = ['*']
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
