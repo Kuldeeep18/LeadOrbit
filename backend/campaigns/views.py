@@ -436,6 +436,7 @@ class WebhookView(APIView):
                 for cl in cleads:
                     if event_type == 'bounce':
                         cl.status = 'BOUNCED'
+                        cl.last_bounced_at = now
                         if bounce_details['bounce_type']:
                             cl.bounce_type = bounce_details['bounce_type']
                         if bounce_details['bounce_code']:
@@ -447,6 +448,7 @@ class WebhookView(APIView):
                             'bounce_type',
                             'bounce_code',
                             'bounce_reason',
+                            'last_bounced_at',
                         ])
                         logger.info(
                             'Webhook bounce processed for email=%s type=%s code=%s reason=%s',

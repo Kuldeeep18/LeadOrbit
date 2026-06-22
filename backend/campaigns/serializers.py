@@ -1,3 +1,5 @@
+import bleach
+from bs4 import BeautifulSoup
 from rest_framework import serializers
 from django.db.models import Q
 
@@ -16,8 +18,63 @@ CONDITION_TIME_TO_MINUTES = {
     '1 week': 10080,
 }
 
+ALLOWED_EMAIL_BODY_TAGS = [
+    'a',
+    'blockquote',
+    'br',
+    'div',
+    'em',
+    'i',
+    'li',
+    'ol',
+    'p',
+    'pre',
+    'span',
+    'strong',
+    'ul',
+]
+
+ALLOWED_EMAIL_BODY_ATTRIBUTES = {
+    'a': ['href', 'title', 'target', 'rel'],
+    'blockquote': ['cite'],
+    'div': ['class'],
+    'p': ['class'],
+    'span': ['class'],
+}
+
+ALLOWED_EMAIL_BODY_PROTOCOLS = ['http', 'https', 'mailto']
+
+
+def sanitize_plain_text(value):
+    return bleach.clean(str(value or ''), tags=[], attributes={}, strip=True, strip_comments=True)
+
+
+def sanitize_email_html(value):
+    html = str(value or '')
+    if not html:
+        return ''
+
+    soup = BeautifulSoup(html, 'html.parser')
+    for node in soup.find_all(['script', 'iframe', 'object', 'embed', 'style']):
+        node.decompose()
+
+    return bleach.clean(
+        str(soup),
+        tags=ALLOWED_EMAIL_BODY_TAGS,
+        attributes=ALLOWED_EMAIL_BODY_ATTRIBUTES,
+        protocols=ALLOWED_EMAIL_BODY_PROTOCOLS,
+        strip=True,
+        strip_comments=True,
+    )
+
 
 class SequenceStepSerializer(serializers.ModelSerializer):
+    def validate_template_subject(self, value):
+        return sanitize_plain_text(value)
+
+    def validate_template_body(self, value):
+        return sanitize_email_html(value)
+
     class Meta:
         model = SequenceStep
         fields = ['id', 'step_order', 'channel_type', 'delay_minutes', 'template_subject', 'template_body']
@@ -178,15 +235,10 @@ class CampaignSerializer(serializers.ModelSerializer):
         delay_minutes = self._extract_delay_minutes(raw_step, channel_type)
 
         template_subject = (
-            raw_step.get('template_subject')
-            or raw_step.get('subject')
-            or ''
+            sanitize_plain_text(raw_step.get('template_subject') or raw_step.get('subject') or '')
         )
         template_body = (
-            raw_step.get('template_body')
-            or raw_step.get('body')
-            or raw_step.get('description')
-            or ''
+            sanitize_email_html(raw_step.get('template_body') or raw_step.get('body') or raw_step.get('description') or '')
         )
 
         return {

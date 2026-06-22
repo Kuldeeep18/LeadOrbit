@@ -10,6 +10,7 @@ from rest_framework.test import APITestCase
 
 from campaigns.models import Campaign, CampaignLead, ConnectedEmailAccount, SequenceStep
 from campaigns.ai import personalize_email
+from campaigns.serializers import SequenceStepSerializer
 from campaigns.tasks import (
     _execute_condition_event_step,
     _get_campaign_steps,
@@ -1257,6 +1258,7 @@ class CampaignWorkflowTests(APITestCase):
         self.assertEqual(campaign_lead.bounce_type, 'soft')
         self.assertEqual(campaign_lead.bounce_code, 'mailbox_full')
         self.assertEqual(campaign_lead.bounce_reason, 'Mailbox full')
+        self.assertIsNotNone(campaign_lead.last_bounced_at)
 
     def test_dashboard_analytics_isolates_data_by_tenant(self):
         org2 = Organization.objects.create(name='Other Corp')
@@ -1516,3 +1518,131 @@ class GoogleOAuthStateTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_302_FOUND)
         self.assertIn('google_auth=error', response['Location'])
         self.assertIn('reason=no_user', response['Location'])
+
+
+@override_settings(GEMINI_API_KEY='')
+class SequenceStepSanitizationTests(APITestCase):
+    def setUp(self):
+        self.organization = Organization.objects.create(name='Sanitize Org')
+        self.user = User.objects.create_user(
+            email='sanitize@acme.test',
+            password='StrongPass123!',
+            organization=self.organization,
+            role='ADMIN',
+        )
+        self.client.force_authenticate(self.user)
+
+    def _serialize_step(self, **kwargs):
+        payload = {
+            'step_order': 1,
+            'channel_type': 'EMAIL',
+            'delay_minutes': 0,
+            'template_subject': 'Hello',
+            'template_body': 'Body',
+        }
+        payload.update(kwargs)
+        serializer = SequenceStepSerializer(data=payload)
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+        return serializer
+
+    def test_template_subject_strips_html_markup(self):
+        serializer = self._serialize_step(template_subject='<strong>Hello</strong>')
+        self.assertEqual(serializer.validated_data['template_subject'], 'Hello')
+
+    def test_template_body_strips_script_tags(self):
+        serializer = self._serialize_step(
+            template_body='<script>alert(1)</script><p>Hello</p>',
+        )
+        self.assertNotIn('<script>', serializer.validated_data['template_body'])
+        self.assertIn('<p>Hello</p>', serializer.validated_data['template_body'])
+
+    def test_template_body_strips_iframe_tags(self):
+        serializer = self._serialize_step(
+            template_body='<iframe src="https://evil.test"></iframe><p>Content</p>',
+        )
+        self.assertNotIn('<iframe', serializer.validated_data['template_body'])
+        self.assertIn('<p>Content</p>', serializer.validated_data['template_body'])
+
+    def test_template_body_preserves_basic_formatting(self):
+        serializer = self._serialize_step(
+            template_body='<p>Hello <strong>team</strong></p>',
+        )
+        self.assertIn('<strong>team</strong>', serializer.validated_data['template_body'])
+
+    def test_template_body_removes_javascript_links(self):
+        serializer = self._serialize_step(
+            template_body='<a href="javascript:alert(1)">Click</a>',
+        )
+        self.assertNotIn('javascript:', serializer.validated_data['template_body'])
+
+    def test_template_body_removes_event_handler_attributes(self):
+        serializer = self._serialize_step(
+            template_body='<span class="keep" onclick="alert(1)">Safe</span>',
+        )
+        self.assertIn('class="keep"', serializer.validated_data['template_body'])
+        self.assertNotIn('onclick', serializer.validated_data['template_body'])
+
+    def test_campaign_builder_payload_sanitizes_step_body_on_create(self):
+        response = self.client.post(
+            '/api/v1/campaigns/',
+            {
+                'name': 'Sanitize on create',
+                'status': 'DRAFT',
+                'settings': {
+                    'steps': [
+                        {
+                            'type': 'EMAIL',
+                            'subject': '<b>Subject</b>',
+                            'body': '<script>alert(1)</script><p>Hello <strong>team</strong></p>',
+                        }
+                    ]
+                },
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        campaign = Campaign.objects.get(id=response.data['id'])
+        step = campaign.steps.first()
+        self.assertEqual(step.template_subject, 'Subject')
+        self.assertNotIn('<script>', step.template_body)
+        self.assertIn('<strong>team</strong>', step.template_body)
+
+    def test_campaign_builder_payload_sanitizes_step_body_on_update(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Sanitize on update',
+            status='DRAFT',
+        )
+        SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Safe',
+            template_body='Safe body',
+        )
+
+        response = self.client.patch(
+            f'/api/v1/campaigns/{campaign.id}/',
+            {
+                'settings': {
+                    'steps': [
+                        {
+                            'type': 'EMAIL',
+                            'subject': '<i>Updated</i>',
+                            'body': '<iframe src="https://bad.test"></iframe><p>Updated <em>body</em></p>',
+                        }
+                    ]
+                }
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        campaign.refresh_from_db()
+        step = campaign.steps.first()
+        self.assertEqual(step.template_subject, 'Updated')
+        self.assertNotIn('<iframe', step.template_body)
+        self.assertIn('<em>body</em>', step.template_body)
