@@ -1246,6 +1246,7 @@
         let aiComposerStep = null;
         let aiConversation = [];
         let aiLatestDraft = null;
+        let leadTagFilter = '';
 
         // Steps are stored as an array of objects
         let steps = [
@@ -1559,9 +1560,32 @@
             availableLeads = await res.json();
         }
 
+        function getLeadTags() {
+            const tagsById = new Map();
+            availableLeads.forEach(lead => {
+                (lead.tags || []).forEach(tag => {
+                    if (tag?.id && !tagsById.has(tag.id)) {
+                        tagsById.set(tag.id, tag);
+                    }
+                });
+            });
+
+            return Array.from(tagsById.values()).sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+        }
+
+        function getFilteredLeads() {
+            if (!leadTagFilter) {
+                return availableLeads;
+            }
+            return availableLeads.filter(lead => (lead.tags || []).some(tag => tag.id === leadTagFilter));
+        }
+
         function renderLeadsTab() {
             const canvas = document.getElementById('canvas');
-            const rows = availableLeads.map(lead => {
+            const leadTags = getLeadTags();
+            const filteredLeads = getFilteredLeads();
+            const selectedFilteredCount = filteredLeads.filter(lead => selectedLeadIds.has(lead.id)).length;
+            const rows = filteredLeads.map(lead => {
                 const checked = selectedLeadIds.has(lead.id) ? 'checked' : '';
                 return `
                     <tr>
@@ -1580,12 +1604,26 @@
                         <h5 class="mb-0">Select leads for this campaign</h5>
                         <span id="selected-leads-count" class="text-muted small">${selectedLeadIds.size} selected</span>
                     </div>
+                    <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+                        <div class="flex-grow-1" style="min-width: 240px; max-width: 320px;">
+                            <label class="form-label small text-muted mb-1" for="lead-tag-filter">Filter by tag</label>
+                            <select id="lead-tag-filter" class="form-select form-select-sm">
+                                <option value="">All tags</option>
+                                ${leadTags.map(tag => `<option value="${tag.id}" ${leadTagFilter === tag.id ? 'selected' : ''}>${tag.name}</option>`).join('')}
+                            </select>
+                        </div>
+                        <button type="button" id="clear-lead-tag-filter" class="btn btn-outline-secondary btn-sm mt-4 ${leadTagFilter ? '' : 'd-none'}">Clear filter</button>
+                    </div>
+                    <div class="small text-muted mb-3">
+                        Showing <b>${filteredLeads.length}</b> of <b>${availableLeads.length}</b> leads
+                        ${leadTagFilter ? ` · <b>${selectedFilteredCount}</b> filtered selected` : ''}
+                    </div>
                     <div class="table-responsive">
                         <table class="table table-sm align-middle mb-0">
                             <thead>
                                 <tr>
                                     <th style="width: 40px;">
-                                        <input id="select-all-leads" class="form-check-input" type="checkbox">
+                                        <input id="select-all-leads" class="form-check-input" type="checkbox" aria-label="Select all filtered leads" title="Select all filtered leads">
                                     </th>
                                     <th>Name</th>
                                     <th>Email</th>
@@ -1597,11 +1635,17 @@
 ${rows || `
 <tr>
     <td colspan="5" class="text-muted py-5 text-center">
-        <p class="mb-3">No leads found in your organization.</p>
-        <a href="/leads.html" class="btn btn-primary btn-sm d-inline-flex align-items-center gap-2">
-            <i class="bi bi-upload"></i>
-            <span>Go to Import Leads</span>
-        </a>
+        <p class="mb-3">${leadTagFilter ? 'No leads match the selected tag filter.' : 'No leads found in your organization.'}</p>
+        ${leadTagFilter ? `
+            <button type="button" id="empty-filter-reset" class="btn btn-outline-secondary btn-sm">
+                Clear filter
+            </button>
+        ` : `
+            <a href="/leads.html" class="btn btn-primary btn-sm d-inline-flex align-items-center gap-2">
+                <i class="bi bi-upload"></i>
+                <span>Go to Import Leads</span>
+            </a>
+        `}
     </td>
 </tr>
 `}
@@ -1614,10 +1658,14 @@ ${rows || `
 
             const selectAll = document.getElementById('select-all-leads');
             if (selectAll) {
-                selectAll.checked = availableLeads.length > 0 && selectedLeadIds.size === availableLeads.length;
+                selectAll.checked = filteredLeads.length > 0 && filteredLeads.every(lead => selectedLeadIds.has(lead.id));
+                selectAll.indeterminate = filteredLeads.some(lead => selectedLeadIds.has(lead.id)) && !selectAll.checked;
                 selectAll.addEventListener('change', (e) => {
-                    selectedLeadIds = new Set();
-                    if (e.target.checked) availableLeads.forEach(lead => selectedLeadIds.add(lead.id));
+                    if (e.target.checked) {
+                        filteredLeads.forEach(lead => selectedLeadIds.add(lead.id));
+                    } else {
+                        filteredLeads.forEach(lead => selectedLeadIds.delete(lead.id));
+                    }
                     renderLeadsTab();
                 });
             }
@@ -1626,9 +1674,33 @@ ${rows || `
                 input.addEventListener('change', (e) => {
                     if (e.target.checked) selectedLeadIds.add(e.target.value);
                     else selectedLeadIds.delete(e.target.value);
-                    document.getElementById('selected-leads-count').textContent = `${selectedLeadIds.size} selected`;
+                    renderLeadsTab();
                 });
             });
+
+            const tagFilterSelect = document.getElementById('lead-tag-filter');
+            if (tagFilterSelect) {
+                tagFilterSelect.addEventListener('change', (e) => {
+                    leadTagFilter = e.target.value;
+                    renderLeadsTab();
+                });
+            }
+
+            const clearFilterBtn = document.getElementById('clear-lead-tag-filter');
+            if (clearFilterBtn) {
+                clearFilterBtn.addEventListener('click', () => {
+                    leadTagFilter = '';
+                    renderLeadsTab();
+                });
+            }
+
+            const emptyFilterReset = document.getElementById('empty-filter-reset');
+            if (emptyFilterReset) {
+                emptyFilterReset.addEventListener('click', () => {
+                    leadTagFilter = '';
+                    renderLeadsTab();
+                });
+            }
 
             document.getElementById('editor-content').innerHTML = `
                 <div class="p-3">
@@ -1636,7 +1708,8 @@ ${rows || `
                     <p class="text-muted small mb-3">Choose leads to enroll before launching.</p>
                     <div class="small text-muted">
                         Total leads: <b>${availableLeads.length}</b><br>
-                        Selected leads: <b>${selectedLeadIds.size}</b>
+                        Selected leads: <b>${selectedLeadIds.size}</b><br>
+                        Filtered leads: <b>${filteredLeads.length}</b>
                     </div>
                 </div>
             `;
@@ -2759,5 +2832,3 @@ document.getElementById('setting-daily-limit').value =
 </body>
 
 </html>
-
-
