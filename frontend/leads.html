@@ -131,6 +131,52 @@
             display: block;
         }
 
+        .tag-manager-create-card {
+            background: var(--panel-muted);
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: 0.9rem;
+        }
+
+        .tag-manager-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.85rem;
+            flex-wrap: wrap;
+        }
+
+        .tag-manager-item + .tag-manager-item {
+            border-top-left-radius: 0;
+            border-top-right-radius: 0;
+        }
+
+        .tag-manager-name-group {
+            min-width: 0;
+            flex: 1 1 260px;
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+        }
+
+        .tag-manager-color {
+            width: 2.5rem;
+            min-width: 2.5rem;
+            padding: 0;
+            border: 0;
+            background: transparent;
+        }
+
+        .tag-manager-name {
+            min-width: 0;
+        }
+
+        .tag-manager-actions {
+            display: flex;
+            gap: 0.5rem;
+            flex-wrap: wrap;
+        }
+
         /* ── Date inputs dark mode ── */
         [data-theme='dark'] input[type='date'] {
             color-scheme: dark;
@@ -200,6 +246,9 @@
                             <i class="bi bi-funnel me-1" aria-hidden="true"></i>Filters
                             <span class="filter-dot" id="filter-active-dot" aria-hidden="true"></span>
                         </button>
+                        <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#tagManagerModal">
+                            <i class="bi bi-tags me-1" aria-hidden="true"></i> Manage Tags
+                        </button>
                         <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#uploadModal">
                             <i class="bi bi-upload me-1" aria-hidden="true"></i> Import CSV
                         </button>
@@ -261,10 +310,15 @@
                     <div class="row g-3 align-items-start">
                         <!-- Tag multi-select -->
                         <div class="col-12 col-md-5">
-                            <label class="form-label fw-semibold" style="font-size:0.82rem;">
-                                <i class="bi bi-tags me-1"></i>Tags
-                                <span class="text-muted fw-normal">(click to toggle)</span>
-                            </label>
+                            <div class="d-flex align-items-center justify-content-between gap-2 mb-1">
+                                <label class="form-label fw-semibold mb-0" style="font-size:0.82rem;">
+                                    <i class="bi bi-tags me-1"></i>Tags
+                                    <span class="text-muted fw-normal">(click to toggle)</span>
+                                </label>
+                                <button class="btn btn-sm btn-outline-secondary py-0 px-2" data-bs-toggle="modal" data-bs-target="#tagManagerModal">
+                                    <i class="bi bi-sliders me-1" aria-hidden="true"></i>Manage
+                                </button>
+                            </div>
                             <div id="tag-filter-chips" class="d-flex flex-wrap gap-2">
                                 <span class="text-muted small">Loading tags...</span>
                             </div>
@@ -413,6 +467,47 @@
         </div>
     </div>
 
+    <div class="modal fade" id="tagManagerModal" tabindex="-1" aria-labelledby="tagManagerModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content rounded-3 shadow">
+                <div class="modal-header border-0">
+                    <div>
+                        <h5 class="modal-title fw-bold" id="tagManagerModalLabel">Manage Tags</h5>
+                        <div class="text-muted small">Create, rename, recolor, or delete organization tags.</div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body pt-0">
+                    <form id="create-tag-form" class="tag-manager-create-card mb-3">
+                        <div class="row g-2 align-items-end">
+                            <div class="col-12 col-md-5">
+                                <label for="new-tag-name" class="form-label small fw-semibold mb-1">Tag name</label>
+                                <input type="text" id="new-tag-name" class="form-control form-control-sm" placeholder="VIP, Hot Lead, Partner">
+                            </div>
+                            <div class="col-6 col-md-3">
+                                <label for="new-tag-color" class="form-label small fw-semibold mb-1">Color</label>
+                                <input type="color" id="new-tag-color" class="form-control form-control-color w-100" value="#6366f1" title="Choose tag color">
+                            </div>
+                            <div class="col-6 col-md-4 d-grid">
+                                <button type="submit" class="btn btn-sm btn-primary" id="create-tag-btn">
+                                    <i class="bi bi-plus-circle me-1" aria-hidden="true"></i>Add tag
+                                </button>
+                            </div>
+                        </div>
+                        <div id="tag-manager-status" class="small mt-2"></div>
+                    </form>
+
+                    <div id="tag-manager-list" class="list-group">
+                        <div class="text-center py-4 text-muted">
+                            <div class="spinner-border spinner-border-sm text-primary me-2" role="status" aria-label="Loading tags"></div>
+                            Loading tags...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
     <div class="modal fade" id="importErrorsModal" tabindex="-1" aria-labelledby="importErrorsModalLabel" aria-hidden="true">
         <div class="modal-dialog modal-lg modal-dialog-scrollable">
             <div class="modal-content rounded-3 shadow">
@@ -506,6 +601,137 @@
                 const icon = button.querySelector('i');
                 icon.classList.replace('bi-clipboard', 'bi-check');
                 setTimeout(() => icon.classList.replace('bi-check', 'bi-clipboard'), 2000);
+            });
+        }
+
+        function setTagManagerStatus(message, variant = 'muted') {
+            const statusEl = document.getElementById('tag-manager-status');
+            if (!statusEl) return;
+            const classes = {
+                muted: 'text-muted',
+                success: 'text-success',
+                danger: 'text-danger',
+            };
+            statusEl.className = `small mt-2 ${classes[variant] || classes.muted}`;
+            statusEl.textContent = message || '';
+        }
+
+        function normalizeTagColor(value) {
+            const fallback = '#6366f1';
+            const color = String(value || '').trim();
+            return /^#[0-9a-fA-F]{6}$/.test(color) ? color : fallback;
+        }
+
+        function renderTagManager() {
+            const list = document.getElementById('tag-manager-list');
+            if (!list) return;
+
+            if (!allTags.length) {
+                list.innerHTML = `
+                    <div class="text-center py-4 text-muted border rounded-3 bg-body-tertiary">
+                        <i class="bi bi-tags display-6 d-block mb-2"></i>
+                        No tags yet. Add one above to get started.
+                    </div>
+                `;
+                return;
+            }
+
+            list.innerHTML = allTags.map(tag => {
+                const color = normalizeTagColor(tag.color);
+                const fg = contrastColor(color);
+                return `
+                    <div class="list-group-item tag-manager-item">
+                        <div class="tag-manager-name-group">
+                            <input
+                                type="color"
+                                class="form-control form-control-color tag-manager-color"
+                                value="${color}"
+                                aria-label="Color for ${escapeHtml(tag.name)}">
+                            <input
+                                type="text"
+                                class="form-control form-control-sm tag-manager-name"
+                                value="${escapeHtml(tag.name)}"
+                                aria-label="Tag name for ${escapeHtml(tag.name)}">
+                            <span class="tag-badge ms-auto" style="background:${color};color:${fg};">
+                                <span class="tag-badge-dot" style="background:${fg};"></span>${escapeHtml(tag.name)}
+                            </span>
+                        </div>
+                        <div class="tag-manager-actions">
+                            <button type="button" class="btn btn-sm btn-outline-primary tag-save-btn" data-tag-id="${tag.id}">
+                                <i class="bi bi-check2 me-1" aria-hidden="true"></i>Save
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-danger tag-delete-btn" data-tag-id="${tag.id}">
+                                <i class="bi bi-trash me-1" aria-hidden="true"></i>Delete
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            list.querySelectorAll('.tag-save-btn').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const item = btn.closest('.tag-manager-item');
+                    const tagId = btn.dataset.tagId;
+                    const name = item.querySelector('.tag-manager-name').value.trim();
+                    const color = normalizeTagColor(item.querySelector('.tag-manager-color').value);
+
+                    if (!name) {
+                        setTagManagerStatus('Tag name cannot be empty.', 'danger');
+                        item.querySelector('.tag-manager-name').focus();
+                        return;
+                    }
+
+                    btn.disabled = true;
+                    setTagManagerStatus('Saving tag changes...');
+                    try {
+                        const res = await fetchWithAuth(`/tags/${tagId}/`, {
+                            method: 'PATCH',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ name, color }),
+                        });
+
+                        if (!res.ok) {
+                            throw new Error('Unable to update tag.');
+                        }
+
+                        setTagManagerStatus('Tag updated successfully.', 'success');
+                        await loadTags();
+                    } catch (error) {
+                        console.error('Failed to update tag:', error);
+                        setTagManagerStatus(error.message || 'Failed to update tag.', 'danger');
+                    } finally {
+                        btn.disabled = false;
+                    }
+                });
+            });
+
+            list.querySelectorAll('.tag-delete-btn').forEach(btn => {
+                btn.addEventListener('click', async () => {
+                    const tagId = btn.dataset.tagId;
+                    const tag = allTags.find(item => String(item.id) === String(tagId));
+                    const tagName = tag?.name || 'this tag';
+                    if (!window.confirm(`Delete ${tagName}? Leads that use it will lose this tag.`)) {
+                        return;
+                    }
+
+                    btn.disabled = true;
+                    setTagManagerStatus('Deleting tag...');
+                    try {
+                        const res = await fetchWithAuth(`/tags/${tagId}/`, { method: 'DELETE' });
+                        if (!res.ok && res.status !== 204) {
+                            throw new Error('Unable to delete tag.');
+                        }
+
+                        selectedTagIds.delete(String(tagId));
+                        setTagManagerStatus('Tag deleted.', 'success');
+                        await loadTags();
+                    } catch (error) {
+                        console.error('Failed to delete tag:', error);
+                        setTagManagerStatus(error.message || 'Failed to delete tag.', 'danger');
+                    } finally {
+                        btn.disabled = false;
+                    }
+                });
             });
         }
 
@@ -642,7 +868,9 @@
                 const res = await fetchWithAuth('/tags/');
                 if (!res.ok) return;
                 allTags = await res.json();
+                selectedTagIds = new Set([...selectedTagIds].filter(id => allTags.some(tag => String(tag.id) === String(id))));
                 renderTagFilterChips();
+                renderTagManager();
             } catch (e) {
                 console.error('Failed to load tags:', e);
             }
@@ -843,6 +1071,45 @@
                     renderLeadRows(leads);
                 } catch (e) {
                     console.error('Error clearing filters:', e);
+                }
+            });
+
+            document.getElementById('create-tag-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const nameInput = document.getElementById('new-tag-name');
+                const colorInput = document.getElementById('new-tag-color');
+                const name = nameInput.value.trim();
+                const color = normalizeTagColor(colorInput.value);
+
+                if (!name) {
+                    setTagManagerStatus('Tag name cannot be empty.', 'danger');
+                    nameInput.focus();
+                    return;
+                }
+
+                const createBtn = document.getElementById('create-tag-btn');
+                createBtn.disabled = true;
+                setTagManagerStatus('Creating tag...');
+                try {
+                    const res = await fetchWithAuth('/tags/', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ name, color }),
+                    });
+
+                    if (!res.ok) {
+                        throw new Error('Unable to create tag.');
+                    }
+
+                    nameInput.value = '';
+                    colorInput.value = '#6366f1';
+                    setTagManagerStatus('Tag created successfully.', 'success');
+                    await loadTags();
+                } catch (error) {
+                    console.error('Failed to create tag:', error);
+                    setTagManagerStatus(error.message || 'Failed to create tag.', 'danger');
+                } finally {
+                    createBtn.disabled = false;
                 }
             });
 
