@@ -15,11 +15,10 @@ class RateLimitMiddleware(MiddlewareMixin):
     Simple in-memory rate limiter for API endpoints.
     Limits each IP to a max number of requests per window.
     """
-    def _get_redis_client(self):
-        return redis.from_url(settings.REDIS_URL)
+    redis_client = redis.from_url(settings.REDIS_URL)
     
     RATE_LIMITS = {
-    "/api/v1/auth/login/": (10, 60),
+    "/api/v1/token/": (10, 60),
     "/api/v1/auth/register/": (5, 60),
     }
     DEFAULT_LIMIT = (100, 60)
@@ -42,7 +41,7 @@ class RateLimitMiddleware(MiddlewareMixin):
         key = f"ratelimit:{request.path}:{ip}"
 
         try:
-            client = self._get_redis_client()
+            client = self.redis_client
             count = client.incr(key)
 
             if count == 1:
