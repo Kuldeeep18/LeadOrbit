@@ -584,6 +584,68 @@
             font-size: 0.85rem;
         }
 
+        .subject-preview-shell {
+            padding: 12px;
+            border: 1.5px solid #dbe4ef;
+            border-radius: 14px;
+            background: linear-gradient(180deg, #f8fbff 0%, #eef4fb 100%);
+        }
+
+        .subject-preview-card {
+            border-radius: 20px;
+            background: #0f172a;
+            padding: 12px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, .12);
+        }
+
+        .subject-preview-notch {
+            width: 34px;
+            height: 5px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, .22);
+            margin: 0 auto 10px;
+        }
+
+        .subject-preview-notification {
+            background: rgba(255, 255, 255, .96);
+            border-radius: 16px;
+            padding: 12px 14px;
+        }
+
+        .subject-preview-source {
+            font-size: 0.68rem;
+            font-weight: 700;
+            letter-spacing: .05em;
+            text-transform: uppercase;
+            color: #64748b;
+            margin-bottom: 4px;
+        }
+
+        .subject-preview-subject {
+            font-size: 0.92rem;
+            font-weight: 700;
+            line-height: 1.35;
+            color: #0f172a;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+            min-height: 2.5em;
+        }
+
+        .subject-preview-subject.is-empty {
+            color: #94a3b8;
+            font-weight: 600;
+            font-style: italic;
+        }
+
+        .subject-preview-hint {
+            margin-top: 10px;
+            font-size: 0.72rem;
+            color: #64748b;
+            text-align: center;
+        }
+
         .delay-badge {
             display: inline-flex;
             align-items: center;
@@ -2056,6 +2118,17 @@ ${rows || `
                     <div class="ep-label">Subject <span class="text-muted fw-normal">&middot; Add Cc</span></div>
                     <input type="text" class="ep-input" id="ep-subject" placeholder="Subject" value="${step.subject || ''}">
                 </div>
+                <div class="mb-3 subject-preview-shell">
+                    <div class="ep-label mb-2">Mobile inbox preview</div>
+                    <div class="subject-preview-card" aria-live="polite">
+                        <div class="subject-preview-notch"></div>
+                        <div class="subject-preview-notification">
+                            <div class="subject-preview-source">LeadOrbit</div>
+                            <div id="subject-preview-subject" class="subject-preview-subject"></div>
+                        </div>
+                    </div>
+                    <div class="subject-preview-hint">This updates live as you type and shows how the subject may appear on mobile.</div>
+                </div>
                 <div class="mb-3">
                     <div class="ep-label">Body</div>
                     <textarea class="ep-textarea" id="ep-body" placeholder="Write your email content...">${step.body || ''}</textarea>
@@ -2085,13 +2158,33 @@ ${rows || `
             `;
 
             // Bind inputs
-            document.getElementById('ep-subject').addEventListener('input', (e) => { step.subject = e.target.value; });
+            const subjectInput = document.getElementById('ep-subject');
+            const subjectPreview = document.getElementById('subject-preview-subject');
+
+            const refreshSubjectPreview = (value) => {
+                if (!subjectPreview) return;
+                const subject = (value || '').trim().replace(/\s+/g, ' ');
+                if (!subject) {
+                    subjectPreview.textContent = 'Your subject line will preview here';
+                    subjectPreview.classList.add('is-empty');
+                    return;
+                }
+
+                subjectPreview.classList.remove('is-empty');
+                subjectPreview.textContent = subject;
+            };
+
+            subjectInput.addEventListener('input', (e) => {
+                step.subject = e.target.value;
+                refreshSubjectPreview(step.subject);
+            });
             document.getElementById('ep-body').addEventListener('input', (e) => { step.body = e.target.value; });
+            refreshSubjectPreview(step.subject);
 
             let activeEditor = document.getElementById('ep-body');
 
-            document.getElementById('ep-subject').addEventListener('focus', () => {
-                activeEditor = document.getElementById('ep-subject');
+            subjectInput.addEventListener('focus', () => {
+                activeEditor = subjectInput;
             });
 
             document.getElementById('ep-body').addEventListener('focus', () => {
@@ -2118,6 +2211,7 @@ ${rows || `
 
             if (body.id === 'ep-subject') {
                 step.subject = body.value;
+                refreshSubjectPreview(step.subject);
             } else {
                 step.body = body.value;
             }
@@ -2759,5 +2853,4 @@ document.getElementById('setting-daily-limit').value =
 </body>
 
 </html>
-
 
