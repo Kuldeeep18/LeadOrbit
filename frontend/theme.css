@@ -25,6 +25,8 @@
     --sidebar-text: #f8fafc;
     --sidebar-link: #cbd5e1;
     --sidebar-link-hover-bg: rgba(148, 163, 184, 0.16);
+    --sidebar-border: rgba(148, 163, 184, 0.2);
+    --sidebar-footer-border: rgba(148, 163, 184, 0.45);
     --brand-gradient-start: #22d3ee;
     --brand-gradient-end: #2dd4bf;
     --btn-outline-color: #334155;
@@ -42,6 +44,21 @@
     --paused-fg: #9a3412;
     --completed-bg: #dbeafe;
     --completed-fg: #1d4ed8;
+    --success-subtle-bg: rgba(34, 197, 94, 0.15);
+    --success-subtle-fg: #86efac;
+    --success-subtle-border: rgba(34, 197, 94, 0.3);
+    --danger-subtle-bg: rgba(239, 68, 68, 0.15);
+    --danger-subtle-fg: #fca5a5;
+    --danger-subtle-border: rgba(239, 68, 68, 0.3);
+    --info-subtle-bg: rgba(59, 130, 246, 0.15);
+    --info-subtle-fg: #93c5fd;
+    --info-subtle-border: rgba(59, 130, 246, 0.3);
+    --password-toggle-bg: rgba(15, 23, 42, 0.55);
+    --password-toggle-bg-focus: rgba(15, 23, 42, 0.75);
+    --password-toggle-border: rgba(148, 163, 184, 0.25);
+    --password-toggle-border-focus: rgba(0, 180, 219, 0.65);
+    --password-toggle-placeholder: rgba(148, 163, 184, 0.8);
+    --password-toggle-focus-ring: rgba(0, 180, 219, 0.15);
 
     --theme-transition: color 0.25s ease, background-color 0.25s ease, border-color 0.25s ease, box-shadow 0.25s ease;
 
@@ -88,6 +105,8 @@
     --sidebar-text: #f1f5f9;
     --sidebar-link: #94a3b8;
     --sidebar-link-hover-bg: rgba(148, 163, 184, 0.12);
+    --sidebar-border: rgba(148, 163, 184, 0.16);
+    --sidebar-footer-border: rgba(148, 163, 184, 0.25);
     --brand-gradient-start: #22d3ee;
     --brand-gradient-end: #2dd4bf;
     --btn-outline-color: #cbd5e1;
@@ -105,6 +124,21 @@
     --paused-fg: #fdba74;
     --completed-bg: rgba(59, 130, 246, 0.18);
     --completed-fg: #93c5fd;
+    --success-subtle-bg: rgba(34, 197, 94, 0.15);
+    --success-subtle-fg: #86efac;
+    --success-subtle-border: rgba(34, 197, 94, 0.3);
+    --danger-subtle-bg: rgba(239, 68, 68, 0.15);
+    --danger-subtle-fg: #fca5a5;
+    --danger-subtle-border: rgba(239, 68, 68, 0.3);
+    --info-subtle-bg: rgba(59, 130, 246, 0.15);
+    --info-subtle-fg: #93c5fd;
+    --info-subtle-border: rgba(59, 130, 246, 0.3);
+    --password-toggle-bg: rgba(15, 23, 42, 0.55);
+    --password-toggle-bg-focus: rgba(15, 23, 42, 0.75);
+    --password-toggle-border: rgba(148, 163, 184, 0.25);
+    --password-toggle-border-focus: rgba(0, 180, 219, 0.65);
+    --password-toggle-placeholder: rgba(148, 163, 184, 0.8);
+    --password-toggle-focus-ring: rgba(0, 180, 219, 0.15);
 
     --bs-body-bg: var(--canvas);
     --bs-body-color: var(--ink-900);
@@ -154,7 +188,7 @@ body {
     overflow-y: auto;
     background: linear-gradient(190deg, var(--sidebar-bg-start) 0%, var(--sidebar-bg-end) 100%);
     color: var(--sidebar-text);
-    border-right: 1px solid rgba(148, 163, 184, 0.2);
+    border-right: 1px solid var(--sidebar-border);
     padding: 1rem;
     display: flex;
     flex-direction: column;
@@ -191,7 +225,7 @@ body {
 
 .sidebar-footer {
     margin-top: auto;
-    border-top: 1px solid rgba(148, 163, 184, 0.45);
+    border-top: 1px solid var(--sidebar-footer-border);
     padding-top: 0.8rem;
 }
 
@@ -465,15 +499,15 @@ body {
 }
 
 [data-theme='dark'] .alert-success {
-    background: rgba(34, 197, 94, 0.15);
-    color: #86efac;
-    border-color: rgba(34, 197, 94, 0.3);
+    background: var(--success-subtle-bg);
+    color: var(--success-subtle-fg);
+    border-color: var(--success-subtle-border);
 }
 
 [data-theme='dark'] .alert-danger {
-    background: rgba(239, 68, 68, 0.15);
-    color: #fca5a5;
-    border-color: rgba(239, 68, 68, 0.3);
+    background: var(--danger-subtle-bg);
+    color: var(--danger-subtle-fg);
+    border-color: var(--danger-subtle-border);
 }
 
 [data-theme='dark'] .badge.bg-success-subtle {
@@ -482,9 +516,9 @@ body {
 }
 
 [data-theme='dark'] .alert-info {
-    background: rgba(59, 130, 246, 0.15);
-    color: #93c5fd;
-    border-color: rgba(59, 130, 246, 0.3);
+    background: var(--info-subtle-bg);
+    color: var(--info-subtle-fg);
+    border-color: var(--info-subtle-border);
 }
 
 [data-theme='dark'] .alert-info strong {
@@ -803,17 +837,6 @@ body.auth-page {
     border: none !important;
     background: transparent !important;
     padding: 0 !important;
-}
-/* .empty-state {
-    background: var(--panel);
-    border: 1px dashed var(--line);
-    border-radius: 14px;
-    padding: 2rem;
-} */
- .dashboard-empty-state {
-    border: none;
-    background: transparent;
-    padding: 0;
 }
 
 /* ── Campaign builder dark mode ── */
@@ -1251,20 +1274,20 @@ body.auth-page {
 
 .password-toggle-wrapper .form-control {
   padding-right: 3rem;
-  background-color: rgba(15, 23, 42, 0.55);
+  background-color: var(--password-toggle-bg);
   color: #ffffff;
-  border: 1px solid rgba(148, 163, 184, 0.25);
+  border: 1px solid var(--password-toggle-border);
 }
 
 .password-toggle-wrapper .form-control::placeholder {
-  color: rgba(148, 163, 184, 0.8);
+  color: var(--password-toggle-placeholder);
 }
 
 .password-toggle-wrapper .form-control:focus {
-  background-color: rgba(15, 23, 42, 0.75);
+  background-color: var(--password-toggle-bg-focus);
   color: #ffffff;
-  border-color: rgba(0, 180, 219, 0.65);
-  box-shadow: 0 0 0 0.2rem rgba(0, 180, 219, 0.15);
+  border-color: var(--password-toggle-border-focus);
+  box-shadow: 0 0 0 0.2rem var(--password-toggle-focus-ring);
 }
 
 .password-toggle-btn {
@@ -1296,7 +1319,7 @@ body.auth-page {
 }
 
 .password-toggle-btn:focus-visible {
-  outline: 2px solid rgba(0, 180, 219, 0.6);
+  outline: 2px solid var(--password-toggle-border-focus);
   outline-offset: 2px;
   border-radius: 999px;
 }
