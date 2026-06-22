@@ -20,6 +20,13 @@
     --header-bg: rgba(255, 255, 255, 0.9);
     --input-bg: #ffffff;
     --input-group-bg: #ffffff;
+    --auth-input-bg: rgba(15, 23, 42, 0.5);
+    --auth-input-bg-focus: rgba(15, 23, 42, 0.8);
+    --auth-input-border: rgba(255, 255, 255, 0.1);
+    --auth-input-border-focus: #00b4db;
+    --auth-toggle-color: rgba(255, 255, 255, 0.5);
+    --auth-toggle-hover: #ffffff;
+    --auth-toggle-focus-ring: rgba(0, 180, 219, 0.25);
     --sidebar-bg-start: #0f172a;
     --sidebar-bg-end: #13263f;
     --sidebar-text: #f8fafc;
@@ -83,6 +90,13 @@
     --header-bg: rgba(30, 41, 59, 0.92);
     --input-bg: #1e293b;
     --input-group-bg: #1e293b;
+    --auth-input-bg: rgba(15, 23, 42, 0.55);
+    --auth-input-bg-focus: rgba(15, 23, 42, 0.75);
+    --auth-input-border: rgba(148, 163, 184, 0.25);
+    --auth-input-border-focus: rgba(0, 180, 219, 0.65);
+    --auth-toggle-color: rgba(226, 232, 240, 0.75);
+    --auth-toggle-hover: #ffffff;
+    --auth-toggle-focus-ring: rgba(0, 180, 219, 0.6);
     --sidebar-bg-start: #070d18;
     --sidebar-bg-end: #0f172a;
     --sidebar-text: #f1f5f9;
@@ -583,13 +597,6 @@ body.auth-page {
 .auth-page a.text-primary {
     color: var(--link-color) !important;
 }
-
-
-.password-toggle-btn:focus-visible {
-    outline: 2px solid rgba(13, 110, 253, 0.35);
-    outline-offset: 2px;
-}
-
 /* ── Campaigns page ── */
 .overview-grid {
     display: grid;
@@ -1251,9 +1258,9 @@ body.auth-page {
 
 .password-toggle-wrapper .form-control {
   padding-right: 3rem;
-  background-color: rgba(15, 23, 42, 0.55);
+  background-color: var(--auth-input-bg);
   color: #ffffff;
-  border: 1px solid rgba(148, 163, 184, 0.25);
+  border: 1px solid var(--auth-input-border);
 }
 
 .password-toggle-wrapper .form-control::placeholder {
@@ -1261,9 +1268,9 @@ body.auth-page {
 }
 
 .password-toggle-wrapper .form-control:focus {
-  background-color: rgba(15, 23, 42, 0.75);
+  background-color: var(--auth-input-bg-focus);
   color: #ffffff;
-  border-color: rgba(0, 180, 219, 0.65);
+  border-color: var(--auth-input-border-focus);
   box-shadow: 0 0 0 0.2rem rgba(0, 180, 219, 0.15);
 }
 
@@ -1283,7 +1290,7 @@ body.auth-page {
 
   border: none;
   background: transparent;
-  color: rgba(226, 232, 240, 0.75);
+  color: var(--auth-toggle-color);
 
   padding: 0;
   margin: 0;
@@ -1292,11 +1299,11 @@ body.auth-page {
 }
 
 .password-toggle-btn:hover {
-  color: #ffffff;
+  color: var(--auth-toggle-hover);
 }
 
 .password-toggle-btn:focus-visible {
-  outline: 2px solid rgba(0, 180, 219, 0.6);
+  outline: 2px solid var(--auth-toggle-focus-ring);
   outline-offset: 2px;
   border-radius: 999px;
 }
