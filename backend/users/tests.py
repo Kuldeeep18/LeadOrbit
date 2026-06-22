@@ -1,3 +1,5 @@
+from django.conf import settings
+from django.test import SimpleTestCase
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -104,3 +106,18 @@ class AuthMeViewTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertTrue(Organization.objects.filter(id=self.organization.id).exists())
         self.assertTrue(User.objects.filter(id=self.user.id).exists())
+
+
+class LoggingSettingsTests(SimpleTestCase):
+    def test_django_logging_is_standardized(self):
+        logging_config = settings.LOGGING
+
+        self.assertEqual(logging_config['version'], 1)
+        self.assertFalse(logging_config['disable_existing_loggers'])
+        self.assertIn('console', logging_config['handlers'])
+        self.assertEqual(logging_config['handlers']['console']['class'], 'logging.StreamHandler')
+        self.assertEqual(logging_config['handlers']['console']['level'], settings.DJANGO_LOG_LEVEL)
+        self.assertEqual(logging_config['root']['handlers'], ['console'])
+        self.assertEqual(logging_config['root']['level'], settings.DJANGO_LOG_LEVEL)
+        self.assertIn('django', logging_config['loggers'])
+        self.assertIn('backend', logging_config['loggers'])

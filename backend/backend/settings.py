@@ -193,6 +193,61 @@ LAUNCH_IMMEDIATE_PASSES = int(os.getenv('LAUNCH_IMMEDIATE_PASSES', '1' if DEBUG 
 # Email backend (console for dev)
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
+DJANGO_LOG_LEVEL = os.getenv('DJANGO_LOG_LEVEL', 'DEBUG' if DEBUG else 'INFO').upper()
+
+LOGGING = {
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'standard': {
+            'format': '%(levelname)s %(asctime)s %(name)s %(message)s',
+        },
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'formatter': 'standard',
+            'level': DJANGO_LOG_LEVEL,
+        },
+    },
+    'root': {
+        'handlers': ['console'],
+        'level': DJANGO_LOG_LEVEL,
+    },
+    'loggers': {
+        'django': {
+            'handlers': ['console'],
+            'level': DJANGO_LOG_LEVEL,
+            'propagate': False,
+        },
+        'backend': {
+            'handlers': ['console'],
+            'level': DJANGO_LOG_LEVEL,
+            'propagate': False,
+        },
+        'leads': {
+            'handlers': ['console'],
+            'level': DJANGO_LOG_LEVEL,
+            'propagate': False,
+        },
+        'campaigns': {
+            'handlers': ['console'],
+            'level': DJANGO_LOG_LEVEL,
+            'propagate': False,
+        },
+        'tenants': {
+            'handlers': ['console'],
+            'level': DJANGO_LOG_LEVEL,
+            'propagate': False,
+        },
+        'users': {
+            'handlers': ['console'],
+            'level': DJANGO_LOG_LEVEL,
+            'propagate': False,
+        },
+    },
+}
+
 # ─── Google OAuth2 / Gmail API ─────────────────────
 BACKEND_BASE_URL = os.getenv(
     'BACKEND_BASE_URL',
