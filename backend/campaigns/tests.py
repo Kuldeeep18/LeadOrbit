@@ -1344,6 +1344,35 @@ class CampaignWorkflowTests(APITestCase):
         lead.refresh_from_db()
         self.assertFalse(lead.global_unsubscribe)
 
+    def test_unsubscribe_view_uses_organization_branding(self):
+        branded_org = Organization.objects.create(
+            name='Northwind',
+            unsubscribe_title='Stay connected with Northwind',
+            unsubscribe_message='You can change your preferences any time from our support team.',
+            brand_logo_url='https://cdn.example.com/northwind-logo.png',
+        )
+        branded_user = User.objects.create_user(
+            email='owner@northwind.test',
+            password='StrongPass123!',
+            organization=branded_org,
+            role='ADMIN',
+        )
+        lead = Lead.objects.create(
+            organization=branded_org,
+            email='unsubscribe@northwind.test',
+        )
+        token = generate_unsubscribe_token(lead.id)
+
+        self.client.force_authenticate(branded_user)
+        response = self.client.get(f'/api/v1/unsubscribe/{lead.id}/{token}/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        html = response.content.decode('utf-8')
+        self.assertIn('Stay connected with Northwind', html)
+        self.assertIn('You can change your preferences any time from our support team.', html)
+        self.assertIn('https://cdn.example.com/northwind-logo.png', html)
+        self.assertIn('Northwind', html)
+
     def test_send_email_step_skips_unsubscribed_leads(self):
         campaign = Campaign.objects.create(
             organization=self.organization,

@@ -1,6 +1,7 @@
 import logging
 
 
+from html import escape
 import urllib.parse
 from django.core.signing import Signer, BadSignature
 from django.http import HttpResponseRedirect, HttpResponseBadRequest
@@ -718,21 +719,56 @@ from leads.models import Lead
 from .utils import verify_unsubscribe_token
 
 
-def _unsubscribe_page(title, message, extra_html=''):
+def _build_unsubscribe_brand_block(organization):
+    org_name = escape((organization.name or 'LeadOrbit').strip())
+    logo_url = (organization.brand_logo_url or '').strip()
+
+    if logo_url:
+        logo_html = (
+            f'<img class="brand-logo" src="{escape(logo_url, quote=True)}" '
+            f'alt="{org_name} logo">'
+        )
+    else:
+        logo_letter = escape((organization.name or 'L').strip()[:1] or 'L')
+        logo_html = f'<div class="brand-mark">{logo_letter}</div>'
+
+    return (
+        '<div class="brand">'
+        f'{logo_html}'
+        '<div>'
+        f'<div class="brand-name">{org_name}</div>'
+        '<div class="brand-subtitle">Email preferences</div>'
+        '</div>'
+        '</div>'
+    )
+
+
+def _unsubscribe_page(organization, title, message, extra_html=''):
+    brand_title = escape((organization.unsubscribe_title or '').strip() or title)
+    brand_message = escape((organization.unsubscribe_message or '').strip() or message)
+    org_name = escape((organization.name or 'LeadOrbit').strip())
     return (
         '<!DOCTYPE html>'
         '<html lang="en">'
         '<head>'
         '<meta charset="utf-8">'
         '<meta name="viewport" content="width=device-width,initial-scale=1">'
-        f'<title>{title} | LeadOrbit</title>'
+        f'<title>{brand_title} | {org_name}</title>'
         '<style>body{margin:0;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Ubuntu,sans-serif;background:#f8fafc;color:#111827;}'
-        '.container{max-width:720px;margin:72px auto;padding:32px;background:#ffffff;border:1px solid #e5e7eb;border-radius:24px;box-shadow:0 20px 80px rgba(15,23,42,.08);}'
-        'h1{margin-top:0;font-size:2rem;color:#0f172a;}p{font-size:1rem;line-height:1.7;color:#475569;}'
+        '.page{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:40px 16px;}'
+        '.container{width:100%;max-width:760px;padding:32px;background:#ffffff;border:1px solid #e5e7eb;border-radius:28px;box-shadow:0 20px 80px rgba(15,23,42,.08);}'
+        '.brand{display:flex;align-items:center;gap:14px;margin-bottom:24px;}'
+        '.brand-mark{width:48px;height:48px;border-radius:14px;background:linear-gradient(135deg,#1d4ed8,#2563eb);color:#fff;display:flex;align-items:center;justify-content:center;font-weight:800;font-size:1.1rem;}'
+        '.brand-logo{width:48px;height:48px;border-radius:14px;object-fit:cover;border:1px solid #e2e8f0;background:#fff;}'
+        '.brand-name{font-size:0.9rem;font-weight:800;color:#1d4ed8;text-transform:uppercase;letter-spacing:.08em;}'
+        '.brand-subtitle{font-size:.84rem;color:#64748b;margin-top:2px;}'
+        'h1{margin:0 0 14px;font-size:clamp(1.8rem,4vw,2.4rem);line-height:1.05;color:#0f172a;}'
+        'p{font-size:1rem;line-height:1.75;color:#475569;margin:0 0 16px;}'
+        '.note{margin-top:22px;padding:18px 20px;background:#f1f5f9;border-radius:18px;color:#334155;}'
         'button{margin-top:12px;border:0;border-radius:999px;background:#1d4ed8;color:#fff;font-weight:700;padding:12px 20px;cursor:pointer;}'
         '</style>'
         '</head>'
-        f'<body><div class="container"><h1>{title}</h1><p>{message}</p>{extra_html}</div></body>'
+        f'<body><div class="page"><div class="container">{_build_unsubscribe_brand_block(organization)}<h1>{brand_title}</h1><p>{brand_message}</p>{extra_html}</div></div></body>'
         '</html>'
     )
 
@@ -764,6 +800,7 @@ def unsubscribe_view(request, lead_id, token):
             '</form>'
         )
         html = _unsubscribe_page(
+            lead.organization,
             'Confirm unsubscribe',
             'Please confirm that you want to unsubscribe from future emails sent through LeadOrbit.',
             form,
@@ -774,9 +811,10 @@ def unsubscribe_view(request, lead_id, token):
     lead.save(update_fields=["global_unsubscribe"])
 
     html = _unsubscribe_page(
+        lead.organization,
         'Unsubscribed',
         'You have been unsubscribed from all future emails sent through LeadOrbit.',
-        '<p>If you received this link by mistake, no further action is needed.</p>',
+        '<div class="note"><strong>Privacy note:</strong> Your unsubscribe preference has been recorded and will be respected across all future email campaigns.</div>',
     )
 
     return HttpResponse(html, content_type='text/html')

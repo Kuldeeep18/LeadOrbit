@@ -9,6 +9,9 @@ class Organization(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     gemini_api_key = models.CharField(max_length=255, blank=True, null=True)
     enable_ai_personalization = models.BooleanField(default=True)
+    unsubscribe_title = models.CharField(max_length=255, blank=True, default='')
+    unsubscribe_message = models.TextField(blank=True, default='')
+    brand_logo_url = models.URLField(blank=True, default='')
 
     def __str__(self):
         return self.name
