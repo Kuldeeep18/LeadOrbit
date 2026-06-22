@@ -1,0 +1,14 @@
+[run]
+branch = True
+source = .
+omit =
+    */venv/*
+    */.venv/*
+    */migrations/*
+
+[report]
+exclude_lines =
+    pragma: no cover
+    def __repr__
+    if TYPE_CHECKING:
+    if __name__ == .__main__.:

@@ -35,6 +35,12 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
+If you are working on backend tests and coverage locally, install the coverage helper too:
+
+```bash
+pip install coverage
+```
+
 ### 5. Configure Environment Variables
 
 Create a `backend/.env` file and add the required environment variables as described in the README.
@@ -111,6 +117,16 @@ python manage.py test
 ```
 
 Ensure all tests pass successfully.
+
+To generate coverage data and a browsable HTML report:
+
+```bash
+cd backend
+coverage run manage.py test
+coverage html
+```
+
+The backend coverage configuration lives in `backend/.coveragerc` and excludes virtual environments and migrations.
 
 ---
 
