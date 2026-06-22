@@ -1328,6 +1328,32 @@ class CampaignWorkflowTests(APITestCase):
         self.assertEqual(response.data['campaign_stats'][0]['replied'], 1)
         self.assertEqual(sum(response.data['time_series']['replied']), 1)
 
+    def test_dashboard_analytics_uses_reply_time_for_series_window(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Older Lead Reply Campaign',
+            status='ACTIVE',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='older-reply@acme.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='ACTIVE',
+            last_replied_at=timezone.now(),
+        )
+        CampaignLead.objects.filter(pk=campaign_lead.pk).update(
+            created_at=timezone.now() - timedelta(days=120)
+        )
+
+        response = self.client.get('/api/v1/analytics/dashboard/?days=30')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(sum(response.data['time_series']['replied']), 1)
+
     def test_dashboard_analytics_requires_authentication(self):
         self.client.force_authenticate(user=None)
         response = self.client.get('/api/v1/analytics/dashboard/')

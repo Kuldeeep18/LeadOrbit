@@ -547,25 +547,25 @@ class DashboardAnalyticsView(APIView):
 
         # ── Time-series: daily aggregates within the window ──
         # Still need to query CampaignLead for time-series breakdown
-        all_cls = CampaignLead.objects.filter(organization=org, created_at__gte=cutoff)
+        all_cls = CampaignLead.objects.filter(organization=org)
 
         sent_statuses = ['ACTIVE', 'FINISHED', 'REPLIED', 'BOUNCED']
         sent_by_day = dict(
-            all_cls.filter(status__in=sent_statuses)
+            all_cls.filter(status__in=sent_statuses, created_at__gte=cutoff)
             .annotate(day=TruncDate('created_at'))
             .values('day')
             .annotate(count=Count('id'))
             .values_list('day', 'count')
         )
         opened_by_day = dict(
-            all_cls.filter(last_opened_at__isnull=False)
+            all_cls.filter(last_opened_at__gte=cutoff)
             .annotate(day=TruncDate('last_opened_at'))
             .values('day')
             .annotate(count=Count('id'))
             .values_list('day', 'count')
         )
         replied_by_day = dict(
-            all_cls.filter(last_replied_at__isnull=False)
+            all_cls.filter(last_replied_at__gte=cutoff)
             .annotate(day=TruncDate('last_replied_at'))
             .values('day')
             .annotate(count=Count('id'))

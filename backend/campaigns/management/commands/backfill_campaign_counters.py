@@ -7,6 +7,8 @@ Usage:
     python manage.py backfill_campaign_counters --batch-size=100
 """
 
+from uuid import UUID
+
 from django.core.management.base import BaseCommand, CommandError
 from django.db.models import Q
 from campaigns.models import Campaign, CampaignLead
@@ -33,13 +35,18 @@ class Command(BaseCommand):
         batch_size = options['batch_size']
         campaign_id = options.get('campaign_id')
 
+        if batch_size < 1:
+            raise CommandError("--batch-size must be greater than 0")
+
         if campaign_id:
             try:
-                campaigns = Campaign.objects.filter(id=campaign_id)
-                if not campaigns.exists():
-                    raise CommandError(f"Campaign with ID {campaign_id} not found")
-            except Exception as e:
-                raise CommandError(f"Invalid campaign ID: {e}")
+                campaign_uuid = UUID(campaign_id)
+            except (AttributeError, TypeError, ValueError) as error:
+                raise CommandError(f"Invalid campaign ID: {campaign_id}") from error
+
+            campaigns = Campaign.objects.filter(id=campaign_uuid)
+            if not campaigns.exists():
+                raise CommandError(f"Campaign with ID {campaign_id} not found")
         else:
             campaigns = Campaign.objects.all()
 
