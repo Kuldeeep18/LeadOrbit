@@ -943,23 +943,30 @@ class CampaignWorkflowTests(APITestCase):
         self.assertEqual(campaign_lead.next_execution_time, next_check)
 
     @override_settings(ENABLE_AUTO_REPLY_DETECTION=True)
-    def test_poll_replies_defers_terminal_status_when_reply_yes_branch_exists(self):
+    def test_dashboard_reply_count_increments_for_branching_reply(self):
+        """
+        Regression test for #245: a reply that routes into a CONDITION_REPLY
+        'yes' branch keeps CampaignLead.status as 'ACTIVE' (sequence continues),
+        but last_replied_at is stamped. The cached Campaign.reply_count counter
+        must still increment in this case, not just when status == 'REPLIED'.
+        """
         campaign = Campaign.objects.create(
             organization=self.organization,
-            name='Reply polling defer branch',
+            name='Reply count branching regression',
             status='ACTIVE',
             settings={
                 'steps': [
                     {'type': 'EMAIL', 'subject': 'First', 'body': 'x'},
                     {'type': 'CONDITION_REPLY', 'condition_time': '1 day'},
-                    {'type': 'EMAIL', 'subject': 'Yes path', 'body': 'yes', 'condition_branch': 'yes', 'condition_parent_index': 1},
+                    {'type': 'EMAIL', 'subject': 'Yes path', 'body': 'yes', 'condition_branch': 'yes',
+                     'condition_parent_index': 1},
                 ]
             },
         )
         account = ConnectedEmailAccount.objects.create(
             organization=self.organization,
             connected_by=self.user,
-            email_address='sender-poll-branch@acme.test',
+            email_address='sender-reply-count@acme.test',
             provider='GOOGLE',
             access_token='token',
             refresh_token='refresh',
@@ -976,23 +983,33 @@ class CampaignWorkflowTests(APITestCase):
         )
         lead = Lead.objects.create(
             organization=self.organization,
-            email='poll-branch@acme.test',
+            email='reply-count-branch@acme.test',
         )
-        campaign_lead = CampaignLead.objects.create(
+        CampaignLead.objects.create(
             organization=self.organization,
             campaign=campaign,
             lead=lead,
             current_step=condition_step,
             status='ACTIVE',
             next_execution_time=timezone.now() + timedelta(hours=1),
-            last_sent_message_id='poll-mid-123',
+            last_sent_message_id='reply-count-mid-123',
         )
 
-        with patch('campaigns.tasks.check_for_replies', return_value={'poll-mid-123': 'replied'}):
+        # Before the reply: nothing replied yet.
+        campaign.refresh_from_db()
+        self.assertEqual(campaign.reply_count, 0)
+
+        with patch('campaigns.tasks.check_for_replies', return_value={'reply-count-mid-123': 'replied'}):
             poll_gmail_for_replies()
 
-        campaign_lead.refresh_from_db()
-        self.assertEqual(campaign_lead.status, 'ACTIVE')
+        campaign.refresh_from_db()
+        # Reply was detected (last_replied_at set) even though status stayed ACTIVE.
+        self.assertEqual(campaign.reply_count, 1)
+
+        # Confirm the dashboard endpoint surfaces the same fixed count.
+        response = self.client.get('/api/v1/analytics/dashboard/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['replied'], 1)
 
     @override_settings(ENABLE_AUTO_REPLY_DETECTION=True)
     def test_poll_replies_handles_finished_leads(self):
