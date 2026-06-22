@@ -1,5 +1,6 @@
 from datetime import timedelta
-from unittest.mock import patch
+from email.message import EmailMessage
+from unittest.mock import MagicMock, patch
 from urllib.parse import parse_qs, urlparse
 
 from django.core import signing
@@ -13,6 +14,7 @@ from campaigns.ai import personalize_email
 from campaigns.tasks import (
     _execute_condition_event_step,
     _get_campaign_steps,
+    check_imap_bounces,
     poll_gmail_for_replies,
     process_active_leads,
     process_active_leads_once,
@@ -1431,6 +1433,184 @@ class CampaignWorkflowTests(APITestCase):
         self.assertIsNone(campaign_lead.next_execution_time)
         self.assertEqual(campaign.status, 'COMPLETED')
         mocked_send.assert_not_called()
+
+
+@override_settings(
+    FIELD_ENCRYPTION_KEY='x5JoyAEpnQSZRvJmT4KvMIulZRKzh_Evn3II6a0FGA4=',
+)
+class CheckImapBouncesTests(APITestCase):
+    def setUp(self):
+        self.organization = Organization.objects.create(name='Imap Org')
+        self.user = User.objects.create_user(
+            email='imap-owner@acme.test',
+            password='StrongPass123!',
+            organization=self.organization,
+            role='ADMIN',
+        )
+
+    def _build_bounce_bytes(self, subject='Mail delivery failed', recipient='bounced@acme.test'):
+        message = EmailMessage()
+        message['Subject'] = subject
+        message['Final-Recipient'] = f'rfc822; {recipient}'
+        message.set_content(f'Delivery to {recipient} failed.')
+        return message.as_bytes()
+
+    def _create_imap_account(self, email_address, imap_host='imap.acme.test', **kwargs):
+        defaults = {
+            'organization': self.organization,
+            'connected_by': self.user,
+            'provider': 'GOOGLE',
+            'access_token': 'token',
+            'refresh_token': 'refresh',
+            'imap_host': imap_host,
+            'imap_port': 993,
+            'imap_username': email_address,
+            'imap_password': 'imap-secret',
+        }
+        defaults.update(kwargs)
+        return ConnectedEmailAccount.objects.create(
+            email_address=email_address,
+            **defaults,
+        )
+
+    def _configure_imap_mock(self, mock_imap_cls, messages):
+        mock_conn = MagicMock()
+        mock_imap_cls.return_value = mock_conn
+        message_ids = [msg_id for msg_id, _ in messages]
+        mock_conn.search.return_value = ('OK', [b' '.join(message_ids)])
+
+        message_map = dict(messages)
+
+        def fetch_side_effect(msg_id, _spec):
+            key = msg_id if isinstance(msg_id, bytes) else msg_id.encode()
+            raw = message_map.get(key)
+            if raw is None:
+                return ('OK', [])
+            return ('OK', [(key, raw)])
+
+        mock_conn.fetch.side_effect = fetch_side_effect
+        return mock_conn
+
+    def _create_bounceable_campaign_lead(self, account, lead_email='bounced@acme.test'):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Bounce campaign',
+            status='ACTIVE',
+            connected_account=account,
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email=lead_email,
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='ACTIVE',
+        )
+        return campaign_lead
+
+    @patch('campaigns.tasks.imaplib.IMAP4_SSL')
+    def test_parses_bounce_and_updates_campaign_lead_status(self, mock_imap_cls):
+        account = self._create_imap_account('sender-bounce@acme.test')
+        campaign_lead = self._create_bounceable_campaign_lead(account)
+
+        self._configure_imap_mock(
+            mock_imap_cls,
+            [(b'1', self._build_bounce_bytes(recipient='bounced@acme.test'))],
+        )
+
+        result = check_imap_bounces()
+
+        campaign_lead.refresh_from_db()
+        self.assertEqual(campaign_lead.status, 'BOUNCED')
+        self.assertEqual(result, 'Processed 1 IMAP bounces.')
+
+    @patch('campaigns.tasks.imaplib.IMAP4_SSL')
+    def test_skips_account_without_imap_credentials(self, mock_imap_cls):
+        ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=self.user,
+            email_address='oauth-only@acme.test',
+            provider='GOOGLE',
+            access_token='token',
+            refresh_token='refresh',
+        )
+
+        result = check_imap_bounces()
+
+        mock_imap_cls.assert_not_called()
+        self.assertEqual(result, 'Processed 0 IMAP bounces.')
+
+    @patch('campaigns.tasks.imaplib.IMAP4_SSL')
+    def test_one_account_failure_does_not_stop_other_accounts(self, mock_imap_cls):
+        self._create_imap_account(
+            'failing@acme.test',
+            imap_host='bad.example.com',
+        )
+        success_account = self._create_imap_account(
+            'success@acme.test',
+            imap_host='imap.good.test',
+        )
+        campaign_lead = self._create_bounceable_campaign_lead(
+            success_account,
+            lead_email='other-bounce@acme.test',
+        )
+
+        success_conn = MagicMock()
+        success_conn.search.return_value = (
+            'OK',
+            [b'1'],
+        )
+        success_conn.fetch.return_value = (
+            'OK',
+            [(b'1', self._build_bounce_bytes(recipient='other-bounce@acme.test'))],
+        )
+
+        def imap_factory(host, port, timeout=30):
+            if host == 'bad.example.com':
+                raise ConnectionError('connection refused')
+            return success_conn
+
+        mock_imap_cls.side_effect = imap_factory
+
+        result = check_imap_bounces()
+
+        campaign_lead.refresh_from_db()
+        self.assertEqual(campaign_lead.status, 'BOUNCED')
+        self.assertEqual(result, 'Processed 1 IMAP bounces.')
+        mock_imap_cls.assert_any_call('bad.example.com', 993, timeout=30)
+        mock_imap_cls.assert_any_call('imap.good.test', 993, timeout=30)
+
+    @patch('campaigns.tasks.imaplib.IMAP4_SSL')
+    def test_marks_message_seen_after_processing(self, mock_imap_cls):
+        account = self._create_imap_account('seen-test@acme.test')
+        self._create_bounceable_campaign_lead(account)
+        mock_conn = self._configure_imap_mock(
+            mock_imap_cls,
+            [(b'1', self._build_bounce_bytes(recipient='bounced@acme.test'))],
+        )
+
+        check_imap_bounces()
+
+        mock_conn.store.assert_called_with(b'1', '+FLAGS', '\\Seen')
+
+    @patch('campaigns.tasks.imaplib.IMAP4_SSL')
+    def test_ignores_non_matching_subject_lines(self, mock_imap_cls):
+        account = self._create_imap_account('subject-test@acme.test')
+        campaign_lead = self._create_bounceable_campaign_lead(account)
+        non_bounce = self._build_bounce_bytes(
+            subject='Weekly newsletter',
+            recipient='bounced@acme.test',
+        )
+        mock_conn = self._configure_imap_mock(mock_imap_cls, [(b'1', non_bounce)])
+
+        result = check_imap_bounces()
+
+        campaign_lead.refresh_from_db()
+        self.assertEqual(campaign_lead.status, 'ACTIVE')
+        self.assertEqual(result, 'Processed 0 IMAP bounces.')
+        mock_conn.store.assert_not_called()
 
 
 @override_settings(

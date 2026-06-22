@@ -49,6 +49,7 @@ def _normalize_google_redirect_uri(raw_uri: str, backend_base_url: str) -> str:
     return f'{scheme}://{host}/api/v1/auth/google/callback'
 
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-fallback-key-change-me')
+FIELD_ENCRYPTION_KEY = os.getenv('FIELD_ENCRYPTION_KEY', '')
 DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes')
 ALLOWED_HOSTS = ['*']
 CORS_ALLOWED_ORIGINS = [
@@ -159,6 +160,10 @@ CELERY_BEAT_SCHEDULE = {
     'poll-gmail-replies-every-5-minutes': {
         'task': 'campaigns.tasks.poll_gmail_for_replies',
         'schedule': 300.0,
+    },
+    'check-imap-bounces-every-15-minutes': {
+        'task': 'campaigns.tasks.check_imap_bounces',
+        'schedule': 900.0,
     },
 }
 
