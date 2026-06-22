@@ -1580,3 +1580,9 @@ class CampaignAnalyticsBenchmarkTests(APITestCase):
             if item['metric'] == 'open_rate'
         )
         self.assertEqual(open_rate['benchmark'], 20.0)
+        self.assertEqual(open_rate['is_favorable'], open_rate['delta'] >= 0)
+        bounce_rate = next(
+            item for item in response.data['benchmark_comparison']
+            if item['metric'] == 'bounce_rate'
+        )
+        self.assertEqual(bounce_rate['is_favorable'], bounce_rate['delta'] <= 0)

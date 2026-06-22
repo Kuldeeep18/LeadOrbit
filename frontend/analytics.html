@@ -424,19 +424,32 @@
                 });
 
                 const recContainer = document.getElementById('benchmarkRecommendations');
-                recContainer.innerHTML = recommendations.length ? recommendations.map(item => `
-                    <div class="benchmark-item">
-                        <div class="benchmark-label">${item.label}</div>
-                        <div class="benchmark-meta mt-1">
-                            Current: ${item.current}% | Benchmark: ${item.benchmark}% | ${item.message}
-                        </div>
-                    </div>
-                `).join('') : `
-                    <div class="benchmark-item">
-                        <div class="benchmark-label">No recommendations yet</div>
-                        <div class="benchmark-meta mt-1">Launch a campaign to compare its performance against benchmark targets.</div>
-                    </div>
-                `;
+                recContainer.replaceChildren();
+                const items = recommendations.length ? recommendations : [{
+                    label: 'No recommendations yet',
+                    message: 'Launch a campaign to compare its performance against benchmark targets.',
+                    current: null,
+                    benchmark: null,
+                    is_favorable: null,
+                }];
+                items.forEach(item => {
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'benchmark-item';
+                    wrapper.dataset.favorable = item.is_favorable === null ? 'unknown' : String(Boolean(item.is_favorable));
+
+                    const labelEl = document.createElement('div');
+                    labelEl.className = 'benchmark-label';
+                    labelEl.textContent = item.label;
+
+                    const metaEl = document.createElement('div');
+                    metaEl.className = 'benchmark-meta mt-1';
+                    metaEl.textContent = item.current !== null && item.current !== undefined
+                        ? `Current: ${item.current}% | Benchmark: ${item.benchmark}% | ${item.message}`
+                        : item.message;
+
+                    wrapper.append(labelEl, metaEl);
+                    recContainer.appendChild(wrapper);
+                });
             };
 
             const renderChannelChart = (campaignList) => {

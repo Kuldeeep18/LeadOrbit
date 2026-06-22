@@ -707,6 +707,7 @@ class DashboardAnalyticsView(APIView):
         for item in benchmark_targets:
             delta = round(item['current'] - item['benchmark'], 1)
             status_label = 'above' if delta >= 0 else 'below'
+            is_favorable = delta >= 0 if item['metric'] != 'bounce_rate' else delta <= 0
             benchmark_comparison.append({
                 'metric': item['metric'],
                 'label': item['label'],
@@ -714,6 +715,7 @@ class DashboardAnalyticsView(APIView):
                 'benchmark': item['benchmark'],
                 'delta': delta,
                 'status': status_label,
+                'is_favorable': is_favorable,
             })
             benchmark_recommendations.append({
                 'metric': item['metric'],
@@ -723,6 +725,7 @@ class DashboardAnalyticsView(APIView):
                     f"{item['recommendation']}"
                 ),
                 'status': status_label,
+                'is_favorable': is_favorable,
                 'current': item['current'],
                 'benchmark': item['benchmark'],
             })
