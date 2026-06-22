@@ -4,6 +4,14 @@ import { fetchWithAuth, clearTokens, refreshAccessToken } from './api.js';
 const THEME_STORAGE_KEY = 'theme';
 const LEADORBIT_VERSION = 'v1.0.0-beta';
 const LEADORBIT_REPO_URL = 'https://github.com/Kuldeeep18/LeadOrbit';
+const ORIGINAL_PAGE_TITLE = document.title;
+const ORIGINAL_FAVICON_HREF = (() => {
+    const faviconLink = document.querySelector("link[rel*='icon']");
+    return faviconLink?.href || '/favicon.png';
+})();
+
+let unreadNotificationCount = 0;
+let faviconRenderPromise = null;
 
 // ==========================================
 // THEME MANAGEMENT
@@ -218,6 +226,106 @@ function initThemeToggle() {
     });
 }
 
+function getOrCreateFaviconLink() {
+    let faviconLink = document.querySelector("link[rel*='icon']");
+    if (!faviconLink) {
+        faviconLink = document.createElement('link');
+        faviconLink.rel = 'icon';
+        faviconLink.type = 'image/png';
+        document.head.appendChild(faviconLink);
+    }
+    return faviconLink;
+}
+
+function restoreFavicon() {
+    getOrCreateFaviconLink().href = ORIGINAL_FAVICON_HREF;
+}
+
+function restorePageTitle() {
+    document.title = ORIGINAL_PAGE_TITLE;
+}
+
+function setAttentionTitle() {
+    document.title = 'Come back to LeadOrbit!';
+}
+
+async function renderNotificationFavicon() {
+    if (faviconRenderPromise) {
+        return faviconRenderPromise;
+    }
+
+    faviconRenderPromise = new Promise((resolve) => {
+        const faviconLink = getOrCreateFaviconLink();
+        const image = new Image();
+
+        image.onload = () => {
+            try {
+                const canvas = document.createElement('canvas');
+                const size = 32;
+                canvas.width = size;
+                canvas.height = size;
+
+                const context = canvas.getContext('2d');
+                if (!context) {
+                    faviconLink.href = ORIGINAL_FAVICON_HREF;
+                    resolve(faviconLink.href);
+                    return;
+                }
+
+                context.drawImage(image, 0, 0, size, size);
+                context.beginPath();
+                context.fillStyle = '#ef4444';
+                context.arc(size - 9, 9, 6, 0, Math.PI * 2);
+                context.fill();
+                context.beginPath();
+                context.fillStyle = '#ffffff';
+                context.arc(size - 9, 9, 2, 0, Math.PI * 2);
+                context.fill();
+
+                faviconLink.href = canvas.toDataURL('image/png');
+                resolve(faviconLink.href);
+            } catch (error) {
+                console.error('Could not render notification favicon:', error);
+                faviconLink.href = ORIGINAL_FAVICON_HREF;
+                resolve(faviconLink.href);
+            }
+        };
+
+        image.onerror = () => {
+            faviconLink.href = ORIGINAL_FAVICON_HREF;
+            resolve(faviconLink.href);
+        };
+
+        image.src = ORIGINAL_FAVICON_HREF;
+    }).finally(() => {
+        faviconRenderPromise = null;
+    });
+
+    return faviconRenderPromise;
+}
+
+export async function notifyLeadOrbit(message = '') {
+    if (!document.hidden) {
+        return false;
+    }
+
+    unreadNotificationCount += 1;
+    setAttentionTitle();
+    await renderNotificationFavicon();
+
+    if (message) {
+        console.info(`LeadOrbit notification: ${message}`);
+    }
+
+    return true;
+}
+
+export function clearLeadOrbitNotifications() {
+    unreadNotificationCount = 0;
+    restorePageTitle();
+    restoreFavicon();
+}
+
 // Sync theme across multiple tabs
 window.addEventListener('storage', (event) => {
     if (event.key === THEME_STORAGE_KEY && event.newValue) {
@@ -230,6 +338,17 @@ window.addEventListener('storage', (event) => {
             themeToggle.checked = newTheme === 'dark';
         }
     }
+});
+
+window.notifyLeadOrbit = notifyLeadOrbit;
+window.clearLeadOrbitNotifications = clearLeadOrbitNotifications;
+document.addEventListener('visibilitychange', () => {
+    if (document.hidden) {
+        setAttentionTitle();
+        return;
+    }
+
+    clearLeadOrbitNotifications();
 });
 
 // ==========================================

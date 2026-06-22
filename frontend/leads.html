@@ -869,6 +869,9 @@
                         statusEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>File uploaded. Processing now...</span>';
                         await loadLeads();
                         await loadImportHistory();
+                        if (document.hidden && typeof window.notifyLeadOrbit === 'function') {
+                            await window.notifyLeadOrbit('CSV import completed');
+                        }
                         fileInput.value = '';
                         bootstrap.Modal.getOrCreateInstance(document.getElementById('uploadModal')).hide();
                     } else {
