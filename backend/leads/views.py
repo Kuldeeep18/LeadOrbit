@@ -3,6 +3,7 @@ from rest_framework import viewsets, parsers, status
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action
 from rest_framework.response import Response
+from campaigns.models import CampaignLead
 from users.permissions import IsOrgManager
 from .models import BlockedDomain, Lead, LeadImportJob, Tag, LeadTag
 from .serializers import BlockedDomainSerializer, LeadImportJobSerializer, LeadSerializer, TagSerializer
@@ -85,7 +86,7 @@ class LeadViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['delete'], url_path='delete-all')
     def delete_all(self, request):
-        deleted_count, _ = self.get_queryset().delete()
+        deleted_count, _ = Lead.objects.filter(organization=request.user.organization).delete()
         return Response(
             {"message": f"Successfully deleted {deleted_count} leads."},
             status=status.HTTP_200_OK,
@@ -151,6 +152,131 @@ class LeadViewSet(viewsets.ModelViewSet):
         # Return the updated tag list
         updated_tags = Tag.objects.filter(tagged_leads__lead=lead)
         return Response(TagSerializer(updated_tags, many=True).data, status=status.HTTP_200_OK)
+
+    @action(detail=True, methods=['get'])
+    def timeline(self, request, pk=None):
+        lead = self.get_object()
+        events = []
+
+        def add_event(event_type, title, timestamp, description='', campaign=None, estimated=False, icon='bi-clock'):
+            if not timestamp:
+                return
+            events.append({
+                'type': event_type,
+                'title': title,
+                'timestamp': timestamp.isoformat(),
+                'description': description,
+                'campaign': campaign,
+                'estimated': estimated,
+                'icon': icon,
+            })
+
+        add_event(
+            'lead_created',
+            'Lead added',
+            lead.created_at,
+            'The lead record was created in the workspace.',
+            icon='bi-person-plus',
+        )
+
+        campaign_leads = (
+            CampaignLead.objects
+            .filter(lead=lead, organization=request.user.organization)
+            .select_related('campaign', 'current_step')
+            .order_by('created_at', 'updated_at')
+        )
+
+        for campaign_lead in campaign_leads:
+            campaign_name = campaign_lead.campaign.name
+            add_event(
+                'campaign_enrolled',
+                f'Enrolled in {campaign_name}',
+                campaign_lead.created_at,
+                f'Lead joined campaign "{campaign_name}".',
+                campaign=campaign_name,
+                icon='bi-bullseye',
+            )
+
+            sent_timestamp = campaign_lead.last_sent_at or campaign_lead.created_at
+            sent_estimated = campaign_lead.last_sent_at is None
+            add_event(
+                'email_sent',
+                f'Email sent in {campaign_name}',
+                sent_timestamp,
+                (
+                    f'Email message ID: {campaign_lead.last_sent_message_id}'
+                    if campaign_lead.last_sent_message_id
+                    else 'Email was sent from the campaign sequence.'
+                ) + (' Timestamp estimated from campaign enrollment.' if sent_estimated else ''),
+                campaign=campaign_name,
+                estimated=sent_estimated,
+                icon='bi-send',
+            )
+
+            add_event(
+                'email_opened',
+                f'Email opened in {campaign_name}',
+                campaign_lead.last_opened_at,
+                'The lead opened the campaign email.',
+                campaign=campaign_name,
+                icon='bi-envelope-open',
+            )
+
+            add_event(
+                'link_clicked',
+                f'Link clicked in {campaign_name}',
+                campaign_lead.last_clicked_at,
+                'The lead clicked a tracked link.',
+                campaign=campaign_name,
+                icon='bi-cursor',
+            )
+
+            add_event(
+                'reply_received',
+                f'Reply received in {campaign_name}',
+                campaign_lead.last_replied_at,
+                'A reply was detected for this campaign lead.',
+                campaign=campaign_name,
+                icon='bi-chat-dots',
+            )
+
+            add_event(
+                'email_bounced',
+                f'Email bounced in {campaign_name}',
+                campaign_lead.last_bounced_at,
+                (
+                    (
+                        'Bounce details: '
+                        + ', '.join(
+                            part for part in [
+                                campaign_lead.bounce_type and f"type={campaign_lead.bounce_type}",
+                                campaign_lead.bounce_code and f"code={campaign_lead.bounce_code}",
+                            ]
+                            if part
+                        )
+                    ).strip()
+                    + (f" Reason: {campaign_lead.bounce_reason}" if campaign_lead.bounce_reason else '')
+                )
+                if (campaign_lead.bounce_type or campaign_lead.bounce_code or campaign_lead.bounce_reason)
+                else 'The email bounced.',
+                campaign=campaign_name,
+                icon='bi-exclamation-triangle',
+            )
+
+        events.sort(key=lambda item: item['timestamp'])
+
+        return Response({
+            'lead': {
+                'id': str(lead.id),
+                'name': f"{lead.first_name or ''} {lead.last_name or ''}".strip() or lead.email,
+                'email': lead.email,
+                'company': lead.company,
+                'score': lead.score,
+                'global_unsubscribe': lead.global_unsubscribe,
+                'created_at': lead.created_at.isoformat() if lead.created_at else None,
+            },
+            'events': events,
+        }, status=status.HTTP_200_OK)
 
 
 class LeadImportJobViewSet(viewsets.ReadOnlyModelViewSet):

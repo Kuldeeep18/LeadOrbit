@@ -583,6 +583,42 @@ class CampaignWorkflowTests(APITestCase):
         self.assertIsNone(campaign_lead.last_sent_message_id)
         self.assertGreater(campaign_lead.next_execution_time, timezone.now())
 
+    @patch('campaigns.tasks._advance_to_next_step')
+    def test_send_email_step_records_sent_timestamp_for_mock_delivery(self, mocked_advance):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Mock send flow',
+            status='ACTIVE',
+        )
+        email_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Hello',
+            template_body='Hi there',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='mock-send@acme.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=email_step,
+            status='ACTIVE',
+            next_execution_time=timezone.now() - timedelta(minutes=1),
+        )
+
+        send_email_step(campaign_lead.id, email_step.id)
+
+        campaign_lead.refresh_from_db()
+        self.assertIsNotNone(campaign_lead.last_sent_at)
+        self.assertIsNone(campaign_lead.last_sent_message_id)
+        mocked_advance.assert_called_once()
+
     def test_condition_reply_step_stops_sequence_when_reply_detected(self):
         campaign = Campaign.objects.create(
             organization=self.organization,
@@ -1257,6 +1293,7 @@ class CampaignWorkflowTests(APITestCase):
         self.assertEqual(campaign_lead.bounce_type, 'soft')
         self.assertEqual(campaign_lead.bounce_code, 'mailbox_full')
         self.assertEqual(campaign_lead.bounce_reason, 'Mailbox full')
+        self.assertIsNotNone(campaign_lead.last_bounced_at)
 
     def test_dashboard_analytics_isolates_data_by_tenant(self):
         org2 = Organization.objects.create(name='Other Corp')

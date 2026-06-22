@@ -1,7 +1,9 @@
 from django.core.files.uploadedfile import SimpleUploadedFile
+from datetime import timedelta
 from rest_framework import status
 from rest_framework.test import APITestCase
 
+from campaigns.models import Campaign, CampaignLead
 from leads.models import BlockedDomain, Lead, Tag, LeadTag, LeadImportJob
 from leads.tasks import import_leads_from_csv
 from tenants.models import Organization
@@ -461,3 +463,64 @@ class LeadFilterTests(APITestCase):
         resp = self._get()
         emails = {l['email'] for l in resp.data}
         self.assertNotIn('spy@example.com', emails)
+
+
+class LeadTimelineTests(APITestCase):
+    def setUp(self):
+        self.org = Organization.objects.create(name='Timeline Org')
+        self.user = _make_user(self.org, email='timeline@example.com')
+        self.client.force_authenticate(self.user)
+        self.lead = _make_lead(
+            self.org,
+            'timeline@example.com',
+            first_name='Taylor',
+            last_name='Lane',
+            company='Orbit Labs',
+            score=88,
+        )
+        self.campaign = Campaign.objects.create(
+            organization=self.org,
+            name='Outbound 1',
+            status='ACTIVE',
+        )
+
+        base = self.lead.created_at
+        self.campaign_lead = CampaignLead.objects.create(
+            organization=self.org,
+            campaign=self.campaign,
+            lead=self.lead,
+            status='BOUNCED',
+            last_sent_message_id='msg-123',
+            last_sent_at=base + timedelta(minutes=5),
+            last_opened_at=base + timedelta(minutes=10),
+            last_clicked_at=base + timedelta(minutes=15),
+            last_replied_at=base + timedelta(minutes=20),
+            last_bounced_at=base + timedelta(minutes=25),
+            bounce_type='soft',
+            bounce_code='mailbox_full',
+            bounce_reason='Mailbox full',
+        )
+
+    def test_timeline_returns_chronological_event_history(self):
+        response = self.client.get(f'/api/v1/leads/{self.lead.id}/timeline/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['lead']['email'], 'timeline@example.com')
+
+        events = response.data['events']
+        self.assertEqual(
+            [event['type'] for event in events],
+            [
+                'lead_created',
+                'campaign_enrolled',
+                'email_sent',
+                'email_opened',
+                'link_clicked',
+                'reply_received',
+                'email_bounced',
+            ],
+        )
+        self.assertFalse(events[2]['estimated'])
+        self.assertEqual(events[2]['campaign'], 'Outbound 1')
+        self.assertIn('msg-123', events[2]['description'])
+        self.assertIn('mailbox_full', events[-1]['description'])

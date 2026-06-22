@@ -286,10 +286,12 @@ class CampaignViewSet(viewsets.ModelViewSet):
                 'email': cl.lead.email,
                 'status': cl.status,
                 'current_step': cl.current_step.step_order if cl.current_step else None,
-                'last_sent_at': cl.last_sent_message_id,
+                'last_sent_at': cl.last_sent_at.isoformat() if cl.last_sent_at else None,
+                'last_sent_message_id': cl.last_sent_message_id,
                 'last_opened_at': cl.last_opened_at.isoformat() if cl.last_opened_at else None,
                 'last_clicked_at': cl.last_clicked_at.isoformat() if cl.last_clicked_at else None,
                 'last_replied_at': cl.last_replied_at.isoformat() if cl.last_replied_at else None,
+                'last_bounced_at': cl.last_bounced_at.isoformat() if cl.last_bounced_at else None,
                 'next_execution': cl.next_execution_time.isoformat() if cl.next_execution_time else None,
             })
 
@@ -436,6 +438,7 @@ class WebhookView(APIView):
                 for cl in cleads:
                     if event_type == 'bounce':
                         cl.status = 'BOUNCED'
+                        cl.last_bounced_at = now
                         if bounce_details['bounce_type']:
                             cl.bounce_type = bounce_details['bounce_type']
                         if bounce_details['bounce_code']:
@@ -447,6 +450,7 @@ class WebhookView(APIView):
                             'bounce_type',
                             'bounce_code',
                             'bounce_reason',
+                            'last_bounced_at',
                         ])
                         logger.info(
                             'Webhook bounce processed for email=%s type=%s code=%s reason=%s',

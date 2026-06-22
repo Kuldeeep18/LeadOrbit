@@ -115,6 +115,75 @@
             position: relative;
         }
 
+        .lead-row {
+            cursor: pointer;
+        }
+
+        .lead-row:hover {
+            background: color-mix(in srgb, var(--panel-soft) 75%, transparent);
+        }
+
+        .lead-timeline-shell {
+            position: relative;
+        }
+
+        .lead-timeline-shell::before {
+            content: '';
+            position: absolute;
+            left: 1rem;
+            top: 0.3rem;
+            bottom: 0.3rem;
+            width: 2px;
+            background: var(--line);
+        }
+
+        .lead-timeline-item {
+            position: relative;
+            padding-left: 2.6rem;
+            margin-bottom: 1.1rem;
+        }
+
+        .lead-timeline-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .lead-timeline-dot {
+            position: absolute;
+            left: 0.55rem;
+            top: 0.2rem;
+            width: 0.95rem;
+            height: 0.95rem;
+            border-radius: 50%;
+            background: var(--primary);
+            border: 3px solid var(--panel);
+            box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 18%, transparent);
+        }
+
+        .lead-timeline-card {
+            background: var(--panel-soft);
+            border: 1px solid var(--line);
+            border-radius: 14px;
+            padding: 0.9rem 1rem;
+        }
+
+        .lead-timeline-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.4rem;
+            margin-top: 0.35rem;
+            font-size: 0.78rem;
+            color: var(--ink-500);
+        }
+
+        .lead-timeline-empty {
+            border: 1px dashed var(--line);
+            border-radius: 14px;
+            padding: 1.2rem;
+            text-align: center;
+            color: var(--ink-500);
+            background: var(--panel-soft);
+        }
+
         .filter-dot {
             display: none;
             position: absolute;
@@ -186,7 +255,7 @@
                     </button>
                     <div>
                         <div class="page-title">Lead Workspace</div>
-                        <div class="title-meta">Upload, review, segment, and filter leads for campaign enrollment.</div>
+                        <div class="title-meta">Upload, review, segment, filter, and inspect each lead’s activity timeline.</div>
                     </div>
                     <div class="d-flex align-items-center gap-2">
                         <div class="search-wrap">
@@ -445,6 +514,25 @@
         </div>
     </div>
 
+    <div class="offcanvas offcanvas-end" tabindex="-1" id="leadTimelineCanvas" aria-labelledby="leadTimelineCanvasLabel">
+        <div class="offcanvas-header border-bottom">
+            <div>
+                <h5 class="offcanvas-title fw-bold mb-1" id="leadTimelineCanvasLabel">Lead activity timeline</h5>
+                <div class="text-muted small" id="lead-timeline-subtitle">Click a lead to load its history.</div>
+            </div>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+        </div>
+        <div class="offcanvas-body">
+            <div id="lead-timeline-summary" class="mb-3"></div>
+            <div id="lead-timeline-loading" class="text-muted small d-none mb-3">
+                <span class="spinner-border spinner-border-sm me-2" aria-hidden="true"></span>
+                Loading activity timeline...
+            </div>
+            <div id="lead-timeline-error" class="alert alert-danger d-none"></div>
+            <div id="lead-timeline-body"></div>
+        </div>
+    </div>
+
     <script type="module" src="./main.js"></script>
     <script type="module">
         import { fetchWithAuth } from './api.js';
@@ -543,6 +631,108 @@
             bootstrap.Modal.getOrCreateInstance(document.getElementById('importErrorsModal')).show();
         }
 
+        function renderLeadTimelineSummary(lead) {
+            const summary = document.getElementById('lead-timeline-summary');
+            const statusChip = lead.global_unsubscribe
+                ? '<span class="chip" style="background:#fee2e2;color:#b91c1c;">Unsubscribed</span>'
+                : '<span class="chip" style="background:#dcfce7;color:#166534;">Active</span>';
+
+            summary.innerHTML = `
+                <div class="lead-timeline-card">
+                    <div class="fw-bold fs-6">${escapeHtml(lead.name || lead.email)}</div>
+                    <div class="text-muted small">${escapeHtml(lead.email)}</div>
+                    <div class="lead-timeline-meta">
+                        ${lead.company ? `<span><i class="bi bi-building me-1"></i>${escapeHtml(lead.company)}</span>` : ''}
+                        <span><i class="bi bi-stars me-1"></i>Score ${escapeHtml(String(lead.score ?? 0))}</span>
+                        ${statusChip}
+                        <span><i class="bi bi-calendar3 me-1"></i>${formatTimestamp(lead.created_at)}</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        function renderLeadTimelineEvents(events) {
+            const body = document.getElementById('lead-timeline-body');
+            if (!events.length) {
+                body.innerHTML = `
+                    <div class="lead-timeline-empty">
+                        <i class="bi bi-clock-history display-6 d-block mb-2"></i>
+                        <div class="fw-semibold">No tracked activity yet</div>
+                        <div class="small">This lead has not generated any timeline events yet.</div>
+                    </div>
+                `;
+                return;
+            }
+
+            body.innerHTML = `
+                <div class="lead-timeline-shell">
+                    ${events.map(event => `
+                        <div class="lead-timeline-item">
+                            <span class="lead-timeline-dot" aria-hidden="true"></span>
+                            <div class="lead-timeline-card">
+                                <div class="d-flex align-items-start justify-content-between gap-2">
+                                    <div>
+                                        <div class="fw-semibold">
+                                            <i class="bi ${event.icon || 'bi-clock'} me-1" aria-hidden="true"></i>
+                                            ${escapeHtml(event.title)}
+                                        </div>
+                                        ${event.description ? `<div class="text-muted small mt-1">${escapeHtml(event.description)}</div>` : ''}
+                                    </div>
+                                    <div class="text-end small text-muted text-nowrap">
+                                        <div>${formatTimestamp(event.timestamp)}</div>
+                                        ${event.estimated ? '<div class="badge text-bg-warning mt-1">Estimated</div>' : ''}
+                                    </div>
+                                </div>
+                                <div class="lead-timeline-meta">
+                                    ${event.campaign ? `<span><i class="bi bi-bullseye me-1"></i>${escapeHtml(event.campaign)}</span>` : ''}
+                                    <span class="text-uppercase">${escapeHtml(event.type.replace(/_/g, ' '))}</span>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function setLeadTimelineLoading(isLoading) {
+            document.getElementById('lead-timeline-loading').classList.toggle('d-none', !isLoading);
+        }
+
+        function setLeadTimelineError(message = '') {
+            const errorEl = document.getElementById('lead-timeline-error');
+            if (!message) {
+                errorEl.classList.add('d-none');
+                errorEl.textContent = '';
+                return;
+            }
+            errorEl.textContent = message;
+            errorEl.classList.remove('d-none');
+        }
+
+        async function openLeadTimeline(leadId) {
+            const canvas = document.getElementById('leadTimelineCanvas');
+            const instance = bootstrap.Offcanvas.getOrCreateInstance(canvas);
+            document.getElementById('lead-timeline-subtitle').textContent = 'Loading activity history...';
+            setLeadTimelineError('');
+            setLeadTimelineLoading(true);
+            document.getElementById('lead-timeline-body').innerHTML = '';
+            instance.show();
+
+            try {
+                const res = await fetchWithAuth(`/leads/${leadId}/timeline/`);
+                if (!res.ok) throw new Error('Failed to load lead timeline');
+                const payload = await res.json();
+                renderLeadTimelineSummary(payload.lead || {});
+                renderLeadTimelineEvents(Array.isArray(payload.events) ? payload.events : []);
+                document.getElementById('lead-timeline-subtitle').textContent = 'Chronological activity history for this lead.';
+            } catch (err) {
+                setLeadTimelineError(err.message || 'Unable to load lead timeline.');
+                document.getElementById('lead-timeline-subtitle').textContent = 'Could not load this timeline.';
+            } finally {
+                setLeadTimelineLoading(false);
+            }
+        }
+
         function renderLeadRows(leads) {
             const tbody = document.getElementById('leads-table-body');
             if (leads.length === 0) {
@@ -563,7 +753,7 @@
             }
 
             tbody.innerHTML = leads.map(lead => `
-                <tr>
+                <tr class="lead-row" data-lead-id="${lead.id}" tabindex="0" role="button" aria-label="Open activity timeline for ${escapeHtml((lead.first_name || lead.last_name) ? `${lead.first_name || ''} ${lead.last_name || ''}`.trim() : lead.email)}">
                     <td class="fw-semibold">${escapeHtml(lead.first_name || '')} ${escapeHtml(lead.last_name || '')}</td>
                     <td>
                         <span>${escapeHtml(lead.email)}</span>
@@ -585,7 +775,10 @@
             `).join('');
 
             document.querySelectorAll('.copy-email-btn').forEach(btn => {
-                btn.addEventListener('click', () => copyToClipboard(btn.dataset.email, btn));
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    copyToClipboard(btn.dataset.email, btn);
+                });
             });
         }
 
@@ -826,6 +1019,26 @@
 
             document.getElementById('lead-search').addEventListener('input', applySearch);
             document.getElementById('refresh-history-btn').addEventListener('click', loadImportHistory);
+
+            document.getElementById('leads-table-body').addEventListener('click', (e) => {
+                const row = e.target.closest('tr.lead-row');
+                if (!row) return;
+                const leadId = row.dataset.leadId;
+                if (leadId) {
+                    openLeadTimeline(leadId);
+                }
+            });
+
+            document.getElementById('leads-table-body').addEventListener('keydown', (e) => {
+                if (!['Enter', ' '].includes(e.key)) return;
+                const row = e.target.closest('tr.lead-row');
+                if (!row) return;
+                e.preventDefault();
+                const leadId = row.dataset.leadId;
+                if (leadId) {
+                    openLeadTimeline(leadId);
+                }
+            });
 
             const filterPanel = document.getElementById('filter-panel');
             document.getElementById('filter-toggle-btn').addEventListener('click', () => {

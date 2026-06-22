@@ -1,13 +1,15 @@
-import logging from datetime 
-import timedelta from celery 
-import shared_task from django.conf 
-import settings as django_settings from django.utils 
-import timezone from .ai 
-import _apply_merge_tags, personalize_email from .gmail_service
-import build_unsubscribe_url, check_for_replies, send_gmail from .sms_service 
-import send_sms, initiate_call from .models 
-import CampaignLead, SequenceStep from leads.models 
-import BlockedDomain, normalize_domain
+import logging
+from datetime import timedelta
+
+from celery import shared_task
+from django.conf import settings as django_settings
+from django.utils import timezone
+
+from .ai import _apply_merge_tags, personalize_email
+from .gmail_service import build_unsubscribe_url, check_for_replies, send_gmail
+from .sms_service import send_sms, initiate_call
+from .models import CampaignLead, SequenceStep
+from leads.models import BlockedDomain, normalize_domain
 
 
 import urllib.parse
@@ -501,6 +503,7 @@ def send_email_step(campaign_lead_id, step_id):
         # -------------------------------------------
 
         account = clead.campaign.connected_account
+        sent_at = timezone.now()
         if account:
             try:
                 message_id = send_gmail(
@@ -511,7 +514,8 @@ def send_email_step(campaign_lead_id, step_id):
                     unsubscribe_url=build_unsubscribe_url(clead.lead),
                 )
                 clead.last_sent_message_id = message_id
-                clead.save(update_fields=['last_sent_message_id'])
+                clead.last_sent_at = sent_at
+                clead.save(update_fields=['last_sent_message_id', 'last_sent_at'])
                 logger.info(f"Gmail SENT to {clead.lead.email} | msg_id={message_id}")
             except Exception as gmail_err:
                 logger.error(f"Gmail API send failed for {clead.lead.email}: {gmail_err}")
@@ -520,6 +524,8 @@ def send_email_step(campaign_lead_id, step_id):
                 clead.save(update_fields=['next_execution_time'])
                 return
         else:
+            clead.last_sent_at = sent_at
+            clead.save(update_fields=['last_sent_at'])
             logger.info(f"Mock SENDING EMAIL to {clead.lead.email} | Subject: {subject}")
 
         _advance_to_next_step(clead, step)
