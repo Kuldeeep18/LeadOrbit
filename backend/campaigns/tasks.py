@@ -2,6 +2,7 @@ import logging
 import urllib.parse
 
 from bs4 import BeautifulSoup
+from django.conf import settings as django_settings
 from django.core.signing import Signer
 
 from .ai import _apply_merge_tags, personalize_email
