@@ -32,6 +32,24 @@
         .campaign-inspector .form-select {
             min-width: 220px;
         }
+
+        .benchmark-item {
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            background: #f8fafc;
+            padding: 12px 14px;
+        }
+
+        .benchmark-item .benchmark-label {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: #0f172a;
+        }
+
+        .benchmark-item .benchmark-meta {
+            font-size: 0.75rem;
+            color: #64748b;
+        }
     </style>
 </head>
 
@@ -210,6 +228,21 @@
                         </div>
                     </div>
                 </div>
+
+                <div class="row g-4 mt-0">
+                    <div class="col-lg-7">
+                        <div class="glass-card p-3 chart-card">
+                            <div class="section-title mb-3">Benchmark Comparison</div>
+                            <canvas id="benchmarkChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="col-lg-5">
+                        <div class="glass-card p-3 chart-card">
+                            <div class="section-title mb-3">Recommendations</div>
+                            <div id="benchmarkRecommendations" class="d-grid gap-2"></div>
+                        </div>
+                    </div>
+                </div>
             </section>
         </main>
     </div>
@@ -229,6 +262,7 @@
             let campaignChart;
             let channelChart;
             let campaignStepChart;
+            let benchmarkChart;
             let campaigns = [];
 
             // ── Load analytics data from backend ──
@@ -237,6 +271,7 @@
                     total_leads: 0, active_campaigns: 0,
                     emails_sent: 0, opened: 0, replied: 0, clicked: 0, bounced: 0,
                     open_rate: 0, reply_rate: 0, click_rate: 0, bounce_rate: 0,
+                    benchmark_comparison: [], benchmark_recommendations: [],
                     time_series: { labels: [], sent: [], opened: [], replied: [] },
                     campaign_stats: [], recent_activity: [],
                 };
@@ -350,6 +385,70 @@
                         plugins: { legend: { position: 'bottom' } },
                         scales: { y: { beginAtZero: true } },
                     },
+                });
+            };
+
+            const renderBenchmarkSection = () => {
+                const comparison = data.benchmark_comparison || [];
+                const recommendations = data.benchmark_recommendations || [];
+                const chartLabels = comparison.length ? comparison.map(item => item.label) : ['Open rate', 'Reply rate', 'Click rate', 'Bounce rate'];
+                const currentVals = comparison.length ? comparison.map(item => item.current || 0) : [0, 0, 0, 0];
+                const benchmarkVals = comparison.length ? comparison.map(item => item.benchmark || 0) : [20, 5, 3, 2];
+
+                if (benchmarkChart) benchmarkChart.destroy();
+                benchmarkChart = new Chart(document.getElementById('benchmarkChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: chartLabels,
+                        datasets: [
+                            {
+                                label: 'Current',
+                                data: currentVals,
+                                backgroundColor: '#0d6efd',
+                                borderRadius: 6,
+                            },
+                            {
+                                label: 'Benchmark',
+                                data: benchmarkVals,
+                                backgroundColor: '#94a3b8',
+                                borderRadius: 6,
+                            },
+                        ],
+                    },
+                    options: {
+                        responsive: true,
+                        indexAxis: 'y',
+                        plugins: { legend: { position: 'bottom' } },
+                        scales: { x: { beginAtZero: true } },
+                    },
+                });
+
+                const recContainer = document.getElementById('benchmarkRecommendations');
+                recContainer.replaceChildren();
+                const items = recommendations.length ? recommendations : [{
+                    label: 'No recommendations yet',
+                    message: 'Launch a campaign to compare its performance against benchmark targets.',
+                    current: null,
+                    benchmark: null,
+                    is_favorable: null,
+                }];
+                items.forEach(item => {
+                    const wrapper = document.createElement('div');
+                    wrapper.className = 'benchmark-item';
+                    wrapper.dataset.favorable = item.is_favorable === null ? 'unknown' : String(Boolean(item.is_favorable));
+
+                    const labelEl = document.createElement('div');
+                    labelEl.className = 'benchmark-label';
+                    labelEl.textContent = item.label;
+
+                    const metaEl = document.createElement('div');
+                    metaEl.className = 'benchmark-meta mt-1';
+                    metaEl.textContent = item.current !== null && item.current !== undefined
+                        ? `Current: ${item.current}% | Benchmark: ${item.benchmark}% | ${item.message}`
+                        : item.message;
+
+                    wrapper.append(labelEl, metaEl);
+                    recContainer.appendChild(wrapper);
                 });
             };
 
@@ -499,6 +598,7 @@
             renderCampaignPerformanceChart();
             renderChannelChart(campaigns);
             renderCampaignSelector(campaigns);
+            renderBenchmarkSection();
 
             timeRangeSelect.addEventListener('change', async () => {
                 const days = Number(timeRangeSelect.value || 30);
@@ -506,6 +606,7 @@
                 updateKPIs();
                 renderActivityChart();
                 renderCampaignPerformanceChart();
+                renderBenchmarkSection();
             });
 
             analyzeBtn.addEventListener('click', async () => {

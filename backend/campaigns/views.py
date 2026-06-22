@@ -14,10 +14,42 @@ from rest_framework.response import Response
 from leads.models import Lead
 from users.permissions import IsOrgManager
 
-from .models import Campaign, CampaignLead, SequenceStep, EmailTemplate
-from .serializers import CampaignSerializer, SequenceStepSerializer, EmailTemplateSerializer
+from .models import AuditLog, Campaign, CampaignLead, SequenceStep, EmailTemplate
+from .serializers import AuditLogSerializer, CampaignSerializer, SequenceStepSerializer, EmailTemplateSerializer
 
 logger = logging.getLogger(__name__)
+
+
+def record_audit_log(request, action, *, target=None, target_type='', target_id='', metadata=None):
+    user = getattr(request, 'user', None)
+    organization = getattr(user, 'organization', None)
+    if not getattr(user, 'is_authenticated', False) or not organization:
+        return
+
+    if target is not None:
+        target_type = target_type or target.__class__.__name__
+        target_id = target_id or str(getattr(target, 'id', '') or '')
+
+    AuditLog.objects.create(
+        organization=organization,
+        actor=user,
+        action=action,
+        target_type=target_type,
+        target_id=target_id,
+        ip_address=request.META.get('REMOTE_ADDR') or None,
+        metadata=metadata or {},
+    )
+
+
+class AuditLogViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = AuditLogSerializer
+    permission_classes = [IsAuthenticated, IsOrgManager]
+    queryset = AuditLog.objects.all()
+
+    def get_queryset(self):
+        return AuditLog.objects.filter(
+            organization=self.request.user.organization,
+        ).select_related('actor').order_by('-created_at')
 
 class CampaignViewSet(viewsets.ModelViewSet):
     serializer_class = CampaignSerializer
@@ -47,7 +79,34 @@ class CampaignViewSet(viewsets.ModelViewSet):
         )
 
     def perform_create(self, serializer):
-        serializer.save(organization=self.request.user.organization)
+        campaign = serializer.save(organization=self.request.user.organization)
+        record_audit_log(
+            self.request,
+            'campaign_created',
+            target=campaign,
+            metadata={'name': campaign.name, 'status': campaign.status},
+        )
+
+    def perform_update(self, serializer):
+        campaign = serializer.save()
+        record_audit_log(
+            self.request,
+            'campaign_updated',
+            target=campaign,
+            metadata={'name': campaign.name, 'status': campaign.status},
+        )
+
+    def perform_destroy(self, instance):
+        campaign_id = str(instance.id)
+        campaign_name = instance.name
+        instance.delete()
+        record_audit_log(
+            self.request,
+            'campaign_deleted',
+            target_type='Campaign',
+            target_id=campaign_id,
+            metadata={'name': campaign_name},
+        )
 
     @action(detail=True, methods=['post'])
     def enroll(self, request, pk=None):
@@ -69,6 +128,13 @@ class CampaignViewSet(viewsets.ModelViewSet):
         
         # Refresh campaign to get updated cached counters from signals
         campaign.refresh_from_db()
+
+        record_audit_log(
+            request,
+            'campaign_enrolled_leads',
+            target=campaign,
+            metadata={'enrolled_count': enrolled_count, 'lead_ids': [str(lead_id) for lead_id in lead_ids]},
+        )
         
         return Response(
             {
@@ -159,6 +225,13 @@ class CampaignViewSet(viewsets.ModelViewSet):
             immediate_processed = process_active_leads_once()
             process_active_leads.delay()
 
+        record_audit_log(
+            request,
+            'campaign_launched',
+            target=campaign,
+            metadata={'enrolled_leads': enrolled_count, 'immediate_processed': immediate_processed},
+        )
+
         return Response(
             {
                 "message": "Campaign launched. Processing queue triggered.",
@@ -185,6 +258,13 @@ class CampaignViewSet(viewsets.ModelViewSet):
 
         campaign.status = 'PAUSED'
         campaign.save(update_fields=['status'])
+
+        record_audit_log(
+            request,
+            'campaign_paused',
+            target=campaign,
+            metadata={'status': campaign.status},
+        )
 
         return Response(
             {
@@ -214,6 +294,13 @@ class CampaignViewSet(viewsets.ModelViewSet):
         campaign.status = 'ACTIVE'
         campaign.save(update_fields=['status'])
         process_active_leads.delay()
+
+        record_audit_log(
+            request,
+            'campaign_resumed',
+            target=campaign,
+            metadata={'status': campaign.status},
+        )
 
         return Response(
             {
@@ -584,6 +671,65 @@ class DashboardAnalyticsView(APIView):
             opened_series.append(opened_by_day.get(d, 0))
             replied_series.append(replied_by_day.get(d, 0))
 
+        benchmark_targets = [
+            {
+                'metric': 'open_rate',
+                'label': 'Open rate',
+                'benchmark': 20.0,
+                'current': open_rate,
+                'recommendation': 'Try improving subject lines and sender trust.',
+            },
+            {
+                'metric': 'reply_rate',
+                'label': 'Reply rate',
+                'benchmark': 5.0,
+                'current': reply_rate,
+                'recommendation': 'Tighten the call to action and lead follow-up timing.',
+            },
+            {
+                'metric': 'click_rate',
+                'label': 'Click rate',
+                'benchmark': 3.0,
+                'current': click_rate,
+                'recommendation': 'Make the CTA clearer and keep the content shorter.',
+            },
+            {
+                'metric': 'bounce_rate',
+                'label': 'Bounce rate',
+                'benchmark': 2.0,
+                'current': bounce_rate,
+                'recommendation': 'Clean the list and verify sender/domain configuration.',
+            },
+        ]
+
+        benchmark_comparison = []
+        benchmark_recommendations = []
+        for item in benchmark_targets:
+            delta = round(item['current'] - item['benchmark'], 1)
+            status_label = 'above' if delta >= 0 else 'below'
+            is_favorable = delta >= 0 if item['metric'] != 'bounce_rate' else delta <= 0
+            benchmark_comparison.append({
+                'metric': item['metric'],
+                'label': item['label'],
+                'current': item['current'],
+                'benchmark': item['benchmark'],
+                'delta': delta,
+                'status': status_label,
+                'is_favorable': is_favorable,
+            })
+            benchmark_recommendations.append({
+                'metric': item['metric'],
+                'label': item['label'],
+                'message': (
+                    f"{item['label']} is {abs(delta):.1f}% {status_label} the benchmark. "
+                    f"{item['recommendation']}"
+                ),
+                'status': status_label,
+                'is_favorable': is_favorable,
+                'current': item['current'],
+                'benchmark': item['benchmark'],
+            })
+
         # ── Per-campaign breakdown: use cached counters directly ──
         campaign_stats = []
         for c in Campaign.objects.filter(organization=org).order_by('-created_at')[:20]:
@@ -627,6 +773,8 @@ class DashboardAnalyticsView(APIView):
             'reply_rate': reply_rate,
             'click_rate': click_rate,
             'bounce_rate': bounce_rate,
+            'benchmark_comparison': benchmark_comparison,
+            'benchmark_recommendations': benchmark_recommendations,
             'time_series': {
                 'labels': labels,
                 'sent': sent_series,

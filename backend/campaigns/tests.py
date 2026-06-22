@@ -18,6 +18,7 @@ from campaigns.tasks import (
     process_active_leads_once,
     send_email_step,
 )
+from campaigns.models import AuditLog
 from campaigns.utils import generate_unsubscribe_token
 from leads.models import BlockedDomain, Lead
 from tenants.models import Organization
@@ -1516,3 +1517,72 @@ class GoogleOAuthStateTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_302_FOUND)
         self.assertIn('google_auth=error', response['Location'])
         self.assertIn('reason=no_user', response['Location'])
+
+
+class CampaignAuditLogTests(APITestCase):
+    def setUp(self):
+        self.organization = Organization.objects.create(name='Audit Org')
+        self.user = User.objects.create_user(
+            email='manager@audit.test',
+            password='StrongPass123!',
+            organization=self.organization,
+            role='ADMIN',
+        )
+        self.client.force_authenticate(self.user)
+
+    def test_campaign_creation_writes_and_lists_audit_log(self):
+        response = self.client.post(
+            '/api/v1/campaigns/',
+            {
+                'name': 'Audit Trail',
+                'status': 'DRAFT',
+                'settings': {},
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        log = AuditLog.objects.get(
+            organization=self.organization,
+            action='campaign_created',
+        )
+        self.assertEqual(log.target_type, 'Campaign')
+        self.assertEqual(log.metadata.get('name'), 'Audit Trail')
+
+        response = self.client.get('/api/v1/audit-logs/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data)
+        self.assertEqual(response.data[0]['action'], 'campaign_created')
+
+
+class CampaignAnalyticsBenchmarkTests(APITestCase):
+    def setUp(self):
+        self.organization = Organization.objects.create(name='Analytics Org')
+        self.user = User.objects.create_user(
+            email='analytics@audit.test',
+            password='StrongPass123!',
+            organization=self.organization,
+            role='ADMIN',
+        )
+        self.client.force_authenticate(self.user)
+
+    def test_dashboard_includes_benchmark_comparison_data(self):
+        response = self.client.get('/api/v1/analytics/dashboard/?days=30')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('benchmark_comparison', response.data)
+        self.assertIn('benchmark_recommendations', response.data)
+        self.assertEqual(len(response.data['benchmark_comparison']), 4)
+        self.assertEqual(len(response.data['benchmark_recommendations']), 4)
+        open_rate = next(
+            item for item in response.data['benchmark_comparison']
+            if item['metric'] == 'open_rate'
+        )
+        self.assertEqual(open_rate['benchmark'], 20.0)
+        self.assertEqual(open_rate['is_favorable'], open_rate['delta'] >= 0)
+        bounce_rate = next(
+            item for item in response.data['benchmark_comparison']
+            if item['metric'] == 'bounce_rate'
+        )
+        self.assertEqual(bounce_rate['is_favorable'], bounce_rate['delta'] <= 0)
