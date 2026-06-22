@@ -65,6 +65,41 @@
             border-right: none !important;
             color: rgba(255, 255, 255, 0.5) !important;
         }
+        .password-strength {
+            margin-top: 0.7rem;
+        }
+        .password-strength-bar {
+            height: 0.42rem;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.12);
+            overflow: hidden;
+        }
+        .password-strength-bar-fill {
+            width: 0%;
+            height: 100%;
+            border-radius: inherit;
+            transition: width 0.2s ease, background-color 0.2s ease;
+            background: #ef4444;
+        }
+        .password-strength-label {
+            margin-top: 0.35rem;
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: rgba(255, 255, 255, 0.58);
+            letter-spacing: 0;
+        }
+        .password-strength[data-strength='weak'] .password-strength-bar-fill {
+            width: 33%;
+            background: #ef4444;
+        }
+        .password-strength[data-strength='medium'] .password-strength-bar-fill {
+            width: 66%;
+            background: #f59e0b;
+        }
+        .password-strength[data-strength='strong'] .password-strength-bar-fill {
+            width: 100%;
+            background: #22c55e;
+        }
     </style>
 </head>
 
@@ -148,6 +183,12 @@
             <i class="bi bi-eye" aria-hidden="true"></i>
         </button>
     </div>
+    <div class="password-strength" id="passwordStrength" data-strength="weak" aria-live="polite">
+        <div class="password-strength-bar" aria-hidden="true">
+            <div class="password-strength-bar-fill"></div>
+        </div>
+        <div class="password-strength-label" id="passwordStrengthLabel">Weak password</div>
+    </div>
 </div>
 
                             <div class="d-grid mb-3">
@@ -171,6 +212,41 @@
         import { register } from './api.js';
 
         document.addEventListener('DOMContentLoaded', () => {
+            const passwordInput = document.getElementById('password');
+            const strengthWrap = document.getElementById('passwordStrength');
+            const strengthLabel = document.getElementById('passwordStrengthLabel');
+
+            const getPasswordStrength = (password) => {
+                const checks = [
+                    password.length >= 8,
+                    /[A-Z]/.test(password),
+                    /[a-z]/.test(password),
+                    /\d/.test(password),
+                    /[^A-Za-z0-9]/.test(password),
+                ];
+                const score = checks.filter(Boolean).length;
+
+                if (password.length === 0 || password.length < 6 || score <= 2) {
+                    return { level: 'weak', label: 'Weak password' };
+                }
+                if (score <= 4) {
+                    return { level: 'medium', label: 'Medium password' };
+                }
+                return { level: 'strong', label: 'Strong password' };
+            };
+
+            const updatePasswordStrength = () => {
+                if (!passwordInput || !strengthWrap || !strengthLabel) return;
+                const strength = getPasswordStrength(passwordInput.value);
+                strengthWrap.dataset.strength = strength.level;
+                strengthLabel.textContent = strength.label;
+            };
+
+            if (passwordInput) {
+                passwordInput.addEventListener('input', updatePasswordStrength);
+                updatePasswordStrength();
+            }
+
             const form = document.querySelector('form');
             if (form) {
                 form.addEventListener('submit', async (e) => {
