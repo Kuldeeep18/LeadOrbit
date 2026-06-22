@@ -671,6 +671,62 @@ class DashboardAnalyticsView(APIView):
             opened_series.append(opened_by_day.get(d, 0))
             replied_series.append(replied_by_day.get(d, 0))
 
+        benchmark_targets = [
+            {
+                'metric': 'open_rate',
+                'label': 'Open rate',
+                'benchmark': 20.0,
+                'current': open_rate,
+                'recommendation': 'Try improving subject lines and sender trust.',
+            },
+            {
+                'metric': 'reply_rate',
+                'label': 'Reply rate',
+                'benchmark': 5.0,
+                'current': reply_rate,
+                'recommendation': 'Tighten the call to action and lead follow-up timing.',
+            },
+            {
+                'metric': 'click_rate',
+                'label': 'Click rate',
+                'benchmark': 3.0,
+                'current': click_rate,
+                'recommendation': 'Make the CTA clearer and keep the content shorter.',
+            },
+            {
+                'metric': 'bounce_rate',
+                'label': 'Bounce rate',
+                'benchmark': 2.0,
+                'current': bounce_rate,
+                'recommendation': 'Clean the list and verify sender/domain configuration.',
+            },
+        ]
+
+        benchmark_comparison = []
+        benchmark_recommendations = []
+        for item in benchmark_targets:
+            delta = round(item['current'] - item['benchmark'], 1)
+            status_label = 'above' if delta >= 0 else 'below'
+            benchmark_comparison.append({
+                'metric': item['metric'],
+                'label': item['label'],
+                'current': item['current'],
+                'benchmark': item['benchmark'],
+                'delta': delta,
+                'status': status_label,
+            })
+            benchmark_recommendations.append({
+                'metric': item['metric'],
+                'label': item['label'],
+                'message': (
+                    f"{item['label']} is {abs(delta):.1f}% {status_label} the benchmark. "
+                    f"{item['recommendation']}"
+                ),
+                'status': status_label,
+                'current': item['current'],
+                'benchmark': item['benchmark'],
+            })
+
         # ── Per-campaign breakdown: use cached counters directly ──
         campaign_stats = []
         for c in Campaign.objects.filter(organization=org).order_by('-created_at')[:20]:
@@ -714,6 +770,8 @@ class DashboardAnalyticsView(APIView):
             'reply_rate': reply_rate,
             'click_rate': click_rate,
             'bounce_rate': bounce_rate,
+            'benchmark_comparison': benchmark_comparison,
+            'benchmark_recommendations': benchmark_recommendations,
             'time_series': {
                 'labels': labels,
                 'sent': sent_series,

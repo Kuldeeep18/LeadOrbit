@@ -1554,3 +1554,29 @@ class CampaignAuditLogTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertTrue(response.data)
         self.assertEqual(response.data[0]['action'], 'campaign_created')
+
+
+class CampaignAnalyticsBenchmarkTests(APITestCase):
+    def setUp(self):
+        self.organization = Organization.objects.create(name='Analytics Org')
+        self.user = User.objects.create_user(
+            email='analytics@audit.test',
+            password='StrongPass123!',
+            organization=self.organization,
+            role='ADMIN',
+        )
+        self.client.force_authenticate(self.user)
+
+    def test_dashboard_includes_benchmark_comparison_data(self):
+        response = self.client.get('/api/v1/analytics/dashboard/?days=30')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('benchmark_comparison', response.data)
+        self.assertIn('benchmark_recommendations', response.data)
+        self.assertEqual(len(response.data['benchmark_comparison']), 4)
+        self.assertEqual(len(response.data['benchmark_recommendations']), 4)
+        open_rate = next(
+            item for item in response.data['benchmark_comparison']
+            if item['metric'] == 'open_rate'
+        )
+        self.assertEqual(open_rate['benchmark'], 20.0)
