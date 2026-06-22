@@ -112,6 +112,17 @@ python manage.py test
 
 Ensure all tests pass successfully.
 
+To measure test coverage locally:
+
+```bash
+cd backend
+coverage run manage.py test
+coverage report
+coverage html
+```
+
+The generated HTML report will be available in `backend/htmlcov/`.
+
 ---
 
 ## Code Style Guidelines
