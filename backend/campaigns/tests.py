@@ -13,11 +13,13 @@ from campaigns.ai import personalize_email
 from campaigns.tasks import (
     _execute_condition_event_step,
     _get_campaign_steps,
+    celery_heartbeat,
     poll_gmail_for_replies,
     process_active_leads,
     process_active_leads_once,
     send_email_step,
 )
+from django.core.cache import cache
 from campaigns.utils import generate_unsubscribe_token
 from leads.models import BlockedDomain, Lead
 from tenants.models import Organization
@@ -1303,6 +1305,39 @@ class CampaignWorkflowTests(APITestCase):
         self.client.force_authenticate(user=None)
         response = self.client.get('/api/v1/analytics/dashboard/')
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_celery_beat_health_reports_503_until_heartbeat_updates(self):
+        cache.clear()
+        response = self.client.get('/api/v1/health/celery-beat/')
+
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertFalse(response.data['healthy'])
+        self.assertFalse(response.data['heartbeat_present'])
+
+    def test_celery_beat_health_reports_healthy_after_recent_heartbeat(self):
+        cache.clear()
+        celery_heartbeat()
+
+        response = self.client.get('/api/v1/health/celery-beat/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['healthy'])
+        self.assertTrue(response.data['heartbeat_present'])
+        self.assertLessEqual(response.data['heartbeat_age_seconds'], 180)
+
+    def test_celery_beat_health_marks_stale_heartbeat_unhealthy(self):
+        cache.set(
+            'celery_beat_heartbeat',
+            timezone.now().timestamp() - 240,
+            timeout=600,
+        )
+
+        response = self.client.get('/api/v1/health/celery-beat/')
+
+        self.assertEqual(response.status_code, status.HTTP_503_SERVICE_UNAVAILABLE)
+        self.assertFalse(response.data['healthy'])
+        self.assertTrue(response.data['heartbeat_present'])
+        self.assertGreater(response.data['heartbeat_age_seconds'], 180)
 
     def test_unsubscribe_get_shows_confirmation_without_updating_lead(self):
         lead = Lead.objects.create(

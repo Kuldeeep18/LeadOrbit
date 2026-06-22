@@ -17,6 +17,7 @@ from campaigns.views import (
     CampaignViewSet,
     SequenceStepViewSet,
     EmailTemplateViewSet,
+    CeleryBeatHealthView,
     WebhookView,
     DashboardAnalyticsView,
     AIGenerateView,
@@ -51,6 +52,7 @@ urlpatterns = [
     path('api/v1/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/v1/webhooks/email/', WebhookView.as_view(), name='email_webhook'),
     path('api/v1/analytics/dashboard/', DashboardAnalyticsView.as_view(), name='dashboard_analytics'),
+    path('api/v1/health/celery-beat/', CeleryBeatHealthView.as_view(), name='celery_beat_health'),
     path('api/v1/campaigns/ai-generate/', AIGenerateView.as_view(), name='ai_generate'),
     
     

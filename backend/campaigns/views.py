@@ -1,21 +1,25 @@
 import logging
-
-
 import urllib.parse
+from datetime import datetime, timezone as dt_timezone
+
+from django.core.cache import cache
 from django.core.signing import Signer, BadSignature
 from django.http import HttpResponseRedirect, HttpResponseBadRequest
+from django.utils import timezone
 # ------------------------------------------
 
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
+from rest_framework.views import APIView
 
 from leads.models import Lead
 from users.permissions import IsOrgManager
 
 from .models import Campaign, CampaignLead, SequenceStep, EmailTemplate
 from .serializers import CampaignSerializer, SequenceStepSerializer, EmailTemplateSerializer
+from .tasks import CELERY_BEAT_HEARTBEAT_KEY, CELERY_BEAT_HEARTBEAT_MAX_AGE_SECONDS
 
 logger = logging.getLogger(__name__)
 
@@ -711,6 +715,54 @@ class AIGenerateView(APIView):
             "Your Name"
         )
         return f"SUBJECT: {subject}\nBODY: {body}"
+
+
+class CeleryBeatHealthView(APIView):
+    """
+    Read-only health endpoint that reports whether Celery Beat is updating the
+    heartbeat cache key frequently enough.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, *args, **kwargs):
+        raw_heartbeat = cache.get(CELERY_BEAT_HEARTBEAT_KEY)
+        if raw_heartbeat is None:
+            return Response(
+                {
+                    'healthy': False,
+                    'heartbeat_present': False,
+                    'detail': 'Celery Beat heartbeat is missing.',
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        try:
+            heartbeat_ts = float(raw_heartbeat)
+        except (TypeError, ValueError):
+            return Response(
+                {
+                    'healthy': False,
+                    'heartbeat_present': True,
+                    'detail': 'Celery Beat heartbeat is malformed.',
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+
+        now_ts = timezone.now().timestamp()
+        age_seconds = now_ts - heartbeat_ts
+        healthy = age_seconds <= CELERY_BEAT_HEARTBEAT_MAX_AGE_SECONDS
+        response_status = status.HTTP_200_OK if healthy else status.HTTP_503_SERVICE_UNAVAILABLE
+
+        return Response(
+            {
+                'healthy': healthy,
+                'heartbeat_present': True,
+                'heartbeat_age_seconds': round(age_seconds, 1),
+                'last_heartbeat': datetime.fromtimestamp(heartbeat_ts, tz=dt_timezone.utc).isoformat(),
+                'max_age_seconds': CELERY_BEAT_HEARTBEAT_MAX_AGE_SECONDS,
+            },
+            status=response_status,
+        )
     
 from django.http import HttpResponse
 from django.middleware.csrf import get_token

@@ -1,21 +1,25 @@
-import logging from datetime 
-import timedelta from celery 
-import shared_task from django.conf 
-import settings as django_settings from django.utils 
-import timezone from .ai 
-import _apply_merge_tags, personalize_email from .gmail_service
-import build_unsubscribe_url, check_for_replies, send_gmail from .sms_service 
-import send_sms, initiate_call from .models 
-import CampaignLead, SequenceStep from leads.models 
-import BlockedDomain, normalize_domain
-
-
+import logging
 import urllib.parse
+from datetime import timedelta
+
 from bs4 import BeautifulSoup
+from celery import shared_task
+from django.conf import settings as django_settings
+from django.core.cache import cache
 from django.core.signing import Signer
+from django.utils import timezone
+
+from .ai import _apply_merge_tags, personalize_email
+from .gmail_service import build_unsubscribe_url, check_for_replies, send_gmail
+from .models import CampaignLead, SequenceStep
+from .sms_service import send_sms, initiate_call
+from leads.models import BlockedDomain, normalize_domain
 
 
 logger = logging.getLogger(__name__)
+
+CELERY_BEAT_HEARTBEAT_KEY = 'celery_beat_heartbeat'
+CELERY_BEAT_HEARTBEAT_MAX_AGE_SECONDS = 180
 
 def _get_campaign_steps(campaign):
     """
@@ -115,6 +119,23 @@ def _maybe_mark_campaign_completed(campaign):
     campaign.status = 'COMPLETED'
     campaign.save(update_fields=['status'])
     logger.info(f"Campaign marked COMPLETED: {campaign.id}")
+
+
+@shared_task
+def celery_heartbeat():
+    """
+    Periodic heartbeat used by the health endpoint to confirm Celery Beat is alive.
+    """
+    now = timezone.now().timestamp()
+    cache.set(
+        CELERY_BEAT_HEARTBEAT_KEY,
+        now,
+        timeout=CELERY_BEAT_HEARTBEAT_MAX_AGE_SECONDS * 2,
+    )
+    return {
+        'heartbeat_key': CELERY_BEAT_HEARTBEAT_KEY,
+        'timestamp': now,
+    }
 
 
 def _advance_to_next_step(clead, completed_step, now=None):

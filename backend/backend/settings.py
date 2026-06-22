@@ -151,9 +151,28 @@ CELERY_TASK_ALWAYS_EAGER = os.getenv(
 ).lower() in ('true', '1', 'yes')
 CELERY_TASK_EAGER_PROPAGATES = True
 
+if DEBUG:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'leadorbit-local-cache',
+        }
+    }
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.redis.RedisCache',
+            'LOCATION': os.getenv('CACHE_URL', os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')),
+        }
+    }
+
 CELERY_BEAT_SCHEDULE = {
     'process-campaign-leads-every-minute': {
         'task': 'campaigns.tasks.process_active_leads',
+        'schedule': 60.0,
+    },
+    'celery-beat-heartbeat-every-minute': {
+        'task': 'campaigns.tasks.celery_heartbeat',
         'schedule': 60.0,
     },
     'poll-gmail-replies-every-5-minutes': {
