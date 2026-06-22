@@ -65,6 +65,58 @@
             border-right: none !important;
             color: rgba(255, 255, 255, 0.5) !important;
         }
+        .password-toggle-wrapper {
+            position: relative;
+        }
+        .password-toggle-wrapper .custom-input {
+            padding-right: 3.25rem;
+        }
+        .password-toggle-btn {
+            position: absolute;
+            top: 50%;
+            right: 0.85rem;
+            transform: translateY(-50%);
+            border: none;
+            background: transparent;
+            color: rgba(255, 255, 255, 0.55);
+            padding: 0.25rem;
+            line-height: 1;
+        }
+        .password-toggle-btn:hover {
+            color: #ffffff;
+        }
+        .password-strength {
+            margin-top: 12px;
+        }
+        .password-strength-bar {
+            width: 100%;
+            height: 8px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.12);
+            overflow: hidden;
+        }
+        .password-strength-bar > span {
+            display: block;
+            height: 100%;
+            width: 0%;
+            border-radius: inherit;
+            transition: width 0.18s ease, background-color 0.18s ease;
+        }
+        .password-strength-label {
+            margin-top: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.72);
+        }
+        .password-strength-label.is-weak {
+            color: #f87171;
+        }
+        .password-strength-label.is-medium {
+            color: #fbbf24;
+        }
+        .password-strength-label.is-strong {
+            color: #4ade80;
+        }
     </style>
 </head>
 
@@ -148,6 +200,12 @@
             <i class="bi bi-eye" aria-hidden="true"></i>
         </button>
     </div>
+    <div class="password-strength" aria-live="polite">
+        <div class="password-strength-bar" aria-hidden="true">
+            <span id="passwordStrengthBar"></span>
+        </div>
+        <div id="passwordStrengthLabel" class="password-strength-label">Strength: enter a password</div>
+    </div>
 </div>
 
                             <div class="d-grid mb-3">
@@ -172,7 +230,60 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             const form = document.querySelector('form');
+            const passwordInput = document.getElementById('password');
+            const strengthBar = document.getElementById('passwordStrengthBar');
+            const strengthLabel = document.getElementById('passwordStrengthLabel');
+
+            const evaluatePasswordStrength = (password) => {
+                const value = password || '';
+                let score = 0;
+
+                if (value.length >= 8) score += 1;
+                if (/[A-Z]/.test(value)) score += 1;
+                if (/[a-z]/.test(value)) score += 1;
+                if (/[0-9]/.test(value)) score += 1;
+                if (/[^A-Za-z0-9]/.test(value)) score += 1;
+
+                if (!value) {
+                    return { label: 'enter a password', level: '', width: '0%' };
+                }
+
+                if (score <= 2) {
+                    return { label: 'weak', level: 'is-weak', width: '33%' };
+                }
+
+                if (score <= 4) {
+                    return { label: 'medium', level: 'is-medium', width: '66%' };
+                }
+
+                return { label: 'strong', level: 'is-strong', width: '100%' };
+            };
+
+            const updatePasswordStrength = () => {
+                if (!strengthBar || !strengthLabel || !passwordInput) return;
+                const { label, level, width } = evaluatePasswordStrength(passwordInput.value);
+                strengthBar.style.width = width;
+                strengthBar.classList.remove('bg-danger', 'bg-warning', 'bg-success');
+                strengthBar.style.backgroundColor = level === 'is-strong'
+                    ? '#4ade80'
+                    : level === 'is-medium'
+                        ? '#fbbf24'
+                        : level === 'is-weak'
+                            ? '#f87171'
+                            : 'transparent';
+                strengthLabel.classList.remove('is-weak', 'is-medium', 'is-strong');
+                if (level) {
+                    strengthLabel.classList.add(level);
+                    strengthLabel.textContent = `Strength: ${label}`;
+                } else {
+                    strengthLabel.textContent = 'Strength: enter a password';
+                }
+            };
+
             if (form) {
+                updatePasswordStrength();
+                passwordInput?.addEventListener('input', updatePasswordStrength);
+
                 form.addEventListener('submit', async (e) => {
                     e.preventDefault();
 
