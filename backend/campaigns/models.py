@@ -50,6 +50,29 @@ class Campaign(TenantModel):
     def __str__(self):
         return self.name
 
+
+class AuditLog(TenantModel):
+    action = models.CharField(max_length=255)
+    target_type = models.CharField(max_length=64, blank=True, default='')
+    target_id = models.CharField(max_length=64, blank=True, default='')
+    actor = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='audit_logs',
+    )
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        actor_label = self.actor.email if self.actor else 'system'
+        target_label = self.target_type or 'unknown target'
+        return f"{self.action} by {actor_label} on {target_label}"
+
 class SequenceStep(TenantModel):
     CHANNEL_CHOICES = (
         ('EMAIL', 'Email'),

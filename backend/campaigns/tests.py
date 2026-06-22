@@ -18,6 +18,7 @@ from campaigns.tasks import (
     process_active_leads_once,
     send_email_step,
 )
+from campaigns.models import AuditLog
 from campaigns.utils import generate_unsubscribe_token
 from leads.models import BlockedDomain, Lead
 from tenants.models import Organization
@@ -1516,3 +1517,40 @@ class GoogleOAuthStateTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_302_FOUND)
         self.assertIn('google_auth=error', response['Location'])
         self.assertIn('reason=no_user', response['Location'])
+
+
+class CampaignAuditLogTests(APITestCase):
+    def setUp(self):
+        self.organization = Organization.objects.create(name='Audit Org')
+        self.user = User.objects.create_user(
+            email='manager@audit.test',
+            password='StrongPass123!',
+            organization=self.organization,
+            role='ADMIN',
+        )
+        self.client.force_authenticate(self.user)
+
+    def test_campaign_creation_writes_and_lists_audit_log(self):
+        response = self.client.post(
+            '/api/v1/campaigns/',
+            {
+                'name': 'Audit Trail',
+                'status': 'DRAFT',
+                'settings': {},
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        log = AuditLog.objects.get(
+            organization=self.organization,
+            action='campaign_created',
+        )
+        self.assertEqual(log.target_type, 'Campaign')
+        self.assertEqual(log.metadata.get('name'), 'Audit Trail')
+
+        response = self.client.get('/api/v1/audit-logs/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data)
+        self.assertEqual(response.data[0]['action'], 'campaign_created')

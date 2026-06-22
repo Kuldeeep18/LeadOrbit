@@ -14,6 +14,7 @@ from leads.views import BlockedDomainViewSet, LeadImportJobViewSet, LeadViewSet,
 
 
 from campaigns.views import (
+    AuditLogViewSet,
     CampaignViewSet,
     SequenceStepViewSet,
     EmailTemplateViewSet,
@@ -43,6 +44,7 @@ router.register(r'tags', TagViewSet, basename='tags')
 router.register(r'blocked-domains', BlockedDomainViewSet, basename='blocked-domains')
 router.register(r'campaigns', CampaignViewSet, basename='campaigns')
 router.register(r'email-templates', EmailTemplateViewSet, basename='email-templates')
+router.register(r'audit-logs', AuditLogViewSet, basename='audit-logs')
 
 urlpatterns = [
     path('', api_root, name='api_root'),
