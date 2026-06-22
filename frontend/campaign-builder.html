@@ -584,6 +584,96 @@
             font-size: 0.85rem;
         }
 
+        .subject-preview {
+            border: 1px solid #dbe4ef;
+            border-radius: 18px;
+            background: linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
+            padding: 12px;
+            box-shadow: 0 10px 24px rgba(15, 23, 42, 0.06);
+        }
+
+        .subject-preview-phone {
+            width: 100%;
+            max-width: 300px;
+            margin: 0 auto;
+            border-radius: 24px;
+            background: linear-gradient(180deg, #0f172a 0%, #1e293b 100%);
+            color: #f8fafc;
+            padding: 14px 14px 16px;
+            box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.14);
+        }
+
+        .subject-preview-pill {
+            width: 42px;
+            height: 5px;
+            border-radius: 999px;
+            margin: 0 auto 12px;
+            background: rgba(255, 255, 255, 0.22);
+        }
+
+        .subject-preview-notification {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 18px;
+            padding: 12px;
+        }
+
+        .subject-preview-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            display: grid;
+            place-items: center;
+            background: linear-gradient(135deg, #2563eb, #0ea5e9);
+            color: #fff;
+            flex-shrink: 0;
+        }
+
+        .subject-preview-meta {
+            min-width: 0;
+            flex: 1;
+        }
+
+        .subject-preview-app {
+            font-size: 0.7rem;
+            font-weight: 800;
+            letter-spacing: 0.06em;
+            text-transform: uppercase;
+            color: #93c5fd;
+            margin-bottom: 3px;
+        }
+
+        .subject-preview-subject {
+            font-weight: 800;
+            font-size: 0.98rem;
+            line-height: 1.35;
+            margin-bottom: 4px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .subject-preview-copy {
+            font-size: 0.82rem;
+            line-height: 1.45;
+            color: #cbd5e1;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
+        .subject-preview-footer {
+            display: flex;
+            justify-content: space-between;
+            gap: 8px;
+            margin-top: 10px;
+            font-size: 0.72rem;
+            color: #94a3b8;
+        }
+
         .delay-badge {
             display: inline-flex;
             align-items: center;
@@ -2057,6 +2147,26 @@ ${rows || `
                     <input type="text" class="ep-input" id="ep-subject" placeholder="Subject" value="${step.subject || ''}">
                 </div>
                 <div class="mb-3">
+                    <div class="ep-label">Mobile inbox preview</div>
+                    <div class="subject-preview" aria-live="polite">
+                        <div class="subject-preview-phone">
+                            <div class="subject-preview-pill"></div>
+                            <div class="subject-preview-notification">
+                                <div class="subject-preview-icon"><i class="bi bi-envelope-fill"></i></div>
+                                <div class="subject-preview-meta">
+                                    <div class="subject-preview-app">LeadOrbit</div>
+                                    <div class="subject-preview-subject" id="subject-preview-subject">${escapeHtml(step.subject || 'Your subject line appears here')}</div>
+                                    <div class="subject-preview-copy" id="subject-preview-copy">${escapeHtml(step.body || 'A short preview of the email body will show here.')}</div>
+                                    <div class="subject-preview-footer">
+                                        <span>Inbox preview</span>
+                                        <span>Just now</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="mb-3">
                     <div class="ep-label">Body</div>
                     <textarea class="ep-textarea" id="ep-body" placeholder="Write your email content...">${step.body || ''}</textarea>
                 </div>
@@ -2084,19 +2194,37 @@ ${rows || `
                 </div>
             `;
 
+            const subjectInput = document.getElementById('ep-subject');
+            const bodyInput = document.getElementById('ep-body');
+            const previewSubject = document.getElementById('subject-preview-subject');
+            const previewCopy = document.getElementById('subject-preview-copy');
+
+            const updateSubjectPreview = () => {
+                previewSubject.textContent = subjectInput.value.trim() || 'Your subject line appears here';
+                previewCopy.textContent = bodyInput.value.trim() || 'A short preview of the email body will show here.';
+            };
+
             // Bind inputs
-            document.getElementById('ep-subject').addEventListener('input', (e) => { step.subject = e.target.value; });
-            document.getElementById('ep-body').addEventListener('input', (e) => { step.body = e.target.value; });
-
-            let activeEditor = document.getElementById('ep-body');
-
-            document.getElementById('ep-subject').addEventListener('focus', () => {
-                activeEditor = document.getElementById('ep-subject');
+            subjectInput.addEventListener('input', (e) => {
+                step.subject = e.target.value;
+                updateSubjectPreview();
+            });
+            bodyInput.addEventListener('input', (e) => {
+                step.body = e.target.value;
+                updateSubjectPreview();
             });
 
-            document.getElementById('ep-body').addEventListener('focus', () => {
-                activeEditor = document.getElementById('ep-body');
+            let activeEditor = bodyInput;
+
+            subjectInput.addEventListener('focus', () => {
+                activeEditor = subjectInput;
             });
+
+            bodyInput.addEventListener('focus', () => {
+                activeEditor = bodyInput;
+            });
+
+            updateSubjectPreview();
 
 
 
@@ -2121,6 +2249,7 @@ ${rows || `
             } else {
                 step.body = body.value;
             }
+            updateSubjectPreview();
 
             body.focus();
             body.selectionStart = body.selectionEnd =
@@ -2448,8 +2577,14 @@ ${rows || `
 
             const subjectInput = document.getElementById('ep-subject');
             const bodyInput = document.getElementById('ep-body');
-            if (subjectInput) subjectInput.value = aiComposerStep.subject;
-            if (bodyInput) bodyInput.value = aiComposerStep.body;
+            if (subjectInput) {
+                subjectInput.value = aiComposerStep.subject;
+                subjectInput.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+            if (bodyInput) {
+                bodyInput.value = aiComposerStep.body;
+                bodyInput.dispatchEvent(new Event('input', { bubbles: true }));
+            }
 
             renderCanvas();
             closeAIComposer();
@@ -2759,5 +2894,3 @@ document.getElementById('setting-daily-limit').value =
 </body>
 
 </html>
-
-
