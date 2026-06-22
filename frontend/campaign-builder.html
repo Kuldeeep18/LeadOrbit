@@ -1243,6 +1243,7 @@
         let activeTab = 'sequence';
         let availableLeads = [];
         let selectedLeadIds = new Set();
+        let selectedLeadTagFilter = '';
         let aiComposerStep = null;
         let aiConversation = [];
         let aiLatestDraft = null;
@@ -1303,6 +1304,24 @@
             const value = String(text).trim();
             if (value.length <= limit) return value;
             return `${value.slice(0, limit)}...`;
+        }
+
+        function getUniqueLeadTags() {
+            const tagsById = new Map();
+            availableLeads.forEach(lead => {
+                (lead.tags || []).forEach(tag => {
+                    if (!tag?.id) return;
+                    tagsById.set(String(tag.id), tag);
+                });
+            });
+            return [...tagsById.values()].sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+        }
+
+        function getFilteredLeads() {
+            if (!selectedLeadTagFilter) return availableLeads;
+            return availableLeads.filter(lead =>
+                (lead.tags || []).some(tag => String(tag.id) === String(selectedLeadTagFilter))
+            );
         }
 
         async function loadEmailTemplates() {
@@ -1561,15 +1580,20 @@
 
         function renderLeadsTab() {
             const canvas = document.getElementById('canvas');
-            const rows = availableLeads.map(lead => {
-                const checked = selectedLeadIds.has(lead.id) ? 'checked' : '';
+            const filteredLeads = getFilteredLeads();
+            const tags = getUniqueLeadTags();
+            const rows = filteredLeads.map(lead => {
+                const leadId = String(lead.id);
+                const checked = selectedLeadIds.has(leadId) ? 'checked' : '';
+                const tagNames = (lead.tags || []).map(tag => `<span class="badge rounded-pill bg-secondary me-1">${escapeHtml(tag.name)}</span>`).join('');
                 return `
                     <tr>
-                        <td><input class="form-check-input lead-select" type="checkbox" value="${lead.id}" ${checked}></td>
-                        <td>${lead.first_name || ''} ${lead.last_name || ''}</td>
-                        <td>${lead.email}</td>
-                        <td>${lead.phone || '-'}</td>
-                        <td>${lead.company || '-'}</td>
+                        <td><input class="form-check-input lead-select" type="checkbox" value="${leadId}" ${checked}></td>
+                        <td>${escapeHtml(lead.first_name || '')} ${escapeHtml(lead.last_name || '')}</td>
+                        <td>${escapeHtml(lead.email || '')}</td>
+                        <td>${escapeHtml(lead.phone || '-') || '-'}</td>
+                        <td>${escapeHtml(lead.company || '-') || '-'}</td>
+                        <td>${tagNames || '<span class="text-muted">-</span>'}</td>
                     </tr>
                 `;
             }).join('');
@@ -1580,24 +1604,42 @@
                         <h5 class="mb-0">Select leads for this campaign</h5>
                         <span id="selected-leads-count" class="text-muted small">${selectedLeadIds.size} selected</span>
                     </div>
+                    <div class="row g-2 align-items-end mb-3">
+                        <div class="col-12 col-md-5">
+                            <label class="form-label small fw-semibold mb-1" for="lead-tag-filter">Filter by tag</label>
+                            <select id="lead-tag-filter" class="form-select form-select-sm">
+                                <option value="">All leads</option>
+                                ${tags.map(tag => `<option value="${tag.id}" ${String(selectedLeadTagFilter) === String(tag.id) ? 'selected' : ''}>${escapeHtml(tag.name)}</option>`).join('')}
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <div class="form-check mt-4">
+                                <input id="select-all-filtered-leads" class="form-check-input" type="checkbox">
+                                <label class="form-check-label small fw-semibold" for="select-all-filtered-leads">
+                                    Select all filtered leads
+                                </label>
+                            </div>
+                        </div>
+                    </div>
                     <div class="table-responsive">
                         <table class="table table-sm align-middle mb-0">
                             <thead>
                                 <tr>
                                     <th style="width: 40px;">
-                                        <input id="select-all-leads" class="form-check-input" type="checkbox">
+                                        <input id="select-all-leads" class="form-check-input" type="checkbox" aria-label="Select all leads">
                                     </th>
                                     <th>Name</th>
                                     <th>Email</th>
                                     <th>Phone</th>
                                     <th>Company</th>
+                                    <th>Tags</th>
                                 </tr>
                             </thead>
                             <tbody>
 ${rows || `
 <tr>
-    <td colspan="5" class="text-muted py-5 text-center">
-        <p class="mb-3">No leads found in your organization.</p>
+    <td colspan="6" class="text-muted py-5 text-center">
+        <p class="mb-3">${selectedLeadTagFilter ? 'No leads match this tag filter.' : 'No leads found in your organization.'}</p>
         <a href="/leads.html" class="btn btn-primary btn-sm d-inline-flex align-items-center gap-2">
             <i class="bi bi-upload"></i>
             <span>Go to Import Leads</span>
@@ -1612,20 +1654,41 @@ ${rows || `
                 </div>
             `;
 
+            const tagFilter = document.getElementById('lead-tag-filter');
+            if (tagFilter) {
+                tagFilter.addEventListener('change', (e) => {
+                    selectedLeadTagFilter = e.target.value;
+                    renderLeadsTab();
+                });
+            }
+
             const selectAll = document.getElementById('select-all-leads');
             if (selectAll) {
-                selectAll.checked = availableLeads.length > 0 && selectedLeadIds.size === availableLeads.length;
+                selectAll.checked = availableLeads.length > 0 && availableLeads.every(lead => selectedLeadIds.has(String(lead.id)));
                 selectAll.addEventListener('change', (e) => {
-                    selectedLeadIds = new Set();
-                    if (e.target.checked) availableLeads.forEach(lead => selectedLeadIds.add(lead.id));
+                    if (e.target.checked) availableLeads.forEach(lead => selectedLeadIds.add(String(lead.id)));
+                    else selectedLeadIds.clear();
+                    renderLeadsTab();
+                });
+            }
+
+            const selectAllFiltered = document.getElementById('select-all-filtered-leads');
+            if (selectAllFiltered) {
+                selectAllFiltered.checked = filteredLeads.length > 0 && filteredLeads.every(lead => selectedLeadIds.has(String(lead.id)));
+                selectAllFiltered.addEventListener('change', (e) => {
+                    if (e.target.checked) {
+                        filteredLeads.forEach(lead => selectedLeadIds.add(String(lead.id)));
+                    } else {
+                        filteredLeads.forEach(lead => selectedLeadIds.delete(String(lead.id)));
+                    }
                     renderLeadsTab();
                 });
             }
 
             canvas.querySelectorAll('.lead-select').forEach(input => {
                 input.addEventListener('change', (e) => {
-                    if (e.target.checked) selectedLeadIds.add(e.target.value);
-                    else selectedLeadIds.delete(e.target.value);
+                    if (e.target.checked) selectedLeadIds.add(String(e.target.value));
+                    else selectedLeadIds.delete(String(e.target.value));
                     document.getElementById('selected-leads-count').textContent = `${selectedLeadIds.size} selected`;
                 });
             });
@@ -2759,5 +2822,3 @@ document.getElementById('setting-daily-limit').value =
 </body>
 
 </html>
-
-
