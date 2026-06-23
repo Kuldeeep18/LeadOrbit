@@ -718,7 +718,12 @@ from leads.models import Lead
 from .utils import verify_unsubscribe_token
 
 
-def _unsubscribe_page(title, message, extra_html=''):
+def _unsubscribe_page(title, message, extra_html='', logo_url=''):
+    logo_html = (
+        f'<img src="{logo_url}" alt="Organization Logo" style="max-width:180px;margin-bottom:20px;">'
+        if logo_url else ''
+    )
+
     return (
         '<!DOCTYPE html>'
         '<html lang="en">'
@@ -732,7 +737,7 @@ def _unsubscribe_page(title, message, extra_html=''):
         'button{margin-top:12px;border:0;border-radius:999px;background:#1d4ed8;color:#fff;font-weight:700;padding:12px 20px;cursor:pointer;}'
         '</style>'
         '</head>'
-        f'<body><div class="container"><h1>{title}</h1><p>{message}</p>{extra_html}</div></body>'
+        f'<body><div class="container">{logo_html}<h1>{title}</h1><p>{message}</p>{extra_html}</div></body>'
         '</html>'
     )
 
@@ -749,6 +754,20 @@ def unsubscribe_view(request, lead_id, token):
 
     try:
         lead = Lead.objects.get(id=lead_id)
+
+        organization = lead.organization
+
+        custom_title = (
+            organization.unsubscribe_title
+            or "Confirm unsubscribe"
+        )
+
+        custom_message = (
+            organization.unsubscribe_message
+            or "Please confirm that you want to unsubscribe from future emails sent through LeadOrbit."
+        )
+
+        logo_url = organization.brand_logo_url or ""
     except Lead.DoesNotExist:
         return HttpResponse(
             "Lead not found",
@@ -764,20 +783,23 @@ def unsubscribe_view(request, lead_id, token):
             '</form>'
         )
         html = _unsubscribe_page(
-            'Confirm unsubscribe',
-            'Please confirm that you want to unsubscribe from future emails sent through LeadOrbit.',
+            custom_title,
+            custom_message,
             form,
+            logo_url
         )
+        
         return HttpResponse(html, content_type='text/html')
 
     lead.global_unsubscribe = True
     lead.save(update_fields=["global_unsubscribe"])
 
     html = _unsubscribe_page(
-        'Unsubscribed',
-        'You have been unsubscribed from all future emails sent through LeadOrbit.',
-        '<p>If you received this link by mistake, no further action is needed.</p>',
-    )
+    'Unsubscribed',
+    'You have been unsubscribed from all future emails sent through LeadOrbit.',
+    '<p>If you received this link by mistake, no further action is needed.</p>',
+    logo_url,
+)
 
     return HttpResponse(html, content_type='text/html')
 
