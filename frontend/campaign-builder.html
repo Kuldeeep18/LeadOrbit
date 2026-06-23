@@ -785,1979 +785,708 @@
 
         .ai-chat-subject {
             font-weight: 700;
-            color: #0f172a;
-            margin-bottom: 6px;
+            font-size: 0.9rem;
+            margin-bottom: 10px;
         }
 
-        .ai-composer-footer {
+        .ai-chat-body {
+            font-size: 0.9rem;
+            line-height: 1.6;
+        }
+
+        .ai-composer-input-area {
+            padding: 16px 22px;
             border-top: 1px solid #dbe4ef;
-            padding: 18px 22px 22px;
-            background: rgba(255, 255, 255, 0.88);
+            background: rgba(255, 255, 255, 0.82);
         }
 
-        .ai-composer-prompt {
+        .ai-composer-input {
             width: 100%;
-            border: 1.5px solid #cbd5e1;
-            border-radius: 18px;
-            min-height: 110px;
-            padding: 14px 16px;
-            resize: none;
-            font-size: 0.93rem;
-            line-height: 1.55;
+            border: 1.5px solid #dbe4ef;
+            border-radius: 12px;
+            padding: 12px 16px;
+            font-size: 0.9rem;
             background: #fff;
         }
 
-        .ai-composer-prompt:focus {
+        .ai-composer-input:focus {
             outline: none;
-            border-color: #2563eb;
-            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, .1);
         }
 
-        .ai-composer-actions {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            margin-top: 14px;
-        }
-
-        .ai-composer-status {
-            font-size: 0.78rem;
-            color: #64748b;
-        }
-
-        .ai-draft-toolbar {
-            display: flex;
-            gap: 10px;
-            margin-top: 10px;
-        }
-
-        @media (max-width: 992px) {
-            .ai-composer {
-                padding: 12px;
-            }
-
-            .ai-composer-card {
-                flex-direction: column;
-                height: min(90vh, 880px);
-            }
-
-            .ai-composer-sidebar {
-                width: 100%;
-            }
-
-            .ai-chat-message {
-                max-width: 100%;
-            }
-        }
-
-        .template-title {
-            font-weight: 700;
-            font-size: 0.82rem;
-            color: #1e293b;
-            margin-bottom: 2px;
-        }
-
-        .template-desc {
-            font-size: 0.73rem;
-            color: #64748b;
-            margin-bottom: 8px;
-            line-height: 1.4;
-            min-height: 30px;
-        }
-
-        .template-meta {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            margin-bottom: 8px;
-        }
-
-        .template-chip {
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            padding: 2px 8px;
-            border-radius: 99px;
-            background: #eef2ff;
-            color: #4338ca;
-            font-size: 0.68rem;
-            font-weight: 700;
-        }
-
-        @media (max-width: 1240px) {
-            .editor-panel {
-                width: 420px;
-            }
-        }
-
-        @media (max-width: 992px) {
-            body {
-                overflow: auto;
-            }
-
-            .main-layout {
-                flex-direction: column;
-                height: auto;
-            }
-
-            .canvas-area {
-                min-height: 58vh;
-                padding-top: 22px;
-            }
-
-            .editor-panel {
-                width: 100%;
-                border-left: none;
-                border-top: 1px solid #e2e8f0;
-            }
-
-            .template-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        @media (max-width: 767px) {
-            .top-bar {
-                height: auto;
-                flex-wrap: wrap;
-                gap: 8px;
-                padding: 10px 12px;
-            }
-
-            .top-bar .campaign-name {
-                width: 160px;
-                font-size: 0.9rem;
-            }
-
-            .tab-pills .tab {
-                padding: 5px 10px;
-                font-size: 0.78rem;
-            }
-
-            .main-layout {
-                flex-direction: column;
-                height: auto;
-            }
-
-            .editor-panel {
-                width: 100% !important;
-                border-left: none;
-                border-top: 1px solid #e2e8f0;
-            }
-
-            .canvas-area {
-                min-height: 50vh;
-            }
-        }
     </style>
-<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-<style>
-    #flowchart-container { display: none; padding: 15px; border: 1px solid #ccc; margin-top: 10px; }
-    .mermaid { text-align: center; }
-    .node rect, .node circle, .node polygon { cursor: pointer; }
-</style>
 </head>
-<!-- Breadcrumb Navigation -->
-<nav aria-label="breadcrumb" class="container mt-3">
-    <ol class="breadcrumb">
-        <li class="breadcrumb-item"><a href="/dashboard.html">Home</a></li>
-        <li class="breadcrumb-item"><a href="/campaigns.html">Campaigns</a></li>
-        <li class="breadcrumb-item active" aria-current="page">Builder</li>
-    </ol>
-</nav>
-<body class="builder-page">
-    <!-- ─── Top Bar ─────────────────────────── -->
+
+<body>
+    <!-- Top Bar: Campaign Name, Tabs, Actions -->
     <div class="top-bar">
         <div class="d-flex align-items-center gap-3">
-            <a href="/campaigns.html" style="color:#64748b; text-decoration:none; font-size:1.2rem;"><i
-                    class="bi bi-x-lg" aria-hidden="true"></i></a>
-            <i class="bi bi-diagram-3" style="color:#94a3b8;" aria-hidden="true"></i>
-            <input type="text" class="campaign-name" id="campaign-name" value="New Campaign" aria-label="Campaign name">
-            <button class="status-toggle off" id="status-toggle" title="Toggle Active/Inactive" aria-label="Toggle campaign status" ></button>
-            <i class="bi bi-gear" style="color:#94a3b8; cursor:pointer;" id="settings-icon" aria-hidden="true"></i>
+            <a href="#" class="btn btn-sm btn-light border"><i class="bi bi-arrow-left"></i></a>
+            <input type="text" class="campaign-name" value="My First Campaign">
+        </div>
+        <div class="tab-pills">
+            <div class="tab active" data-tab="sequence">Sequence</div>
+            <div class="tab" data-tab="leads">Leads</div>
+            <div class="tab" data-tab="settings">Settings</div>
+            <div class="tab" data-tab="analytics">Analytics</div>
         </div>
         <div class="d-flex align-items-center gap-3">
-            <div class="tab-pills">
-                <div class="tab active" data-tab="sequence"><i class="bi bi-diagram-3 me-1" aria-hidden="true"></i> Sequence</div>
-                <div class="tab" data-tab="leads"><i class="bi bi-people me-1" aria-hidden="true"></i> Lead list</div>
-                <div class="tab" data-tab="launch"><i class="bi bi-rocket me-1" aria-hidden="true"></i> Launch</div>
+            <div class="d-flex align-items-center gap-2">
+                <span class="fs-sm fw-500 text-muted">Status</span>
+                <button class="status-toggle off" id="campaignStatusToggle"></button>
             </div>
-            <button class="btn btn-primary btn-sm px-3 fw-semibold" id="next-step-btn">
-                Next step <i class="bi bi-chevron-right ms-1" aria-hidden="true"></i>
+            <button class="btn btn-primary">
+                <i class="bi bi-rocket-takeoff me-1"></i> Launch Campaign
             </button>
         </div>
     </div>
 
-    <nav aria-label="breadcrumb" class="mt-2 px-3">
-        <ol class="breadcrumb small">
-            <li class="breadcrumb-item">
-                <a href="dashboard.html">Dashboard</a>
-            </li>
-            <li class="breadcrumb-item">
-                <a href="campaigns.html">Campaigns</a>
-            </li>
-            <li class="breadcrumb-item active" aria-current="page">
-                Campaign Builder
-            </li>
-        </ol>
-    </nav>
-
-    <!-- â”€â”€â”€ Main Layout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-    <!-- ─── Main Layout ─────────────────────── -->
+    <!-- Main Layout: Canvas + Editor Panel -->
     <div class="main-layout">
-        <!-- Canvas -->
+        <!-- Canvas Area for the flow -->
         <div class="canvas-area" id="canvas">
-            <!-- Rendered dynamically -->
-        </div>
+            <!-- Template Strip -->
+            <div class="template-strip">
+                <div class="template-strip-head">
+                    <div>
+                        <div class="template-strip-title">Start from a proven template</div>
+                        <div class="template-strip-subtitle">Get started faster with pre-built sequences from our library.</div>
+                    </div>
+                    <button class="btn btn-sm btn-outline-secondary">
+                        <i class="bi bi-book me-1"></i> Browse Library
+                    </button>
+                </div>
+                <div class="template-grid">
+                    <div class="template-card">Template 1</div>
+                    <div class="template-card">Template 2</div>
+                </div>
+            </div>
 
-        <!-- Editor Panel (right side) -->
-        <div class="editor-panel" id="editor-panel">
-            <div id="editor-content">
-                <div class="text-center text-muted py-5">
-                    <i class="bi bi-cursor" style="font-size: 2rem;"></i>
-                    <p class="mt-2 small">Click a step to edit its content</p>
+            <!-- Start Node -->
+            <div class="flow-node start-node">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="node-icon manual"><i class="bi bi-people"></i></div>
+                    <div>
+                        <div class="node-label">Leads Added to Campaign</div>
+                        <div class="node-meta">0 leads enrolled</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Connector -->
+            <div class="connector">
+                <div class="connector-line"></div>
+                <button class="add-btn" onclick="openStepPicker(0)"><i class="bi bi-plus-lg"></i></button>
+                <div class="connector-line"></div>
+            </div>
+
+            <!-- End Node -->
+            <div class="flow-node start-node">
+                <div class="d-flex align-items-center gap-3">
+                    <div class="node-icon manual"><i class="bi bi-flag"></i></div>
+                    <div>
+                        <div class="node-label">End of Sequence</div>
+                    </div>
                 </div>
             </div>
         </div>
+
+        <!-- Editor Panel -->
+        <div class="editor-panel hidden" id="editorPanel">
+            <!-- Editor content will be loaded here -->
+        </div>
     </div>
 
-    <!-- ─── Add Step Modal ──────────────────── -->
-    <div class="step-picker hidden" id="step-picker">
+    <!-- Add Step Modal -->
+    <div class="step-picker hidden" id="stepPicker">
         <div class="step-picker-card">
             <div class="d-flex justify-content-between align-items-center mb-3">
-                <h5 class="mb-0">Add a step</h5>
-                <button class="btn btn-sm" id="close-picker" style="font-size:1.2rem;color:#94a3b8;"><i
-                        class="bi bi-x-lg"></i></button>
+                <h5>Add a new step</h5>
+                <button class="btn-close" onclick="closeStepPicker()"></button>
             </div>
+
             <div class="picker-tabs">
-                <div class="ptab active" data-picker="actions">Actions</div>
-                <div class="ptab" data-picker="conditions">Conditions</div>
+                <div class="ptab active" data-picker-tab="automated">Automated</div>
+                <div class="ptab" data-picker-tab="manual">Manual Tasks</div>
             </div>
-            <div id="picker-actions">
-                <div class="step-type" data-type="EMAIL">
-                    <div class="st-icon" style="background:#dbeafe;color:#2563eb;"><i class="bi bi-envelope-fill"></i>
+
+            <div id="automated-steps">
+                <div class="step-type" onclick="addStep('WAIT')">
+                    <div class="st-icon wait"><i class="bi bi-clock"></i></div>
+                    <div>
+                        <div class="st-name">Wait</div>
+                        <div class="st-desc">Pause for a set amount of time before the next step.</div>
                     </div>
+                </div>
+                <div class="step-type" onclick="addStep('EMAIL')">
+                    <div class="st-icon email"><i class="bi bi-envelope"></i></div>
                     <div>
                         <div class="st-name">Email</div>
-                        <div class="st-desc">Send an automated email via Gmail</div>
+                        <div class="st-desc">Send an automated email to your lead.</div>
                     </div>
                 </div>
-                <div class="step-type" data-type="WAIT">
-                    <div class="st-icon" style="background:#fef3c7;color:#d97706;"><i class="bi bi-clock-fill"></i>
-                    </div>
+                <div class="step-type" onclick="addStep('CONDITION')">
+                    <div class="st-icon condition"><i class="bi bi-sign-merge-right"></i></div>
                     <div>
-                        <div class="st-name">Delay</div>
-                        <div class="st-desc">Wait a specific amount of time</div>
+                        <div class="st-name">Condition</div>
+                        <div class="st-desc">Create different paths based on lead behavior.</div>
                     </div>
                 </div>
-                <div class="step-type" data-type="LINKEDIN">
-                    <div class="st-icon" style="background:#e0e7ff;color:#4f46e5;"><i class="bi bi-linkedin"></i></div>
-                    <div>
-                        <div class="st-name">LinkedIn</div>
-                        <div class="st-desc">Send connection request or message</div>
-                    </div>
-                </div>
-                <div class="step-type" data-type="MANUAL">
-                    <div class="st-icon" style="background:#d1fae5;color:#059669;"><i class="bi bi-hand-index-fill"></i>
-                    </div>
-                    <div>
-                        <div class="st-name">Manual Task</div>
-                        <div class="st-desc">Add a manual action item to your workflow</div>
-                    </div>
-                </div>
-                <div class="step-type" data-type="SMS">
-                    <div class="st-icon" style="background:#dcfce7;color:#16a34a;"><i class="bi bi-chat-dots-fill"></i>
-                    </div>
+                <div class="step-type" onclick="addStep('SMS')">
+                    <div class="st-icon sms"><i class="bi bi-chat-text"></i></div>
                     <div>
                         <div class="st-name">SMS</div>
-                        <div class="st-desc">Send a text message to the lead's phone</div>
+                        <div class="st-desc">Send an automated text message.</div>
                     </div>
                 </div>
-                <div class="step-type" data-type="CALL">
-                    <div class="st-icon" style="background:#ffedd5;color:#ea580c;"><i class="bi bi-telephone-fill"></i>
+            </div>
+            <div id="manual-steps" class="hidden">
+                <div class="step-type" onclick="addStep('MANUAL_EMAIL')">
+                    <div class="st-icon email"><i class="bi bi-pencil-square"></i></div>
+                    <div>
+                        <div class="st-name">Manual Email</div>
+                        <div class="st-desc">Create a task to manually send a personalized email.</div>
                     </div>
+                </div>
+                <div class="step-type" onclick="addStep('CALL')">
+                    <div class="st-icon call"><i class="bi bi-telephone"></i></div>
                     <div>
                         <div class="st-name">Phone Call</div>
-                        <div class="st-desc">Initiate a phone call to the lead</div>
+                        <div class="st-desc">Create a task to call a lead.</div>
                     </div>
                 </div>
-            </div>
-            <div id="picker-conditions" style="display:none;">
-                <div class="step-type" data-type="CONDITION_OPEN">
-                    <div class="st-icon" style="background:#fce7f3;color:#db2777;"><i
-                            class="bi bi-envelope-open-fill"></i></div>
+                <div class="step-type" onclick="addStep('LINKEDIN_CONNECT')">
+                    <div class="st-icon linkedin"><i class="bi bi-linkedin"></i></div>
                     <div>
-                        <div class="st-name">Opened email</div>
-                        <div class="st-desc">Branch based on whether the lead opened an email</div>
-                    </div>
-                </div>
-                <div class="step-type" data-type="CONDITION_REPLY">
-                    <div class="st-icon" style="background:#fce7f3;color:#db2777;"><i class="bi bi-reply-fill"></i>
-                    </div>
-                    <div>
-                        <div class="st-name">Replied to email</div>
-                        <div class="st-desc">Branch based on whether the lead replied</div>
-                    </div>
-                </div>
-                <div class="step-type" data-type="CONDITION_CLICK">
-                    <div class="st-icon" style="background:#fce7f3;color:#db2777;"><i class="bi bi-cursor-fill"></i>
-                    </div>
-                    <div>
-                        <div class="st-name">Clicked link</div>
-                        <div class="st-desc">Branch based on whether the lead clicked a link</div>
+                        <div class="st-name">LinkedIn: Connect</div>
+                        <div class="st-desc">Create a task to send a LinkedIn connection request.</div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
 
-    <div class="template-library-modal hidden" id="template-library-modal">
+    <!-- Email Template Library Modal -->
+    <div class="template-library-modal hidden" id="templateLibrary">
         <div class="template-library-card">
-            <div class="d-flex align-items-start justify-content-between gap-3 mb-3">
-                <div>
-                    <h5>Saved email templates</h5>
-                    <p class="text-muted small mb-0">Insert a saved template into the current email step, or save the current draft as a new template.</p>
-                </div>
-                <button class="btn btn-sm btn-outline-secondary" id="close-template-library" title="Close templates"><i class="bi bi-x-lg"></i></button>
+            <div class="d-flex justify-content-between align-items-center mb-3">
+                <h5>Select an Email Template</h5>
+                <button class="btn-close" onclick="closeTemplateLibrary()"></button>
             </div>
-            <div id="template-library-content"></div>
+            <div class="template-list" id="templateList">
+                <!-- Templates will be loaded here -->
+            </div>
         </div>
     </div>
 
-    <div class="ai-composer hidden" id="ai-composer">
+    <!-- AI Composer Modal -->
+    <div class="ai-composer hidden" id="aiComposer">
         <div class="ai-composer-card">
             <div class="ai-composer-sidebar">
                 <div>
-                    <h4>AI Email Studio</h4>
-                    <p>Describe the email you want in plain language. Ask for tone, goal, audience, offer, CTA, or follow-up angle.</p>
+                    <h4><i class="bi bi-stars me-2"></i> AI Composer</h4>
+                    <p>Generate high-quality email copy in seconds. Provide a prompt and let AI do the heavy lifting.</p>
                 </div>
                 <div>
-                    <div class="ep-label text-white mb-2">Prompt ideas</div>
-                    <div class="ai-composer-chip-list" id="ai-prompt-chips">
-                        <button class="ai-composer-chip" data-prompt="Write a concise cold outreach email for a SaaS founder introducing our product to {{company}} and asking for a short call.">Cold outreach</button>
-                        <button class="ai-composer-chip" data-prompt="Create a polite follow-up email referencing a previous message and asking if {{firstName}} is the right person to speak with.">Follow-up</button>
-                        <button class="ai-composer-chip" data-prompt="Draft a warm introduction email that explains our value proposition and includes one specific reason this might matter for {{company}}.">Introduction</button>
-                        <button class="ai-composer-chip" data-prompt="Write a re-engagement email for a prospect who has not replied yet. Keep it short and low-pressure.">Re-engagement</button>
+                    <h6 class="fs-sm text-uppercase ls-1">Tone</h6>
+                    <div class="ai-composer-chip-list">
+                        <div class="ai-composer-chip">Friendly</div>
+                        <div class="ai-composer-chip">Professional</div>
+                        <div class="ai-composer-chip">Casual</div>
+                        <div class="ai-composer-chip">Direct</div>
+                        <div class="ai-composer-chip">Persuasive</div>
+                    </div>
+                </div>
+                <div>
+                    <h6 class="fs-sm text-uppercase ls-1">Goal</h6>
+                    <div class="ai-composer-chip-list">
+                        <div class="ai-composer-chip">Book a meeting</div>
+                        <div class="ai-composer-chip">Get a reply</div>
+                        <div class="ai-composer-chip">Gauge interest</div>
+                        <div class="ai-composer-chip">Follow up</div>
                     </div>
                 </div>
             </div>
             <div class="ai-composer-main">
                 <div class="ai-composer-head">
                     <div class="ai-composer-headline">
-                        <strong>Chat with LeadOrbit AI</strong>
-                        <span>Generate a subject and body, iterate on it, then insert it into the step.</span>
+                        <strong>Your AI-powered writing assistant</strong>
+                        <span>Currently drafting: Cold Outreach Email</span>
                     </div>
-                    <button class="btn btn-sm btn-outline-secondary" id="ai-composer-close">Close</button>
+                    <button class="btn-close" onclick="closeAiComposer()"></button>
                 </div>
-                <div class="ai-chat-log" id="ai-chat-log"></div>
-                <div class="ai-composer-footer">
-                    <textarea class="ai-composer-prompt" id="ai-prompt-input" placeholder="Example: Write a sales outreach email for CFOs at B2B SaaS companies. Mention cost control, keep it direct, and end with a low-friction CTA."></textarea>
-                    <div class="ai-composer-actions">
-                        <div class="ai-composer-status" id="ai-composer-status">Drafts stay local until you click Insert into email.</div>
-                        <div class="d-flex gap-2">
-                            <button class="btn btn-outline-secondary" id="ai-clear-chat">Clear chat</button>
-                            <button class="btn btn-primary" id="ai-send-prompt"><i class="bi bi-stars me-1"></i> Generate draft</button>
-                        </div>
+                <div class="ai-chat-log" id="aiChatLog">
+                    <div class="ai-chat-message assistant">
+                        How can I help you write today? You can start with a prompt like:
+                        <br><br>
+                        <em>"Write a short, friendly email to a prospect who visited our pricing page. The goal is to book a demo."</em>
                     </div>
+                </div>
+                <div class="ai-composer-input-area">
+                    <input type="text" id="aiPromptInput" class="ai-composer-input" placeholder="Tell me what to write...">
                 </div>
             </div>
         </div>
     </div>
 
-    <script type="module" src="./main.js"></script>
-    <!-- Campaign Settings Modal -->
-<div class="modal fade" id="campaignSettingsModal" tabindex="-1">
-  <div class="modal-dialog">
-    <div class="modal-content">
 
-      <div class="modal-header">
-        <h5 class="modal-title">Campaign Settings</h5>
-        <button type="button"
-                class="btn-close"
-                data-bs-dismiss="modal"></button>
-      </div>
+    <script>
+        const canvas = document.getElementById('canvas');
+        const editorPanel = document.getElementById('editorPanel');
+        const stepPicker = document.getElementById('stepPicker');
+        const templateLibrary = document.getElementById('templateLibrary');
+        const aiComposer = document.getElementById('aiComposer');
+        const aiPromptInput = document.getElementById('aiPromptInput');
+        const aiChatLog = document.getElementById('aiChatLog');
 
-      <div class="modal-body">
-
-        <div class="form-check form-switch mb-3">
-          <input class="form-check-input"
-                 type="checkbox"
-                 id="setting-stop-reply"
-                 checked>
-          <label class="form-check-label">
-            Stop on Reply
-          </label>
-        </div>
-
-        <div class="form-check form-switch mb-3">
-          <input class="form-check-input"
-                 type="checkbox"
-                 id="setting-track-opens"
-                 checked>
-          <label class="form-check-label">
-            Track Email Opens
-          </label>
-        </div>
-
-        <div class="form-check form-switch mb-3">
-          <input class="form-check-input"
-                 type="checkbox"
-                 id="setting-track-clicks"
-                 checked>
-          <label class="form-check-label">
-            Track Link Clicks
-          </label>
-        </div>
-
-        <div class="mb-3">
-          <label class="form-label">
-            Daily Sending Limit
-          </label>
-
-          <input type="number"
-                 class="form-control"
-                 id="setting-daily-limit"
-                 value="100">
-        </div>
-
-      </div>
-
-    </div>
-  </div>
-</div>
-
-    <script type="module" src="/main.js"></script>
-    <script type="module">
-        import { fetchWithAuth } from './api.js';
-
-        // ─── STATE ──────────────────────────
-        let campaignId = null;
-        let selectedNodeIndex = null;
-        let addInsertIndex = null; // where the "+" was clicked
-        let addBranchTarget = null; // optional { parentIndex, branch }
-        let connectedAccounts = [];
-        let selectedConnectedAccountId = null;
-        let emailTemplates = [];
-        let emailTemplatesLoaded = false;
-        let activeTab = 'sequence';
-        let availableLeads = [];
-        let selectedLeadIds = new Set();
-        let aiComposerStep = null;
-        let aiConversation = [];
-        let aiLatestDraft = null;
-
-        // Steps are stored as an array of objects
-        let steps = [
-            // { type: 'EMAIL', subject: '', body: '', delay_minutes: 0, delay_unit: 'minutes' }
-            // { type: 'WAIT', delay_value: 1, delay_unit: 'days' }
-            // { type: 'CONDITION_OPEN', condition_time: '1 day', yes: [], no: [] }
-        ];
-
-        const params = new URLSearchParams(window.location.search);
-        const editId = params.get('id');
-
-        // ─── ICONS MAP ──────────────────────
-        const ICONS = {
-            EMAIL: { icon: 'bi-envelope-fill', cls: 'email', label: 'Email', meta: 'Send automatic email' },
-            WAIT: { icon: 'bi-clock-fill', cls: 'wait', label: 'Delay', meta: 'Wait before next step' },
-            LINKEDIN: { icon: 'bi-linkedin', cls: 'linkedin', label: 'LinkedIn', meta: 'LinkedIn action' },
-            MANUAL: { icon: 'bi-hand-index-fill', cls: 'manual', label: 'Manual Task', meta: 'Manual action' },
-            SMS: { icon: 'bi-chat-dots-fill', cls: 'sms', label: 'SMS', meta: 'Send a text message' },
-            CALL: { icon: 'bi-telephone-fill', cls: 'call', label: 'Phone Call', meta: 'Call the lead' },
-            CONDITION_OPEN: { icon: 'bi-envelope-open-fill', cls: 'condition', label: 'Opened email', meta: '' },
-            CONDITION_REPLY: { icon: 'bi-reply-fill', cls: 'condition', label: 'Replied', meta: '' },
-            CONDITION_CLICK: { icon: 'bi-cursor-fill', cls: 'condition', label: 'Clicked link', meta: '' },
+        let campaign = {
+            name: 'My First Campaign',
+            status: 'DRAFT',
+            steps: []
         };
 
-        function createEmailStep(subject, body) {
-            return { type: 'EMAIL', subject, body, delay_minutes: 0 };
-        }
+        let selectedStepIndex = -1;
+        let addIndex = -1; // The index where a new step should be added
 
-        function createWaitStep(delayValue = 1, delayUnit = 'days') {
-            return { type: 'WAIT', delay_value: delayValue, delay_unit: delayUnit };
-        }
+        const stepIcons = {
+            EMAIL: '<i class="bi bi-envelope"></i>',
+            WAIT: '<i class="bi bi-clock"></i>',
+            CONDITION: '<i class="bi bi-sign-merge-right"></i>',
+            MANUAL_EMAIL: '<i class="bi bi-pencil-square"></i>',
+            CALL: '<i class="bi bi-telephone"></i>',
+            LINKEDIN_CONNECT: '<i class="bi bi-linkedin"></i>',
+            SMS: '<i class="bi bi-chat-text"></i>',
+        };
 
-        function createLinkedInStep(action = 'CONNECT', description = '') {
-            return { type: 'LINKEDIN', action, description };
-        }
+        const stepIconClasses = {
+            EMAIL: 'email',
+            WAIT: 'wait',
+            CONDITION: 'condition',
+            MANUAL_EMAIL: 'email',
+            CALL: 'call',
+            LINKEDIN_CONNECT: 'linkedin',
+            SMS: 'sms',
+        };
 
-        function createManualStep(description = '') {
-            return { type: 'MANUAL', description };
-        }
+        // --- Main Render Function ---
+        function render() {
+            canvas.innerHTML = ''; // Clear canvas
 
-        function createSMSStep(body = '') {
-            return { type: 'SMS', body, delay_minutes: 0 };
-        }
+            // Start Node
+            const startNode = createStartNode();
+            canvas.appendChild(startNode);
 
-        function createCallStep(description = '') {
-            return { type: 'CALL', description, delay_minutes: 0 };
-        }
+            // Render steps
+            campaign.steps.forEach((step, index) => {
+                const connector = createConnector(index);
+                canvas.appendChild(connector);
 
-        function cloneStepList(source) {
-            return source.map(step => ({ ...step }));
-        }
-
-        function summarizeText(text, limit = 56) {
-            if (!text) return '';
-            const value = String(text).trim();
-            if (value.length <= limit) return value;
-            return `${value.slice(0, limit)}...`;
-        }
-
-        async function loadEmailTemplates() {
-            try {
-                const res = await fetchWithAuth('/email-templates/');
-                if (!res.ok) {
-                    throw new Error('Unable to load templates');
+                if (step.type === 'CONDITION') {
+                    const conditionNode = createConditionNode(step, index);
+                    canvas.appendChild(conditionNode);
+                } else {
+                    const node = createNode(step, index);
+                    canvas.appendChild(node);
                 }
-                emailTemplates = await res.json();
-                emailTemplatesLoaded = true;
-            } catch (error) {
-                console.error(error);
-                emailTemplates = [];
-                emailTemplatesLoaded = true;
-            }
-        }
-
-        function renderTemplateLibrary() {
-            const library = document.getElementById('template-library-content');
-            if (!library) return;
-
-            if (!emailTemplatesLoaded) {
-                library.innerHTML = '<div class="text-center py-5">Loading templates...</div>';
-                return;
-            }
-
-            if (emailTemplates.length === 0) {
-                library.innerHTML = `
-                    <div class="p-4 text-center text-muted">
-                        <p class="mb-2">No saved templates yet.</p>
-                        <p>Create one from the current email step using <strong>Save as Template</strong>.</p>
-                    </div>
-                `;
-                return;
-            }
-
-            library.innerHTML = `
-                <div class="template-list">
-                    ${emailTemplates.map(template => `
-                        <div class="template-item">
-                            <div class="template-item-name">${escapeHtml(template.name)}</div>
-                            <div class="template-item-meta">
-                                ${template.category ? `<span class="badge rounded-pill bg-secondary me-1">${escapeHtml(template.category)}</span>` : ''}
-                                Used ${template.usage_count || 0} times
-                            </div>
-                            <div class="template-item-body">${escapeHtml(template.subject)}\n\n${escapeHtml(template.body)}</div>
-                            <button class="btn btn-sm btn-primary" data-insert-template="${template.id}">Insert into step</button>
-                        </div>
-                    `).join('')}
-                </div>
-            `;
-
-            library.querySelectorAll('[data-insert-template]').forEach(btn => {
-                btn.addEventListener('click', async () => {
-                    const templateId = btn.dataset.insertTemplate;
-                    const template = emailTemplates.find(item => item.id === templateId);
-                    if (!template) return;
-                    applyTemplateToCurrentEmail(template);
-                    await incrementTemplateUsage(templateId);
-                    closeTemplateLibrary();
-                });
             });
-        }
 
-        async function openTemplateLibrary() {
-            if (!emailTemplatesLoaded) {
-                await loadEmailTemplates();
-            }
-            renderTemplateLibrary();
-            document.getElementById('template-library-modal').classList.remove('hidden');
-        }
+            // Final connector and end node
+            const finalConnector = createConnector(campaign.steps.length);
+            canvas.appendChild(finalConnector);
+            const endNode = createEndNode();
+            canvas.appendChild(endNode);
 
-        function closeTemplateLibrary() {
-            document.getElementById('template-library-modal').classList.add('hidden');
-        }
-
-        function applyTemplateToCurrentEmail(template) {
-            if (selectedNodeIndex === null || !steps[selectedNodeIndex] || steps[selectedNodeIndex].type !== 'EMAIL') {
-                alert('Select an email step first.');
-                return;
-            }
-            const step = steps[selectedNodeIndex];
-            step.subject = template.subject || '';
-            step.body = template.body || '';
-            renderCanvas();
+            // Render editor if a step is selected
             renderEditor();
         }
 
-        async function saveCurrentStepAsTemplate(step) {
-            if (!step || step.type !== 'EMAIL') {
-                alert('Please select an email step to save as a template.');
+        // --- Node Creation ---
+        function createStartNode() {
+            const div = document.createElement('div');
+            div.className = 'flow-node start-node';
+            div.innerHTML = `
+                <div class="d-flex align-items-center gap-3">
+                    <div class="node-icon manual"><i class="bi bi-people"></i></div>
+                    <div>
+                        <div class="node-label">Leads Added to Campaign</div>
+                        <div class="node-meta">0 leads enrolled</div>
+                    </div>
+                </div>`;
+            return div;
+        }
+
+        function createEndNode() {
+            const div = document.createElement('div');
+            div.className = 'flow-node start-node';
+            div.innerHTML = `
+                <div class="d-flex align-items-center gap-3">
+                    <div class="node-icon manual"><i class="bi bi-flag"></i></div>
+                    <div>
+                        <div class="node-label">End of Sequence</div>
+                    </div>
+                </div>`;
+            return div;
+        }
+
+        function createConnector(index) {
+            const div = document.createElement('div');
+            div.className = 'connector';
+            div.innerHTML = `
+                <div class="connector-line"></div>
+                <button class="add-btn" onclick="openStepPicker(${index})"><i class="bi bi-plus-lg"></i></button>
+                <div class="connector-line"></div>`;
+            return div;
+        }
+
+        function createNode(step, index) {
+            const div = document.createElement('div');
+            div.className = `flow-node ${selectedStepIndex === index ? 'selected' : ''}`;
+            div.onclick = () => selectStep(index);
+
+            const iconClass = stepIconClasses[step.type] || 'manual';
+            const icon = stepIcons[step.type] || '';
+            const { label, meta } = getStepMeta(step);
+
+            div.innerHTML = `
+                <div class="d-flex align-items-center gap-3">
+                    <div class="node-icon ${iconClass}">${icon}</div>
+                    <div>
+                        <div class="node-label">${label}</div>
+                        <div class="node-meta">${meta}</div>
+                        ${step.error ? `<div class="node-error mt-1"><i class="bi bi-exclamation-triangle-fill me-1"></i> ${step.error}</div>` : ''}
+                    </div>
+                </div>`;
+            return div;
+        }
+
+        function createConditionNode(step, index) {
+            // This is a simplified representation. A real implementation would be more complex.
+            const div = document.createElement('div');
+            div.className = `flow-node condition-node ${selectedStepIndex === index ? 'selected' : ''}`;
+            div.onclick = () => selectStep(index);
+
+            const { label, meta } = getStepMeta(step);
+
+            div.innerHTML = `
+                <div class="d-flex align-items-center gap-3">
+                    <div class="node-icon condition">${stepIcons.CONDITION}</div>
+                    <div>
+                        <div class="node-label">${label}</div>
+                        <div class="node-meta">${meta}</div>
+                    </div>
+                </div>
+                <div class="branch-container mt-3">
+                    <div class="branch-column">
+                        <div class="branch-label yes">Yes</div>
+                        <!-- Yes branch steps would go here -->
+                    </div>
+                    <div class="branch-column">
+                        <div class="branch-label no">No</div>
+                        <!-- No branch steps would go here -->
+                    </div>
+                </div>
+            `;
+            return div;
+        }
+
+
+        function getStepMeta(step) {
+            switch (step.type) {
+                case 'EMAIL':
+                    return {
+                        label: 'Automated Email',
+                        meta: step.template ? `Template: ${step.template.name}` : 'No template selected'
+                    };
+                case 'WAIT':
+                    return {
+                        label: 'Wait',
+                        meta: `For ${step.delay_days || 1} day(s)`
+                    };
+                case 'CONDITION':
+                    return {
+                        label: 'Condition',
+                        meta: `Check if email was ${step.condition_type || 'opened'}`
+                    };
+                default:
+                    return {
+                        label: step.type.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase()),
+                        meta: 'Manual Task'
+                    };
+            }
+        }
+
+        // --- Step Management ---
+        function addStep(type) {
+            const newStep = {
+                type: type,
+                id: Date.now() // Simple unique ID
+            };
+
+            if (type === 'WAIT') {
+                newStep.delay_days = 1;
+            }
+            if (type === 'EMAIL') {
+                newStep.subject = '';
+                newStep.body = '';
+                newStep.template = null;
+                newStep.error = 'No template selected';
+            }
+            if (type === 'CONDITION') {
+                newStep.condition_type = 'OPEN'; // or 'CLICK', 'REPLY'
+                newStep.yes_branch = [];
+                newStep.no_branch = [];
+            }
+
+            campaign.steps.splice(addIndex, 0, newStep);
+            closeStepPicker();
+            selectStep(addIndex);
+            render();
+        }
+
+        function selectStep(index) {
+            selectedStepIndex = index;
+            editorPanel.classList.remove('hidden');
+            render();
+        }
+
+        function closeEditor() {
+            selectedStepIndex = -1;
+            editorPanel.classList.add('hidden');
+            render();
+        }
+
+        // --- Editor Rendering ---
+        function renderEditor() {
+            if (selectedStepIndex === -1) {
+                editorPanel.innerHTML = '';
+                editorPanel.classList.add('hidden');
                 return;
             }
 
-            const name = window.prompt('Template name', step.subject ? step.subject.slice(0, 40) : 'New template');
-            if (!name) return;
+            const step = campaign.steps[selectedStepIndex];
+            let content = '';
 
-            const payload = {
-                name: name.trim(),
-                subject: step.subject || '',
-                body: step.body || '',
-                category: 'general',
-            };
-
-            try {
-                const res = await fetchWithAuth('/email-templates/', {
-                    method: 'POST',
-                    body: JSON.stringify(payload),
-                    timeoutMs: 20000,
-                });
-                if (!res.ok) {
-                    const err = await res.json().catch(() => ({}));
-                    throw new Error(err.detail || 'Unable to save template.');
-                }
-                const template = await res.json();
-                emailTemplates.push(template);
-                emailTemplatesLoaded = true;
-                alert('Template saved successfully.');
-            } catch (error) {
-                console.error(error);
-                alert(error.message || 'Failed to save template.');
+            switch (step.type) {
+                case 'EMAIL':
+                    content = getEmailEditor(step);
+                    break;
+                case 'WAIT':
+                    content = getWaitEditor(step);
+                    break;
+                default:
+                    content = getDefaultEditor(step);
             }
+            editorPanel.innerHTML = content;
+            editorPanel.classList.remove('hidden');
         }
 
-        async function incrementTemplateUsage(templateId) {
-            try {
-                const template = emailTemplates.find(item => item.id === templateId);
-                if (!template) return;
-                const res = await fetchWithAuth(`/email-templates/${templateId}/`, {
-                    method: 'PATCH',
-                    body: JSON.stringify({ usage_count: (template.usage_count || 0) + 1 }),
-                    timeoutMs: 15000,
-                });
-                if (res.ok) {
-                    const updated = await res.json();
-                    template.usage_count = updated.usage_count;
-                }
-            } catch (error) {
-                console.warn('Could not update template usage count.', error);
-            }
-        }
-
-        const SEQUENCE_TEMPLATES = [
-            {
-                key: 'quick-touch',
-                name: 'Quick Touch',
-                description: 'Fast 3-step intro sequence for warm leads.',
-                eta: '3 days',
-                steps: [
-                    createEmailStep('Quick intro for {{company}}', 'Hi {{firstName}},\n\nSaw your work at {{company}}. Worth a short intro to show how we can help your team save time?\n\nBest,\nYour Name'),
-                    createWaitStep(2, 'days'),
-                    createEmailStep('Following up on the note above', 'Hi {{firstName}},\n\nChecking back in on my previous email. Open to a 10-minute chat this week?\n\nThanks,\nYour Name'),
-                ],
-            },
-            {
-                key: 'classic-outbound',
-                name: 'Classic Outbound',
-                description: '5-step cadence with spaced follow-ups.',
-                eta: '12 days',
-                steps: [
-                    createEmailStep('Idea for {{company}}', 'Hi {{firstName}},\n\nI have a quick idea to improve outreach performance for {{company}}. Should I send details?\n\nBest,\nYour Name'),
-                    createWaitStep(2, 'days'),
-                    createEmailStep('Sharing more context', 'Hi {{firstName}},\n\nFollowing up with more context on the idea. We helped similar teams increase reply rates.\n\nOpen to a quick call?\n\nBest,\nYour Name'),
-                    createWaitStep(4, 'days'),
-                    createEmailStep('Last follow-up', 'Hi {{firstName}},\n\nI will close the loop after this note. If helpful, I can share a short one-page plan for {{company}}.\n\nBest,\nYour Name'),
-                ],
-            },
-            {
-                key: 'email-linkedin',
-                name: 'Email + LinkedIn',
-                description: 'Multi-channel sequence with social touchpoint.',
-                eta: '9 days',
-                steps: [
-                    createEmailStep('Connecting about {{company}}', 'Hi {{firstName}},\n\nWould love to share a practical workflow that could help your team at {{company}}.\n\nBest,\nYour Name'),
-                    createWaitStep(1, 'days'),
-                    createLinkedInStep('CONNECT', 'Send a personalized LinkedIn connect request mentioning the recent email.'),
-                    createWaitStep(2, 'days'),
-                    createEmailStep('Wanted to make this easy', 'Hi {{firstName}},\n\nSent a quick LinkedIn note too. Happy to send a concise overview if useful.\n\nBest,\nYour Name'),
-                    createManualStep('If no response, review profile updates and add a final personalized follow-up.'),
-                ],
-            },
-            {
-                key: 'nurture-loop',
-                name: 'Nurture Loop',
-                description: 'Longer 7-step sequence for colder prospects.',
-                eta: '21 days',
-                steps: [
-                    createEmailStep('Quick question about {{company}}', 'Hi {{firstName}},\n\nCould I share one suggestion that might improve outbound performance at {{company}}?\n\nBest,\nYour Name'),
-                    createWaitStep(3, 'days'),
-                    createEmailStep('Resource for your team', 'Hi {{firstName}},\n\nI put together a short resource that might be relevant for {{company}}. Want me to send it?\n\nBest,\nYour Name'),
-                    createWaitStep(5, 'days'),
-                    createLinkedInStep('MESSAGE', 'Send a short LinkedIn message referencing the shared resource.'),
-                    createWaitStep(7, 'days'),
-                    createManualStep('Mark as nurture complete and hand off to a lighter monthly touch sequence.'),
-                ],
-            },
-        ];
-
-        function setNextButtonLabel() {
-            const btn = document.getElementById('next-step-btn');
-            if (activeTab === 'sequence') {
-                btn.innerHTML = 'Next step <i class="bi bi-chevron-right ms-1"></i>';
-            } else if (activeTab === 'leads') {
-                btn.innerHTML = 'Save leads <i class="bi bi-chevron-right ms-1"></i>';
-            } else {
-                btn.innerHTML = '<i class="bi bi-rocket me-1"></i> Launch campaign';
-            }
-        }
-
-        function applySequenceTemplate(templateKey, mode = 'replace') {
-            const template = SEQUENCE_TEMPLATES.find(item => item.key === templateKey);
-            if (!template) return;
-
-            const generatedSteps = cloneStepList(template.steps);
-            if (mode === 'replace') {
-                const shouldReplace = steps.length === 0 || confirm(`Replace current steps with "${template.name}" template?`);
-                if (!shouldReplace) return;
-                steps = generatedSteps;
-                selectedNodeIndex = steps.length > 0 ? 0 : null;
-            } else {
-                const insertAt = steps.length;
-                steps = [...steps, ...generatedSteps];
-                selectedNodeIndex = insertAt;
-            }
-
-            renderCanvas();
-            renderEditor();
-        }
-
-        function switchTab(tabName) {
-            activeTab = tabName;
-            document.querySelectorAll('.tab-pills .tab').forEach(t => t.classList.remove('active'));
-            const tabNode = document.querySelector(`.tab-pills .tab[data-tab="${tabName}"]`);
-            if (tabNode) tabNode.classList.add('active');
-
-            if (tabName === 'sequence') {
-                document.getElementById('editor-panel').classList.remove('hidden');
-                renderCanvas();
-                renderEditor();
-            } else if (tabName === 'leads') {
-                document.getElementById('editor-panel').classList.remove('hidden');
-                renderLeadsTab();
-            } else {
-                document.getElementById('editor-panel').classList.add('hidden');
-                renderLaunchTab();
-            }
-
-            setNextButtonLabel();
-        }
-
-        async function loadLeads() {
-            const res = await fetchWithAuth('/leads/');
-            if (!res.ok) throw new Error('Failed to load leads');
-            availableLeads = await res.json();
-        }
-
-        function renderLeadsTab() {
-            const canvas = document.getElementById('canvas');
-            const rows = availableLeads.map(lead => {
-                const checked = selectedLeadIds.has(lead.id) ? 'checked' : '';
-                return `
-                    <tr>
-                        <td><input class="form-check-input lead-select" type="checkbox" value="${lead.id}" ${checked}></td>
-                        <td>${lead.first_name || ''} ${lead.last_name || ''}</td>
-                        <td>${lead.email}</td>
-                        <td>${lead.phone || '-'}</td>
-                        <td>${lead.company || '-'}</td>
-                    </tr>
-                `;
-            }).join('');
-
-            canvas.innerHTML = `
-                <div class="flow-node w-100" style="max-width: 960px;">
-                    <div class="d-flex justify-content-between align-items-center mb-3">
-                        <h5 class="mb-0">Select leads for this campaign</h5>
-                        <span id="selected-leads-count" class="text-muted small">${selectedLeadIds.size} selected</span>
-                    </div>
-                    <div class="table-responsive">
-                        <table class="table table-sm align-middle mb-0">
-                            <thead>
-                                <tr>
-                                    <th style="width: 40px;">
-                                        <input id="select-all-leads" class="form-check-input" type="checkbox">
-                                    </th>
-                                    <th>Name</th>
-                                    <th>Email</th>
-                                    <th>Phone</th>
-                                    <th>Company</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-${rows || `
-<tr>
-    <td colspan="5" class="text-muted py-5 text-center">
-        <p class="mb-3">No leads found in your organization.</p>
-        <a href="/leads.html" class="btn btn-primary btn-sm d-inline-flex align-items-center gap-2">
-            <i class="bi bi-upload"></i>
-            <span>Go to Import Leads</span>
-        </a>
-    </td>
-</tr>
-`}
-</tbody>
-                           
-                        </table>
-                    </div>
+        function getEmailEditor(step) {
+            const templateName = step.template ? step.template.name : 'No template selected';
+            return `
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="ep-title">Email Step</h5>
+                    <button class="btn-close" onclick="closeEditor()"></button>
                 </div>
-            `;
-
-            const selectAll = document.getElementById('select-all-leads');
-            if (selectAll) {
-                selectAll.checked = availableLeads.length > 0 && selectedLeadIds.size === availableLeads.length;
-                selectAll.addEventListener('change', (e) => {
-                    selectedLeadIds = new Set();
-                    if (e.target.checked) availableLeads.forEach(lead => selectedLeadIds.add(lead.id));
-                    renderLeadsTab();
-                });
-            }
-
-            canvas.querySelectorAll('.lead-select').forEach(input => {
-                input.addEventListener('change', (e) => {
-                    if (e.target.checked) selectedLeadIds.add(e.target.value);
-                    else selectedLeadIds.delete(e.target.value);
-                    document.getElementById('selected-leads-count').textContent = `${selectedLeadIds.size} selected`;
-                });
-            });
-
-            document.getElementById('editor-content').innerHTML = `
-                <div class="p-3">
-                    <h6 class="fw-bold mb-2">Lead targeting</h6>
-                    <p class="text-muted small mb-3">Choose leads to enroll before launching.</p>
-                    <div class="small text-muted">
-                        Total leads: <b>${availableLeads.length}</b><br>
-                        Selected leads: <b>${selectedLeadIds.size}</b>
-                    </div>
-                </div>
-            `;
-        }
-
-        function renderLaunchTab() {
-            const canvas = document.getElementById('canvas');
-            const statusText = document.getElementById('status-toggle').classList.contains('on') ? 'ACTIVE' : 'DRAFT';
-            canvas.innerHTML = `
-                <div class="flow-node w-100" style="max-width: 900px;">
-                    <h4 class="mb-3">Launch campaign</h4>
-                    <p class="text-muted mb-4">Review and launch this campaign now.</p>
-                    <div class="row g-3">
-                        <div class="col-md-4">
-                            <div class="p-3 rounded-3 panel-muted-box">
-                                <div class="text-muted small">Campaign name</div>
-                                <div class="fw-semibold">${document.getElementById('campaign-name').value || 'Untitled campaign'}</div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="p-3 rounded-3 panel-muted-box">
-                                <div class="text-muted small">Steps configured</div>
-                                <div class="fw-semibold">${steps.length}</div>
-                            </div>
-                        </div>
-                        <div class="col-md-4">
-                            <div class="p-3 rounded-3 panel-muted-box">
-                                <div class="text-muted small">Selected leads</div>
-                                <div class="fw-semibold">${selectedLeadIds.size}</div>
-                            </div>
+                <div class="mb-3">
+                    <label class="ep-label">From</label>
+                    <div class="sender-card">
+                        <div class="sc-avatar">JD</div>
+                        <div>
+                            <strong>John Doe</strong>
+                            <div class="fs-sm text-muted">john.doe@example.com</div>
                         </div>
                     </div>
-                    <div class="alert alert-info mt-4 mb-0">
-                        Current status toggle: <b>${statusText}</b>. Launch will activate the campaign and trigger processing.
-                    </div>
                 </div>
-            `;
-        }
-
-        async function saveCampaign() {
-            const name = document.getElementById('campaign-name').value;
-            // const settings = { steps: steps.map((s, i) => ({ ...s, step_order: i + 1 })) };
-            const settings = {
-    steps: steps.map((s, i) => ({ ...s, step_order: i + 1 })),
-
-    stop_on_reply:
-        document.getElementById('setting-stop-reply').checked,
-
-    track_opens:
-        document.getElementById('setting-track-opens').checked,
-
-    track_clicks:
-        document.getElementById('setting-track-clicks').checked,
-
-    daily_limit:
-        parseInt(document.getElementById('setting-daily-limit').value) || 100
-};
-            const isActive = document.getElementById('status-toggle').classList.contains('on');
-            const payload = {
-                name,
-                status: isActive ? 'ACTIVE' : 'DRAFT',
-                settings,
-                steps: settings.steps,
-                connected_account_id: selectedConnectedAccountId || null,
-            };
-
-            let res;
-            if (campaignId) {
-                res = await fetchWithAuth(`/campaigns/${campaignId}/`, {
-                    method: 'PATCH',
-                    body: JSON.stringify(payload),
-                    timeoutMs: 30000,
-                });
-            } else {
-                res = await fetchWithAuth('/campaigns/', {
-                    method: 'POST',
-                    body: JSON.stringify(payload),
-                    timeoutMs: 30000,
-                });
-            }
-
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.detail || 'Failed to save campaign.');
-            }
-
-            const data = await res.json();
-            campaignId = data.id;
-            return data;
-        }
-
-        async function enrollLeads() {
-            if (!campaignId) throw new Error('Save campaign before enrolling leads.');
-            const res = await fetchWithAuth(`/campaigns/${campaignId}/enroll/`, {
-                method: 'POST',
-                body: JSON.stringify({ lead_ids: Array.from(selectedLeadIds) }),
-                timeoutMs: 60000,
-            });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.error || err.detail || 'Failed to enroll selected leads.');
-            }
-            return res.json();
-        }
-
-        async function launchCampaign() {
-            if (!campaignId) throw new Error('Save campaign before launching.');
-            const res = await fetchWithAuth(`/campaigns/${campaignId}/launch/`, {
-                method: 'POST',
-                body: JSON.stringify({}),
-                timeoutMs: 120000,
-            });
-            if (!res.ok) {
-                const err = await res.json().catch(() => ({}));
-                throw new Error(err.error || err.detail || 'Failed to launch campaign.');
-            }
-            return res.json();
-        }
-
-        // ─── RENDER CANVAS ──────────────────
-        function renderCanvas() {
-            const canvas = document.getElementById('canvas');
-            let html = '';
-
-            const templateCards = SEQUENCE_TEMPLATES.map(template => `
-                <div class="template-card">
-                    <div class="template-title">${template.name}</div>
-                    <div class="template-desc">${template.description}</div>
-                    <div class="template-meta">
-                        <span class="template-chip"><i class="bi bi-diagram-3"></i> ${template.steps.length} steps</span>
-                        <span class="template-chip"><i class="bi bi-clock-history"></i> ${template.eta}</span>
-                    </div>
+                <div class="mb-3">
+                    <label class="ep-label">Template</label>
                     <div class="d-flex gap-2">
-                        <button class="btn btn-sm btn-primary flex-grow-1" data-template-apply="${template.key}">
-                            Use
-                        </button>
-                        <button class="btn btn-sm btn-outline-secondary" data-template-append="${template.key}">
-                            Append
-                        </button>
+                        <div class="ep-input flex-grow-1 bg-light">${templateName}</div>
+                        <button class="btn btn-outline-secondary" onclick="openTemplateLibrary()">Browse</button>
                     </div>
+                </div>
+                <div class="mb-3">
+                    <label class="ep-label">Subject</label>
+                    <input type="text" class="ep-input" value="${step.subject}" oninput="updateStep('subject', this.value)">
+                </div>
+                <div class="mb-3">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <label class="ep-label">Body</label>
+                        <button class="ai-btn" onclick="openAiComposer()"><i class="bi bi-stars"></i> Use AI</button>
+                    </div>
+                    <textarea class="ep-textarea" oninput="updateStep('body', this.value)">${step.body}</textarea>
+                </div>
+                <div>
+                    <label class="ep-label">Merge Tags</label>
+                    <div class="d-flex flex-wrap gap-2">
+                        <div class="merge-tag">{{first_name}}</div>
+                        <div class="merge-tag">{{last_name}}</div>
+                        <div class="merge-tag">{{company_name}}</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        function getWaitEditor(step) {
+            return `
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="ep-title">Wait Step</h5>
+                    <button class="btn-close" onclick="closeEditor()"></button>
+                </div>
+                <p class="ep-subtitle">Pause the sequence for a specific amount of time.</p>
+                <div class="mb-3">
+                    <label class="ep-label">Wait for</label>
+                    <div class="input-group" style="width: 160px;">
+                        <input type="number" class="form-control" value="${step.delay_days || 1}" oninput="updateStep('delay_days', this.value)">
+                        <span class="input-group-text">days</span>
+                    </div>
+                </div>
+            `;
+        }
+
+        function getDefaultEditor(step) {
+            const title = step.type.replace('_', ' ').toLowerCase().replace(/\b\w/g, l => l.toUpperCase());
+            return `
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h5 class="ep-title">${title}</h5>
+                    <button class="btn-close" onclick="closeEditor()"></button>
+                </div>
+                <p class="ep-subtitle">This is a manual task. Configuration options will be available here.</p>
+            `;
+        }
+
+        function updateStep(key, value) {
+            if (selectedStepIndex > -1) {
+                const step = campaign.steps[selectedStepIndex];
+                step[key] = value;
+
+                // Basic validation
+                if (step.type === 'EMAIL') {
+                    if (step.template) {
+                        delete step.error;
+                    } else {
+                        step.error = 'No template selected';
+                    }
+                }
+                render(); // Re-render nodes to show updated meta or error
+            }
+        }
+
+
+        // --- Modal Handling ---
+        function openStepPicker(index) {
+            addIndex = index;
+            stepPicker.classList.remove('hidden');
+        }
+
+        function closeStepPicker() {
+            stepPicker.classList.add('hidden');
+        }
+
+        function openTemplateLibrary() {
+            // Mock templates
+            const templates = [
+                { id: 1, name: 'Initial Outreach', subject: 'Quick question', body: 'Hi {{first_name}}, ...' },
+                { id: 2, name: 'Follow-up', subject: 'Re: Quick question', body: 'Just bumping this up...' },
+                { id: 3, name: 'Pricing Inquiry', subject: 'Info about our pricing', body: 'Thanks for your interest...' },
+            ];
+
+            const templateList = document.getElementById('templateList');
+            templateList.innerHTML = templates.map(t => `
+                <div class="template-item" onclick="selectTemplate(${JSON.stringify(t).replace(/"/g, '&quot;')})">
+                    <div class="template-item-name">${t.name}</div>
+                    <div class="template-item-meta">Subject: ${t.subject}</div>
+                    <div class="template-item-body">${t.body.substring(0, 100)}...</div>
                 </div>
             `).join('');
 
-            html += `<div class="template-strip">
-                <div class="template-strip-head">
-                    <div>
-                        <div class="template-strip-title">Quick-start sequence templates</div>
-                        <div class="template-strip-subtitle">Use a ready flow, or append one to expand your campaign.</div>
-                    </div>
-                    <span class="badge text-bg-light border">Current: ${steps.length} steps</span>
-                </div>
-                <div class="template-grid">${templateCards}</div>
-            </div>`;
-
-            // Sequence start node
-            html += `<div class="flow-node start-node" style="text-align:center;">
-                <div class="d-flex align-items-center gap-2 justify-content-center">
-                    <i class="bi bi-flag-fill" style="color:#94a3b8;"></i>
-                    <span class="node-label">Sequence start</span>
-                </div>
-            </div>`;
-
-            steps.forEach((step, i) => {
-                // Connector + add button
-                html += `<div class="connector">
-                    <div class="connector-line"></div>
-                    <button class="add-btn" data-insert="${i}" title="Add step here">
-                        <i class="bi bi-plus"></i>
-                    </button>
-                    <div class="connector-line"></div>
-                </div>`;
-
-                if (step.type.startsWith('CONDITION_')) {
-                    // Condition node with branching
-                    const info = ICONS[step.type];
-                    const condLabel = step.type === 'CONDITION_OPEN' ? 'Opened email' :
-                        step.type === 'CONDITION_REPLY' ? 'Replied to email' : 'Clicked link';
-                    const timeLabel = step.condition_time || '1 day';
-
-                    html += `<div class="flow-node ${selectedNodeIndex === i ? 'selected' : ''}" data-index="${i}">
-                        <div class="d-flex align-items-center gap-3">
-                            <div class="node-icon ${info.cls}"><i class="bi ${info.icon}"></i></div>
-                            <div>
-                                <div class="node-label">${condLabel} within ${timeLabel}</div>
-                            </div>
-                        </div>
-                    </div>`;
-
-                    // Yes/No branches
-                    html += `<div class="connector"><div class="connector-line"></div></div>`;
-                    html += `<div class="branch-container">
-                        <div class="branch-column">
-                            <div class="branch-label yes">Yes</div>
-                            <button class="add-btn" data-branch-parent="${i}" data-branch="yes"><i class="bi bi-plus"></i></button>
-                        </div>
-                        <div class="branch-column">
-                            <div class="branch-label no">No</div>
-                            <button class="add-btn" data-branch-parent="${i}" data-branch="no"><i class="bi bi-plus"></i></button>
-                        </div>
-                    </div>`;
-                } else {
-                    // Regular node
-                    const info = ICONS[step.type] || ICONS.EMAIL;
-                    let delayText = '';
-                    if (step.type === 'WAIT') {
-                        delayText = `Wait ${step.delay_value || 1} ${step.delay_unit || 'day(s)'}`;
-                    }
-                    let meta = step.type === 'EMAIL'
-                        ? (step.subject ? step.subject.substring(0, 40) : '<span class="node-error">Content required</span>')
-                        : (step.type === 'WAIT' ? delayText : info.meta);
-
-                    if (step.type === 'LINKEDIN') {
-                        const action = step.action || 'CONNECT';
-                        const detail = summarizeText(step.description || '', 36);
-                        meta = detail ? `${action}: ${detail}` : `LinkedIn ${action.toLowerCase()} action`;
-                    }
-
-                    if (step.type === 'MANUAL') {
-                        meta = step.description ? summarizeText(step.description, 42) : 'Manual follow-up task';
-                    }
-
-                    if (step.type === 'SMS') {
-                        meta = step.body ? summarizeText(step.body, 42) : 'Text message to lead';
-                    }
-
-                    if (step.type === 'CALL') {
-                        meta = step.description ? summarizeText(step.description, 42) : 'Phone call to lead';
-                    }
-
-                    const branchMeta = step.condition_branch === 'yes'
-                        ? '<span class="badge rounded-pill text-bg-success me-1">Yes path</span>'
-                        : (step.condition_branch === 'no'
-                            ? '<span class="badge rounded-pill text-bg-danger me-1">No path</span>'
-                            : '');
-
-                    html += `<div class="flow-node ${selectedNodeIndex === i ? 'selected' : ''}" data-index="${i}">
-                        <div class="d-flex align-items-center gap-3">
-                            <div class="node-icon ${info.cls}"><i class="bi ${info.icon}"></i></div>
-                            <div class="flex-grow-1">
-                                <div class="node-label">${info.label}</div>
-                                <div class="node-meta">${branchMeta}${meta}</div>
-                            </div>
-                            <button class="btn btn-sm" style="color:#94a3b8;" data-delete="${i}" title="Delete step"><i class="bi bi-three-dots"></i></button>
-                        </div>
-                    </div>`;
-                }
-            });
-
-            // Final add button
-            html += `<div class="connector">
-                <div class="connector-line"></div>
-                <button class="add-btn" data-insert="${steps.length}" title="Add step">
-                    <i class="bi bi-plus"></i>
-                </button>
-                <div class="connector-line"></div>
-            </div>`;
-
-            canvas.innerHTML = html;
-
-            canvas.querySelectorAll('[data-template-apply]').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    applySequenceTemplate(btn.dataset.templateApply, 'replace');
-                });
-            });
-
-            canvas.querySelectorAll('[data-template-append]').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    applySequenceTemplate(btn.dataset.templateAppend, 'append');
-                });
-            });
-
-            // Attach click listeners
-            canvas.querySelectorAll('.flow-node[data-index]').forEach(node => {
-                node.addEventListener('click', (e) => {
-                    if (e.target.closest('[data-delete]')) return;
-                    selectedNodeIndex = parseInt(node.dataset.index);
-                    renderCanvas();
-                    renderEditor();
-                });
-            });
-
-            canvas.querySelectorAll('.add-btn[data-insert]').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    addInsertIndex = parseInt(btn.dataset.insert);
-                    addBranchTarget = null;
-                    document.querySelectorAll('.picker-tabs .ptab').forEach(t => t.classList.remove('active'));
-                    document.querySelector('.picker-tabs .ptab[data-picker="actions"]').classList.add('active');
-                    document.getElementById('picker-actions').style.display = '';
-                    document.getElementById('picker-conditions').style.display = 'none';
-                    document.getElementById('step-picker').classList.remove('hidden');
-                });
-            });
-
-            canvas.querySelectorAll('.add-btn[data-branch-parent]').forEach(btn => {
-                btn.addEventListener('click', () => {
-                    const parentIndex = parseInt(btn.dataset.branchParent);
-                    const branch = btn.dataset.branch;
-                    addInsertIndex = parentIndex + 1;
-                    addBranchTarget = { parentIndex, branch };
-                    document.querySelectorAll('.picker-tabs .ptab').forEach(t => t.classList.remove('active'));
-                    document.querySelector('.picker-tabs .ptab[data-picker="actions"]').classList.add('active');
-                    document.getElementById('picker-actions').style.display = '';
-                    document.getElementById('picker-conditions').style.display = 'none';
-                    document.getElementById('step-picker').classList.remove('hidden');
-                });
-            });
-
-            canvas.querySelectorAll('[data-delete]').forEach(btn => {
-                btn.addEventListener('click', (e) => {
-                    e.stopPropagation();
-                    const idx = parseInt(btn.dataset.delete);
-                    if (confirm('Delete this step?')) {
-                        steps.splice(idx, 1);
-                        if (selectedNodeIndex === idx) selectedNodeIndex = null;
-                        else if (selectedNodeIndex > idx) selectedNodeIndex--;
-                        renderCanvas();
-                        renderEditor();
-                    }
-                });
-            });
+            templateLibrary.classList.remove('hidden');
         }
 
-        // ─── RENDER EDITOR PANEL ────────────
-        function renderEditor() {
-            const panel = document.getElementById('editor-content');
-
-            if (selectedNodeIndex === null || !steps[selectedNodeIndex]) {
-                panel.innerHTML = `<div class="text-center text-muted py-5">
-                    <i class="bi bi-cursor" style="font-size: 2rem;"></i>
-                    <p class="mt-2 small">Click a step to edit its content</p>
-                </div>`;
-                return;
-            }
-
-            const step = steps[selectedNodeIndex];
-
-            if (step.type === 'EMAIL') {
-                renderEmailEditor(panel, step);
-            } else if (step.type === 'WAIT') {
-                renderWaitEditor(panel, step);
-            } else if (step.type === 'LINKEDIN') {
-                renderLinkedInEditor(panel, step);
-            } else if (step.type === 'SMS') {
-                renderSMSEditor(panel, step);
-            } else if (step.type === 'CALL') {
-                renderCallEditor(panel, step);
-            } else if (step.type.startsWith('CONDITION_')) {
-                renderConditionEditor(panel, step);
-            } else {
-                renderManualEditor(panel, step);
-            }
+        function closeTemplateLibrary() {
+            templateLibrary.classList.add('hidden');
         }
 
-        function renderEmailEditor(panel, step) {
-            // Build sender dropdown
-            let senderHtml = '';
-            if (connectedAccounts.length > 0) {
-                if (!selectedConnectedAccountId) {
-                    selectedConnectedAccountId = connectedAccounts[0].id;
-                }
-                const options = connectedAccounts.map(account => `
-                    <option value="${account.id}" ${selectedConnectedAccountId === account.id ? 'selected' : ''}>
-                        ${account.email} (${account.provider})
-                    </option>
-                `).join('');
-                senderHtml = `
-                    <div class="mb-3">
-                        <div class="ep-label">Sender for email steps</div>
-                        <select id="sender-account-select" class="ep-input">${options}</select>
-                    </div>`;
-            } else {
-                senderHtml = `
-                    <div class="mb-3">
-                        <div class="ep-label">Sender for email steps</div>
-                        <a href="/settings.html" class="btn btn-outline-secondary btn-sm">
-                            <i class="bi bi-google me-1"></i> Connect a Google account first
-                        </a>
-                    </div>`;
-            }
-
-            panel.innerHTML = `
-                <div class="d-flex align-items-center justify-content-between mb-1">
-                    <div class="d-flex align-items-center gap-2">
-                        <div class="node-icon email"><i class="bi bi-envelope-fill"></i></div>
-                        <div>
-                            <div class="ep-title">Email</div>
-                            <div class="ep-subtitle">Send automatic email</div>
-                        </div>
-                    </div>
-                </div>
-                ${senderHtml}
-                <div class="mb-3">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div class="ep-label">Content</div>
-                        <div class="d-flex gap-2">
-                            <button class="btn btn-sm btn-outline-secondary" id="open-template-library-btn"><i class="bi bi-card-text me-1"></i> Templates</button>
-                            <button class="btn btn-sm btn-outline-secondary" id="save-template-btn"><i class="bi bi-save me-1"></i> Save as Template</button>
-                            <button class="ai-btn" id="ai-generate-btn">
-                                <i class="bi bi-stars"></i> Ask AI
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="mb-3">
-                    <div class="ep-label">Insert Tag</div>
-                        <select class="ep-input" id="merge-tag-select">
-                            <option value="">Select a merge tag</option>
-                            <option value="{{firstName}}">{{firstName}}</option>
-                            <option value="{{lastName}}">{{lastName}}</option>
-                            <option value="{{email}}">{{email}}</option>
-                            <option value="{{company}}">{{company}}</option>
-                            <option value="{{icebreaker}}">{{icebreaker}}</option>
-                        </select>
-                </div>
-                <div class="mb-3">
-                    <div class="ep-label">Subject <span class="text-muted fw-normal">&middot; Add Cc</span></div>
-                    <input type="text" class="ep-input" id="ep-subject" placeholder="Subject" value="${step.subject || ''}">
-                </div>
-                <div class="mb-3">
-                    <div class="ep-label">Body</div>
-                    <textarea class="ep-textarea" id="ep-body" placeholder="Write your email content...">${step.body || ''}</textarea>
-                </div>
-                <div class="mb-3">
-                    <div class="ep-label">Merge Tags</div>
-                    <div class="d-flex flex-wrap gap-2">
-                        <span class="merge-tag" data-tag="{{firstName}}">{{firstName}}</span>
-                        <span class="merge-tag" data-tag="{{lastName}}">{{lastName}}</span>
-                        <span class="merge-tag" data-tag="{{email}}">{{email}}</span>
-                        <span class="merge-tag" data-tag="{{company}}">{{company}}</span>
-                        <span class="merge-tag" data-tag="{{icebreaker}}"><i class="bi bi-stars me-1"></i>{{icebreaker}}</span>
-                    </div>
-                </div>
-
-                <!-- AI Generation Result -->
-                <div id="ai-result" class="d-none mb-3">
-                    <div class="ep-label">AI Suggestion</div>
-                    <div class="p-3 rounded-3 ai-result-box">
-                        <p id="ai-result-text" class="mb-2 small" style="white-space:pre-wrap;"></p>
-                        <div class="d-flex gap-2">
-                            <button class="btn btn-sm btn-primary" id="ai-use-btn">Use this</button>
-                            <button class="btn btn-sm btn-outline-secondary" id="ai-regenerate-btn">Regenerate</button>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            // Bind inputs
-            document.getElementById('ep-subject').addEventListener('input', (e) => { step.subject = e.target.value; });
-            document.getElementById('ep-body').addEventListener('input', (e) => { step.body = e.target.value; });
-
-            let activeEditor = document.getElementById('ep-body');
-
-            document.getElementById('ep-subject').addEventListener('focus', () => {
-                activeEditor = document.getElementById('ep-subject');
-            });
-
-            document.getElementById('ep-body').addEventListener('focus', () => {
-                activeEditor = document.getElementById('ep-body');
-            });
-
-
-
-            const mergeSelect = document.getElementById('merge-tag-select');
-
-            mergeSelect.addEventListener('change', (e) => {
-                const tagText = e.target.value;
-                if (!tagText) return;
-
-            const body = activeEditor;
-
-            const start = body.selectionStart;
-            const end = body.selectionEnd;
-
-            body.value =
-                body.value.substring(0, start) +
-                tagText +
-                body.value.substring(end);
-
-            if (body.id === 'ep-subject') {
-                step.subject = body.value;
-            } else {
-                step.body = body.value;
-            }
-
-            body.focus();
-            body.selectionStart = body.selectionEnd =
-                start + tagText.length;
-
-            mergeSelect.value = '';
-        });
-            const senderSelect = document.getElementById('sender-account-select');
-            if (senderSelect) {
-                senderSelect.addEventListener('change', (e) => {
-                    selectedConnectedAccountId = e.target.value;
-                });
-            }
-
-            // Merge tags
-            panel.querySelectorAll('.merge-tag').forEach(tag => {
-                tag.addEventListener('click', () => {
-                    const textarea = document.getElementById('ep-body');
-                    const pos = textarea.selectionStart;
-                    const text = textarea.value;
-                    const tagText = tag.dataset.tag;
-                    textarea.value = text.substring(0, pos) + tagText + text.substring(pos);
-                    step.body = textarea.value;
-                    textarea.focus();
-                    textarea.selectionStart = textarea.selectionEnd = pos + tagText.length;
-                });
-            });
-
-            document.getElementById('open-template-library-btn').addEventListener('click', openTemplateLibrary);
-            document.getElementById('save-template-btn').addEventListener('click', () => saveCurrentStepAsTemplate(step));
-
-            // AI Generate button
-            document.getElementById('ai-generate-btn').addEventListener('click', () => openAIComposer(step));
-        }
-
-        function renderWaitEditor(panel, step) {
-            panel.innerHTML = `
-                <div class="d-flex align-items-center gap-2 mb-3">
-                    <div class="node-icon wait"><i class="bi bi-clock-fill"></i></div>
-                    <div>
-                        <div class="ep-title">Delay</div>
-                        <div class="ep-subtitle">Wait before the next step</div>
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <div class="ep-label">Wait duration</div>
-                    <div class="d-flex gap-2">
-                        <input type="number" class="ep-input" id="ep-delay-val" value="${step.delay_value || 1}" min="1" style="width:100px;">
-                        <select class="ep-input" id="ep-delay-unit" style="width:150px;">
-                            <option value="minutes" ${step.delay_unit === 'minutes' ? 'selected' : ''}>Minutes</option>
-                            <option value="hours" ${step.delay_unit === 'hours' ? 'selected' : ''}>Hours</option>
-                            <option value="days" ${(step.delay_unit === 'days' || !step.delay_unit) ? 'selected' : ''}>Days</option>
-                        </select>
-                    </div>
-                </div>
-            `;
-            document.getElementById('ep-delay-val').addEventListener('input', e => { step.delay_value = parseInt(e.target.value) || 1; renderCanvas(); });
-            document.getElementById('ep-delay-unit').addEventListener('change', e => { step.delay_unit = e.target.value; renderCanvas(); });
-        }
-
-        function renderConditionEditor(panel, step) {
-            const condName = step.type === 'CONDITION_OPEN' ? 'Opened email' :
-                step.type === 'CONDITION_REPLY' ? 'Replied to email' : 'Clicked link';
-            panel.innerHTML = `
-                <div class="d-flex align-items-center gap-2 mb-3">
-                    <div class="node-icon condition"><i class="bi bi-signpost-split-fill"></i></div>
-                    <div>
-                        <div class="ep-title">${condName}</div>
-                        <div class="ep-subtitle">Branches based on lead behavior</div>
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <div class="ep-label">Check within</div>
-                    <select class="ep-input" id="ep-cond-time">
-                        <option value="1 day" ${step.condition_time === '1 day' ? 'selected' : ''}>1 Day</option>
-                        <option value="2 days" ${step.condition_time === '2 days' ? 'selected' : ''}>2 Days</option>
-                        <option value="3 days" ${step.condition_time === '3 days' ? 'selected' : ''}>3 Days</option>
-                        <option value="1 week" ${step.condition_time === '1 week' ? 'selected' : ''}>1 Week</option>
-                    </select>
-                </div>
-                <div class="alert alert-info small"><i class="bi bi-info-circle me-1"></i> If the condition is met, the lead follows the <b>Yes</b> branch. Otherwise, they follow the <b>No</b> branch.</div>
-            `;
-            document.getElementById('ep-cond-time').addEventListener('change', e => { step.condition_time = e.target.value; renderCanvas(); });
-        }
-
-        function renderLinkedInEditor(panel, step) {
-            panel.innerHTML = `
-                <div class="d-flex align-items-center gap-2 mb-3">
-                    <div class="node-icon linkedin"><i class="bi bi-linkedin"></i></div>
-                    <div>
-                        <div class="ep-title">LinkedIn Action</div>
-                        <div class="ep-subtitle">Add social touches into your outreach sequence</div>
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <div class="ep-label">Action type</div>
-                    <select class="ep-input" id="ep-linkedin-action">
-                        <option value="CONNECT" ${(step.action === 'CONNECT' || !step.action) ? 'selected' : ''}>Send connection request</option>
-                        <option value="MESSAGE" ${step.action === 'MESSAGE' ? 'selected' : ''}>Send LinkedIn message</option>
-                        <option value="PROFILE_VIEW" ${step.action === 'PROFILE_VIEW' ? 'selected' : ''}>View profile manually</option>
-                    </select>
-                </div>
-                <div class="mb-3">
-                    <div class="ep-label">Action notes</div>
-                    <textarea class="ep-textarea" id="ep-linkedin-desc" placeholder="e.g. Mention your previous email and ask if they are the right contact..." style="min-height:120px;">${step.description || ''}</textarea>
-                </div>
-                <div class="alert alert-light border small mb-0">
-                    This step currently logs workflow progression. Use notes to guide your action style.
-                </div>
-            `;
-            document.getElementById('ep-linkedin-action').addEventListener('change', e => {
-                step.action = e.target.value;
-                renderCanvas();
-            });
-            document.getElementById('ep-linkedin-desc').addEventListener('input', e => {
-                step.description = e.target.value;
-                renderCanvas();
-            });
-        }
-
-        function renderManualEditor(panel, step) {
-            panel.innerHTML = `
-                <div class="d-flex align-items-center gap-2 mb-3">
-                    <div class="node-icon manual"><i class="bi bi-hand-index-fill"></i></div>
-                    <div>
-                        <div class="ep-title">Manual Task</div>
-                        <div class="ep-subtitle">A reminder for you to perform a specific action</div>
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <div class="ep-label">Task description</div>
-                    <textarea class="ep-textarea" id="ep-manual-desc" placeholder="e.g. Research the lead's company on LinkedIn..." style="min-height:100px;">${step.description || ''}</textarea>
-                </div>
-            `;
-            document.getElementById('ep-manual-desc').addEventListener('input', e => {
-                step.description = e.target.value;
-                renderCanvas();
-            });
-        }
-
-
-        function renderSMSEditor(panel, step) {
-            const charCount = (step.body || '').length;
-            const segments = Math.ceil(charCount / 160) || 1;
-            panel.innerHTML = `
-                <div class="d-flex align-items-center gap-2 mb-3">
-                    <div class="node-icon sms"><i class="bi bi-chat-dots-fill"></i></div>
-                    <div>
-                        <div class="ep-title">SMS Message</div>
-                        <div class="ep-subtitle">Send a text message to the lead's phone</div>
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <div class="ep-label">Message body</div>
-                    <textarea class="ep-textarea" id="ep-sms-body" placeholder="Hi {{firstName}}, just wanted to follow up on..." style="min-height:120px;">${step.body || ''}</textarea>
-                    <div class="d-flex justify-content-between mt-1">
-                        <small class="text-muted" id="sms-char-count">${charCount} chars &middot; ${segments} segment${segments !== 1 ? 's' : ''}</small>
-                        <small class="text-muted">160 chars = 1 SMS segment</small>
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <div class="ep-label">Merge Tags</div>
-                    <div class="d-flex flex-wrap gap-2">
-                        <span class="merge-tag" data-tag="{{firstName}}">{{firstName}}</span>
-                        <span class="merge-tag" data-tag="{{lastName}}">{{lastName}}</span>
-                        <span class="merge-tag" data-tag="{{company}}">{{company}}</span>
-                    </div>
-                </div>
-                <div class="alert alert-light border small mb-0">
-                    <i class="bi bi-info-circle me-1"></i> SMS requires a phone number on the lead. Leads without a phone number will be skipped.
-                </div>
-            `;
-            const bodyEl = document.getElementById('ep-sms-body');
-            bodyEl.addEventListener('input', e => {
-                step.body = e.target.value;
-                const len = e.target.value.length;
-                const segs = Math.ceil(len / 160) || 1;
-                document.getElementById('sms-char-count').textContent = len + ' chars \u00b7 ' + segs + ' segment' + (segs !== 1 ? 's' : '');
-                renderCanvas();
-            });
-            panel.querySelectorAll('.merge-tag').forEach(tag => {
-                tag.addEventListener('click', () => {
-                    const pos = bodyEl.selectionStart;
-                    const val = bodyEl.value;
-                    bodyEl.value = val.slice(0, pos) + tag.dataset.tag + val.slice(pos);
-                    step.body = bodyEl.value;
-                    bodyEl.focus();
-                    bodyEl.selectionStart = bodyEl.selectionEnd = pos + tag.dataset.tag.length;
-                    const len = bodyEl.value.length;
-                    const segs = Math.ceil(len / 160) || 1;
-                    document.getElementById('sms-char-count').textContent = len + ' chars \u00b7 ' + segs + ' segment' + (segs !== 1 ? 's' : '');
-                    renderCanvas();
-                });
-            });
-        }
-
-        function renderCallEditor(panel, step) {
-            panel.innerHTML = `
-                <div class="d-flex align-items-center gap-2 mb-3">
-                    <div class="node-icon call"><i class="bi bi-telephone-fill"></i></div>
-                    <div>
-                        <div class="ep-title">Phone Call</div>
-                        <div class="ep-subtitle">Initiate a call to the lead</div>
-                    </div>
-                </div>
-                <div class="mb-3">
-                    <div class="ep-label">Call script / notes</div>
-                    <textarea class="ep-textarea" id="ep-call-desc" placeholder="e.g. Introduce yourself, mention the email you sent, and ask about their needs..." style="min-height:140px;">${step.description || ''}</textarea>
-                </div>
-                <div class="alert alert-light border small mb-0">
-                    <i class="bi bi-telephone-outbound me-1"></i> When Twilio is configured, this step initiates an automated call reading your script. Otherwise, it acts as a manual reminder.
-                </div>
-            `;
-            document.getElementById('ep-call-desc').addEventListener('input', e => {
-                step.description = e.target.value;
-                renderCanvas();
-            });
-        }
-        // ─── AI CONTENT GENERATION ──────────
-        function openAIComposer(step) {
-            aiComposerStep = step;
-            aiConversation = [];
-            aiLatestDraft = step.subject || step.body ? {
-                subject: step.subject || '',
-                body: step.body || '',
-                assistant_message: 'Current draft loaded. You can ask for a rewrite, different tone, or a new email angle.',
-            } : null;
-            document.getElementById('ai-composer').classList.remove('hidden');
-            document.getElementById('ai-prompt-input').value = '';
-            setAIComposerStatus('Describe the email you want, then generate a draft.');
-            renderAIConversation();
-            document.getElementById('ai-prompt-input').focus();
-        }
-
-        function closeAIComposer() {
-            document.getElementById('ai-composer').classList.add('hidden');
-            aiComposerStep = null;
-            aiConversation = [];
-            aiLatestDraft = null;
-        }
-
-        function setAIComposerStatus(text) {
-            const statusEl = document.getElementById('ai-composer-status');
-            if (statusEl) {
-                statusEl.textContent = text;
-            }
-        }
-
-        function escapeHtml(value) {
-            return (value || '')
-                .replaceAll('&', '&amp;')
-                .replaceAll('<', '&lt;')
-                .replaceAll('>', '&gt;')
-                .replaceAll('"', '&quot;')
-                .replaceAll("'", '&#39;');
-        }
-
-        function renderAIConversation() {
-            const log = document.getElementById('ai-chat-log');
-            if (!log) return;
-
-            const messages = [];
-            if (aiConversation.length === 0 && !aiLatestDraft) {
-                messages.push(`
-                    <div class="ai-chat-message assistant">
-                        Start with a prompt like: "Write a short sales outreach email for marketing leaders at {{company}} and use a friendly tone."
-                    </div>
-                `);
-            }
-
-            aiConversation.forEach((message, index) => {
-                if (message.role === 'user') {
-                    messages.push(`<div class="ai-chat-message user">${escapeHtml(message.content)}</div>`);
-                    return;
-                }
-
-                const draftHtml = message.subject || message.body ? `
-                    <div class="ai-chat-draft">
-                        <div class="ai-chat-draft-label">Draft</div>
-                        <div class="ai-chat-subject">Subject: ${escapeHtml(message.subject || '(empty)')}</div>
-                        <div>${escapeHtml(message.body || '')}</div>
-                        <div class="ai-draft-toolbar">
-                            <button class="btn btn-sm btn-primary" data-ai-use="${index}">Insert into email</button>
-                        </div>
-                    </div>
-                ` : '';
-
-                messages.push(`
-                    <div class="ai-chat-message assistant">
-                        <div>${escapeHtml(message.content)}</div>
-                        ${draftHtml}
-                    </div>
-                `);
-            });
-
-            if (aiConversation.length === 0 && aiLatestDraft) {
-                messages.push(`
-                    <div class="ai-chat-message assistant">
-                        <div>${escapeHtml(aiLatestDraft.assistant_message || 'Current draft loaded for iteration.')}</div>
-                        <div class="ai-chat-draft">
-                            <div class="ai-chat-draft-label">Current draft</div>
-                            <div class="ai-chat-subject">Subject: ${escapeHtml(aiLatestDraft.subject || '(empty)')}</div>
-                            <div>${escapeHtml(aiLatestDraft.body || '')}</div>
-                        </div>
-                    </div>
-                `);
-            }
-
-            log.innerHTML = messages.join('');
-            log.querySelectorAll('[data-ai-use]').forEach(button => {
-                button.addEventListener('click', () => {
-                    const index = Number(button.dataset.aiUse);
-                    const message = aiConversation[index];
-                    if (!message || !aiComposerStep) return;
-                    applyAIDraftToStep(message.subject, message.body);
-                });
-            });
-            log.scrollTop = log.scrollHeight;
-        }
-
-        function applyAIDraftToStep(subject, body) {
-            if (!aiComposerStep) return;
-            aiComposerStep.subject = subject || '';
-            aiComposerStep.body = body || '';
-
-            const subjectInput = document.getElementById('ep-subject');
-            const bodyInput = document.getElementById('ep-body');
-            if (subjectInput) subjectInput.value = aiComposerStep.subject;
-            if (bodyInput) bodyInput.value = aiComposerStep.body;
-
-            renderCanvas();
-            closeAIComposer();
-        }
-
-        async function submitAIPrompt() {
-            if (!aiComposerStep) return;
-            const promptInput = document.getElementById('ai-prompt-input');
-            const sendBtn = document.getElementById('ai-send-prompt');
-            const prompt = promptInput.value.trim();
-            if (!prompt) {
-                setAIComposerStatus('Enter a prompt first.');
-                promptInput.focus();
-                return;
-            }
-
-            aiConversation.push({ role: 'user', content: prompt });
-            renderAIConversation();
-            promptInput.value = '';
-            sendBtn.disabled = true;
-            sendBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Generating...';
-            setAIComposerStatus('Generating a draft from the AI provider...');
-
-            try {
-                const res = await fetchWithAuth('/campaigns/ai-generate/', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        prompt,
-                        subject: aiComposerStep.subject || '',
-                        body: aiComposerStep.body || '',
-                        messages: aiConversation,
-                    }),
-                    timeoutMs: 120000,
-                });
-
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok) {
-                    throw new Error(data.error || data.detail || 'AI generation failed.');
-                }
-
-                aiLatestDraft = {
-                    assistant_message: data.assistant_message || 'I generated a draft you can insert into the email step.',
-                    subject: data.subject || '',
-                    body: data.body || '',
-                };
-                aiConversation.push({
-                    role: 'assistant',
-                    content: aiLatestDraft.assistant_message,
-                    subject: aiLatestDraft.subject,
-                    body: aiLatestDraft.body,
-                });
-                renderAIConversation();
-                setAIComposerStatus(`Draft ready from ${data.provider || 'AI provider'}${data.model ? ` using ${data.model}` : ''}.`);
-            } catch (error) {
-                console.error(error);
-                setAIComposerStatus(error.message || 'Could not reach the AI endpoint.');
-            } finally {
-                sendBtn.disabled = false;
-                sendBtn.innerHTML = '<i class="bi bi-stars me-1"></i> Generate draft';
-            }
-        }
-
-        // ─── STEP PICKER ────────────────────
-        document.querySelectorAll('.step-type').forEach(el => {
-            el.addEventListener('click', () => {
-                const type = el.dataset.type;
-                const newStep = { type };
-
-                if (type === 'EMAIL') { newStep.subject = ''; newStep.body = ''; newStep.delay_minutes = 0; }
-                else if (type === 'WAIT') { newStep.delay_value = 1; newStep.delay_unit = 'days'; }
-                else if (type === 'LINKEDIN') { newStep.action = 'CONNECT'; newStep.description = ''; }
-                else if (type === 'SMS') { newStep.body = ''; newStep.delay_minutes = 0; }
-                else if (type === 'CALL') { newStep.description = ''; newStep.delay_minutes = 0; }
-                else if (type.startsWith('CONDITION_')) { newStep.condition_time = '1 day'; newStep.yes = []; newStep.no = []; }
-                else { newStep.description = ''; }
-
-                if (addBranchTarget) {
-                    newStep.condition_branch = addBranchTarget.branch;
-                    newStep.condition_parent_index = addBranchTarget.parentIndex;
-                }
-
-                steps.splice(addInsertIndex, 0, newStep);
-                selectedNodeIndex = addInsertIndex;
-                addBranchTarget = null;
-                document.getElementById('step-picker').classList.add('hidden');
-                renderCanvas();
-                renderEditor();
-            });
-        });
-
-        document.getElementById('close-picker').addEventListener('click', () => {
-            addBranchTarget = null;
-            document.getElementById('step-picker').classList.add('hidden');
-        });
-
-        document.getElementById('ai-composer-close').addEventListener('click', closeAIComposer);
-        document.getElementById('ai-clear-chat').addEventListener('click', () => {
-            aiConversation = [];
-            aiLatestDraft = aiComposerStep && (aiComposerStep.subject || aiComposerStep.body) ? {
-                subject: aiComposerStep.subject || '',
-                body: aiComposerStep.body || '',
-                assistant_message: 'Current draft loaded. You can ask for a rewrite, different tone, or a new email angle.',
-            } : null;
-            setAIComposerStatus('Chat cleared. Describe the email you want next.');
-            renderAIConversation();
-        });
-        document.getElementById('ai-send-prompt').addEventListener('click', submitAIPrompt);
-        document.getElementById('ai-prompt-input').addEventListener('keydown', (event) => {
-            if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-                event.preventDefault();
-                submitAIPrompt();
-            }
-        });
-        document.querySelectorAll('#ai-prompt-chips [data-prompt]').forEach(button => {
-            button.addEventListener('click', () => {
-                const input = document.getElementById('ai-prompt-input');
-                input.value = button.dataset.prompt || '';
-                input.focus();
-            });
-        });
-        document.getElementById('ai-composer').addEventListener('click', (event) => {
-            if (event.target.id === 'ai-composer') {
-                closeAIComposer();
-            }
-        });
-
-        document.getElementById('close-template-library').addEventListener('click', closeTemplateLibrary);
-        document.getElementById('template-library-modal').addEventListener('click', (event) => {
-            if (event.target.id === 'template-library-modal') {
+        function selectTemplate(template) {
+            if (selectedStepIndex > -1) {
+                const step = campaign.steps[selectedStepIndex];
+                step.template = template;
+                step.subject = template.subject;
+                step.body = template.body;
+                delete step.error;
                 closeTemplateLibrary();
+                render();
+                renderEditor();
+            }
+        }
+
+        function openAiComposer() {
+            aiComposer.classList.remove('hidden');
+            aiPromptInput.focus();
+        }
+
+        function closeAiComposer() {
+            aiComposer.classList.add('hidden');
+        }
+
+        aiPromptInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && aiPromptInput.value.trim() !== '') {
+                const userMessage = aiPromptInput.value;
+                addAiChatMessage(userMessage, 'user');
+                aiPromptInput.value = '';
+
+                // Simulate AI response
+                setTimeout(() => {
+                    const aiResponse = `
+Here's a draft based on your prompt:
+
+<div class="ai-chat-draft">
+    <div class="ai-chat-draft-label">Draft</div>
+    <div class="ai-chat-subject">Following up on your interest</div>
+    <div class="ai-chat-body">
+        Hi {{first_name}},<br><br>
+        I noticed you were looking at our pricing page. Happy to answer any questions you might have or walk you through a personalized demo.<br><br>
+        Would you be open to a quick 15-minute chat next week?<br><br>
+        Best,<br>
+        John
+    </div>
+</div>
+                    `;
+                    addAiChatMessage(aiResponse, 'assistant');
+                }, 1000);
             }
         });
 
-        // Picker tabs
-        document.querySelectorAll('.picker-tabs .ptab').forEach(tab => {
-            tab.addEventListener('click', () => {
-                document.querySelectorAll('.picker-tabs .ptab').forEach(t => t.classList.remove('active'));
-                tab.classList.add('active');
-                document.getElementById('picker-actions').style.display = tab.dataset.picker === 'actions' ? '' : 'none';
-                document.getElementById('picker-conditions').style.display = tab.dataset.picker === 'conditions' ? '' : 'none';
+        function addAiChatMessage(content, sender) {
+            const messageDiv = document.createElement('div');
+            messageDiv.className = `ai-chat-message ${sender}`;
+            messageDiv.innerHTML = content;
+            aiChatLog.appendChild(messageDiv);
+            aiChatLog.scrollTop = aiChatLog.scrollHeight;
+        }
+
+
+        // --- Initial Render ---
+        document.addEventListener('DOMContentLoaded', () => {
+            render();
+
+            // Tab switching for step picker
+            document.querySelectorAll('.picker-tabs .ptab').forEach(tab => {
+                tab.addEventListener('click', () => {
+                    document.querySelector('.picker-tabs .ptab.active').classList.remove('active');
+                    tab.classList.add('active');
+                    const tabName = tab.dataset.pickerTab;
+                    if (tabName === 'automated') {
+                        document.getElementById('automated-steps').classList.remove('hidden');
+                        document.getElementById('manual-steps').classList.add('hidden');
+                    } else {
+                        document.getElementById('automated-steps').classList.add('hidden');
+                        document.getElementById('manual-steps').classList.remove('hidden');
+                    }
+                });
             });
-        });
-
-        // ─── TOP BAR TABS ───────────────────
-        document.querySelectorAll('.tab-pills .tab').forEach(tab => {
-            tab.addEventListener('click', async () => {
-                try {
-                    if ((tab.dataset.tab === 'leads' || tab.dataset.tab === 'launch') && !campaignId) {
-                        await saveCampaign();
-                    }
-                    if (tab.dataset.tab === 'leads' && availableLeads.length === 0) {
-                        await loadLeads();
-                    }
-                    switchTab(tab.dataset.tab);
-                } catch (e) {
-                    alert(e.message || 'Unable to switch tab right now.');
-                }
-            });
-        });
-
-        // Status toggle
-        document.getElementById('status-toggle').addEventListener('click', function () {
-            this.classList.toggle('on');
-            this.classList.toggle('off');
-            if (activeTab === 'launch') renderLaunchTab();
-        });
-
-        // ─── SAVE / NEXT ────────────────────
-        document.getElementById('next-step-btn').addEventListener('click', async () => {
-            const btn = document.getElementById('next-step-btn');
-            btn.disabled = true;
-            btn.innerHTML = '<span class="spinner-border spinner-border-sm"></span> Saving...';
-
-            try {
-                if (activeTab === 'sequence') {
-                    await saveCampaign();
-                    await loadLeads();
-                    switchTab('leads');
-                } else if (activeTab === 'leads') {
-                    await saveCampaign();
-                    await enrollLeads();
-                    switchTab('launch');
-                } else {
-                    await saveCampaign();
-                    await enrollLeads();
-                    await launchCampaign();
-                    alert('Campaign launched and processing triggered.');
-                    window.location.href = '/campaigns.html';
-                }
-            } catch (e) {
-                alert('Error: ' + e.message);
-            } finally {
-                btn.disabled = false;
-                setNextButtonLabel();
-            }
-        });
-
-        // ─── INIT ───────────────────────────
-        document.addEventListener('DOMContentLoaded', async () => {
-            document.getElementById('settings-icon').addEventListener('click', () => {
-    const modal = new bootstrap.Modal(
-        document.getElementById('campaignSettingsModal')
-    );
-    modal.show();
-});
-            // Load connected accounts
-            try {
-                const res = await fetchWithAuth('/connected-accounts/');
-                if (res.ok) {
-                    connectedAccounts = await res.json();
-                    if (connectedAccounts.length > 0) {
-                        selectedConnectedAccountId = connectedAccounts[0].id;
-                    }
-                }
-            } catch (e) { console.warn('No connected accounts'); }
-
-            // Load existing campaign
-            if (editId) {
-                try {
-                    const res = await fetchWithAuth(`/campaigns/${editId}/`);
-                    if (res.ok) {
-                        const data = await res.json();
-                        campaignId = data.id;
-                        document.getElementById('campaign-name').value = data.name;
-                        if (data.status === 'ACTIVE') {
-                            document.getElementById('status-toggle').classList.add('on');
-                            document.getElementById('status-toggle').classList.remove('off');
-                        }
-                        if (data.connected_account && data.connected_account.id) {
-                            selectedConnectedAccountId = data.connected_account.id;
-                        }
-                        if (Array.isArray(data.enrolled_lead_ids)) {
-                            selectedLeadIds = new Set(data.enrolled_lead_ids);
-                        }
-                        // Restore steps from settings
-                        if (data.settings && data.settings.steps) {
-                            steps = data.settings.steps;
-                        }
-
-                        const settings = data.settings || {};
-
-document.getElementById('setting-stop-reply').checked =
-    settings.stop_on_reply ?? true;
-
-document.getElementById('setting-track-opens').checked =
-    settings.track_opens ?? true;
-
-document.getElementById('setting-track-clicks').checked =
-    settings.track_clicks ?? true;
-
-document.getElementById('setting-daily-limit').value =
-    settings.daily_limit ?? 100;
-                    }
-                } catch (e) { console.error(e); }
-            }
-
-            switchTab('sequence');
         });
     </script>
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script>
-    mermaid.initialize({ startOnLoad: true, securityLevel: 'loose' });
-
-    document.getElementById('canvasTab').addEventListener('click', function() {
-        document.getElementById('flowchart-container').style.display = 'block';
-        document.getElementById('').style.display = 'none';
-        renderFlowchart();
-    });
-
-    document.getElementById('').addEventListener('click', function() {
-        document.getElementById('flowchart-container').style.display = 'none';
-        document.getElementById('').style.display = 'block';
-    });
-
-    function renderFlowchart() {
-        const steps = window.campaignSteps;
-        if (!steps || steps.length === 0) return;
-
-        let graph = 'graph TD\n';
-        steps.forEach((step, i) => {
-            const nodeId = step${i};
-            if (step.type === 'condition' || step.type === 'CONDITION') {
-                graph +=     ${nodeId}{${step.name || 'Condition'}}\n;
-            } else {
-                graph +=     ${nodeId}[${step.name || 'Action'}]\n;
-            }
-            if (i < steps.length - 1) {
-                graph +=     ${nodeId} --> step${i+1}\n;
-            }
-        });
-        steps.forEach((step, i) => {
-            graph +=     click step${i} openStepDetail\n;
-        });
-
-        document.getElementById('mermaidFlowchart').textContent = graph;
-        mermaid.init(undefined, document.getElementById('mermaidFlowchart'));
-    }
-
-    function openStepDetail(stepId) {
-        console.log('Clicked node:', stepId);
-        const stepIndex = parseInt(stepId.replace('step', ''));
-        if (typeof editStep === 'function') {
-            editStep(stepIndex);
-        }
-    }
-</script>
 </body>
 
 </html>
-
-
