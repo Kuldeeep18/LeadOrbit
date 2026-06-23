@@ -1,13 +1,18 @@
 from django.db import models
 from django.conf import settings
+from django.db.models import Q
+from django.db.models.functions import Lower
 from tenants.models import TenantModel
 from leads.models import Lead
 import uuid
 
+from .fields import EncryptedTextField
+
 class ConnectedEmailAccount(TenantModel):
     PROVIDER_CHOICES = (
         ('GOOGLE', 'Google'),
-        ('MICROSOFT', 'Microsoft')
+        ('MICROSOFT', 'Microsoft'),
+        ('CUSTOM', 'Custom SMTP/IMAP'),
     )
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email_address = models.EmailField()
@@ -19,9 +24,32 @@ class ConnectedEmailAccount(TenantModel):
         blank=True,
         related_name='connected_email_accounts',
     )
-    access_token = models.TextField()
+    access_token = models.TextField(blank=True, default='')
     refresh_token = models.TextField(blank=True, null=True)
     token_expiry = models.DateTimeField(null=True, blank=True)
+    smtp_host = models.CharField(max_length=255, blank=True, null=True)
+    smtp_port = models.PositiveIntegerField(blank=True, null=True)
+    smtp_username = models.CharField(max_length=255, blank=True, null=True)
+    smtp_password = EncryptedTextField(blank=True, null=True)
+    smtp_use_tls = models.BooleanField(default=True)
+    smtp_use_ssl = models.BooleanField(default=False)
+    imap_host = models.CharField(max_length=255, blank=True, null=True)
+    imap_port = models.PositiveIntegerField(blank=True, null=True)
+    imap_username = models.CharField(max_length=255, blank=True, null=True)
+    imap_password = EncryptedTextField(blank=True, null=True)
+    imap_use_ssl = models.BooleanField(default=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                Lower('email_address'),
+                'organization',
+                'connected_by',
+                'provider',
+                condition=Q(provider='CUSTOM'),
+                name='uniq_custom_connected_account_per_user_email',
+            ),
+        ]
 
     def __str__(self):
         return f"{self.email_address} ({self.get_provider_display()})"
@@ -38,6 +66,14 @@ class Campaign(TenantModel):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DRAFT')
     settings = models.JSONField(default=dict, blank=True)
     connected_account = models.ForeignKey(ConnectedEmailAccount, on_delete=models.SET_NULL, null=True, blank=True, related_name='campaigns')
+    
+    # Cached counters for performance optimization
+    leads_count = models.IntegerField(default=0, help_text="Total enrolled leads")
+    sent_count = models.IntegerField(default=0, help_text="Leads with sent messages")
+    open_count = models.IntegerField(default=0, help_text="Leads that opened emails")
+    reply_count = models.IntegerField(default=0, help_text="Leads that replied")
+    clicked_count = models.IntegerField(default=0, help_text="Leads that clicked links")
+    bounced_count = models.IntegerField(default=0, help_text="Bounced leads")
 
     def __str__(self):
         return self.name
@@ -99,6 +135,9 @@ class CampaignLead(TenantModel):
     last_opened_at = models.DateTimeField(null=True, blank=True)
     last_clicked_at = models.DateTimeField(null=True, blank=True)
     last_replied_at = models.DateTimeField(null=True, blank=True)
+    bounce_type = models.CharField(max_length=32, null=True, blank=True)
+    bounce_code = models.CharField(max_length=64, null=True, blank=True)
+    bounce_reason = models.TextField(null=True, blank=True)
 
     class Meta:
         unique_together = ('campaign', 'lead')

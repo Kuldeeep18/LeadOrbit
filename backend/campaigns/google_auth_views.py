@@ -8,25 +8,29 @@ Architecture notes:
   base model and explicit org assignment, since the callback request is
   unauthenticated (Google redirect).
 """
-import json
 import logging
 import requests
 from urllib.parse import urlencode, urlparse
+from datetime import timedelta
 
+from django.core import signing
 from django.conf import settings
+from django.db import transaction
 from django.shortcuts import redirect
 from django.utils import timezone
 from django.db.models import Q
-from datetime import timedelta
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from rest_framework import status
+from rest_framework import serializers, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
 from .models import ConnectedEmailAccount
 
 logger = logging.getLogger(__name__)
+
+GOOGLE_OAUTH_STATE_SALT = 'leadorbit-google-oauth-state'
+GOOGLE_OAUTH_STATE_MAX_AGE_SECONDS = 10 * 60
 
 
 def _is_local_host(hostname: str) -> bool:
@@ -63,6 +67,59 @@ def _frontend_settings_redirect(request, preferred_frontend_base: str = '', **pa
         frontend_base = f"{request.scheme}://{request.get_host()}"
     query_string = urlencode(params)
     return redirect(f"{frontend_base}/settings.html?{query_string}")
+
+
+def _serialize_connected_account(account):
+    return {
+        'id': str(account.id),
+        'email': account.email_address,
+        'provider': account.provider,
+        'provider_display': account.get_provider_display(),
+        'connected': True,
+        'supports_smtp': bool(account.smtp_host and account.smtp_port),
+        'supports_imap': bool(account.imap_host and account.imap_port),
+    }
+
+
+class CustomMailboxAccountSerializer(serializers.Serializer):
+    email_address = serializers.EmailField()
+    smtp_host = serializers.CharField(max_length=255)
+    smtp_port = serializers.IntegerField(min_value=1, max_value=65535)
+    smtp_username = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    smtp_password = serializers.CharField(required=False, allow_blank=True, write_only=True)
+    smtp_use_tls = serializers.BooleanField(required=False, default=True)
+    smtp_use_ssl = serializers.BooleanField(required=False, default=False)
+    imap_host = serializers.CharField(max_length=255)
+    imap_port = serializers.IntegerField(min_value=1, max_value=65535)
+    imap_username = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    imap_password = serializers.CharField(required=False, allow_blank=True, write_only=True)
+    imap_use_ssl = serializers.BooleanField(required=False, default=True)
+
+    def validate(self, attrs):
+        if attrs.get('smtp_use_ssl') and attrs.get('smtp_use_tls'):
+            raise serializers.ValidationError(
+                {'smtp_use_tls': 'Choose either SMTP SSL or STARTTLS, not both.'}
+            )
+        if not attrs.get('smtp_use_ssl') and not attrs.get('smtp_use_tls'):
+            raise serializers.ValidationError(
+                {'smtp_use_tls': 'Enable SMTP SSL or STARTTLS to protect credentials in transit.'}
+            )
+
+        email_address = attrs.get('email_address')
+        attrs['smtp_username'] = (attrs.get('smtp_username') or email_address).strip()
+        attrs['imap_username'] = (attrs.get('imap_username') or email_address).strip()
+
+        smtp_password = (attrs.get('smtp_password') or '').strip()
+        imap_password = (attrs.get('imap_password') or '').strip()
+        if not smtp_password:
+            raise serializers.ValidationError({'smtp_password': 'SMTP password is required.'})
+        if not imap_password:
+            raise serializers.ValidationError({'imap_password': 'IMAP password is required.'})
+
+        attrs['smtp_password'] = smtp_password
+        attrs['imap_password'] = imap_password
+        attrs['email_address'] = email_address.strip().lower()
+        return attrs
 
 
 class GoogleOAuthLoginView(APIView):
@@ -103,11 +160,11 @@ class GoogleOAuthLoginView(APIView):
 
         # Encode user identity in state so callback can link to correct user
         frontend_origin = _sanitize_frontend_base(request, request.GET.get('frontend_origin', ''))
-        state_data = json.dumps({
+        state_data = signing.dumps({
             'user_id': str(user.id),
             'org_id': str(user.organization_id),
             'frontend_origin': frontend_origin,
-        })
+        }, salt=GOOGLE_OAUTH_STATE_SALT)
 
         params = {
             'client_id': settings.GOOGLE_CLIENT_ID,
@@ -139,9 +196,13 @@ class GoogleOAuthCallbackView(APIView):
         frontend_origin = ''
         if state_raw:
             try:
-                state_data = json.loads(state_raw)
+                state_data = signing.loads(
+                    state_raw,
+                    salt=GOOGLE_OAUTH_STATE_SALT,
+                    max_age=GOOGLE_OAUTH_STATE_MAX_AGE_SECONDS,
+                )
                 frontend_origin = _sanitize_frontend_base(request, state_data.get('frontend_origin', ''))
-            except (json.JSONDecodeError, TypeError):
+            except (signing.BadSignature, signing.SignatureExpired, TypeError):
                 frontend_origin = ''
 
         oauth_error = request.GET.get('error')
@@ -175,7 +236,11 @@ class GoogleOAuthCallbackView(APIView):
 
         if state_raw:
             try:
-                state_data = json.loads(state_raw)
+                state_data = signing.loads(
+                    state_raw,
+                    salt=GOOGLE_OAUTH_STATE_SALT,
+                    max_age=GOOGLE_OAUTH_STATE_MAX_AGE_SECONDS,
+                )
                 user_id = state_data.get('user_id')
                 org_id = state_data.get('org_id')
                 frontend_origin = _sanitize_frontend_base(request, state_data.get('frontend_origin', ''))
@@ -188,7 +253,7 @@ class GoogleOAuthCallbackView(APIView):
                     logger.info(f"[OAuth Callback] Resolved user={user.email}, org={org.name}")
                 except (User.DoesNotExist, Organization.DoesNotExist) as e:
                     logger.warning(f"[OAuth Callback] Could not find user/org from state: {e}")
-            except (json.JSONDecodeError, KeyError, TypeError) as e:
+            except (signing.BadSignature, signing.SignatureExpired, KeyError, TypeError) as e:
                 logger.warning(f"[OAuth Callback] Failed to parse state parameter: {e}")
 
         if not user or not org:
@@ -343,6 +408,9 @@ class ConnectedAccountsListView(APIView):
     """
     GET /api/v1/connected-accounts/
     Returns the list of connected email accounts for the current user's org.
+
+    POST /api/v1/connected-accounts/
+    Creates or updates a custom SMTP/IMAP mailbox for the current user.
     """
     permission_classes = [IsAuthenticated]
 
@@ -374,13 +442,73 @@ class ConnectedAccountsListView(APIView):
 
         logger.info(f"[ConnectedAccounts] Found {len(deduped)} unique accounts for org {org.name}")
 
-        data = [
-            {
-                'id': str(a.id),
-                'email': a.email_address,
-                'provider': a.provider,
-                'connected': True,
-            }
-            for a in deduped
-        ]
+        data = [_serialize_connected_account(a) for a in deduped]
         return Response(data)
+
+    def post(self, request):
+        org = request.user.organization
+        if not org:
+            return Response(
+                {'detail': 'Organization context is required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        serializer = CustomMailboxAccountSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+
+        with transaction.atomic():
+            account, created = ConnectedEmailAccount._default_manager.update_or_create(
+                organization=org,
+                connected_by=request.user,
+                provider='CUSTOM',
+                email_address=payload['email_address'],
+                defaults={
+                    'access_token': '',
+                    'refresh_token': None,
+                    'token_expiry': None,
+                    'smtp_host': payload['smtp_host'].strip(),
+                    'smtp_port': payload['smtp_port'],
+                    'smtp_username': payload['smtp_username'],
+                    'smtp_password': payload['smtp_password'],
+                    'smtp_use_tls': payload.get('smtp_use_tls', True),
+                    'smtp_use_ssl': payload.get('smtp_use_ssl', False),
+                    'imap_host': payload['imap_host'].strip(),
+                    'imap_port': payload['imap_port'],
+                    'imap_username': payload['imap_username'],
+                    'imap_password': payload['imap_password'],
+                    'imap_use_ssl': payload.get('imap_use_ssl', True),
+                },
+            )
+
+        return Response(
+            _serialize_connected_account(account),
+            status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
+        )
+
+
+class ConnectedAccountDetailView(APIView):
+    """
+    DELETE /api/v1/connected-accounts/<uuid:account_id>/
+    Removes a connected email account owned by the current user.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def delete(self, request, account_id):
+        account = (
+            ConnectedEmailAccount._default_manager
+            .filter(
+                id=account_id,
+                organization=request.user.organization,
+            )
+            .filter(
+                Q(connected_by=request.user)
+                | Q(connected_by__isnull=True, email_address__iexact=request.user.email)
+            )
+            .first()
+        )
+        if not account:
+            return Response({'detail': 'Connected account not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+        account.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

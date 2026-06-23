@@ -1,0 +1,7 @@
+blank_issues_enabled: false
+
+contact_links:
+
+* name: 📖 Read the Documentation
+  url: https://github.com/Kuldeeep18/LeadOrbit/blob/main/README.md
+  about: Check the README before opening an issue.
