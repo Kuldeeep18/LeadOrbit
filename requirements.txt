@@ -13,3 +13,6 @@ google-auth-oauthlib>=1.2,<2.0
 firebase-admin>=6.5,<7.0
 twilio>=9.0,<10.0
 gunicorn>=20.1,<21.0
+
+playwright==1.49.0
+google-genai==0.1.1
