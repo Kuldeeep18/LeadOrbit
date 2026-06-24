@@ -207,6 +207,9 @@ LAUNCH_IMMEDIATE_PASSES = int(os.getenv('LAUNCH_IMMEDIATE_PASSES', '1' if DEBUG 
 # Email backend (console for dev)
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
 
+# CSV import safety cap to prevent large uploads from being read into memory.
+MAX_CSV_UPLOAD_SIZE = int(os.getenv('MAX_CSV_UPLOAD_SIZE', str(10 * 1024 * 1024)))
+
 # ─── Google OAuth2 / Gmail API ─────────────────────
 BACKEND_BASE_URL = os.getenv(
     'BACKEND_BASE_URL',
