@@ -57,7 +57,13 @@
                 </li>
             </ul>
             <div class="sidebar-footer small">
-                <span class="text-white opacity-75 user-display-name">Loading...</span>
+                <div class="sidebar-user-profile d-flex align-items-center gap-2">
+                    <div class="sidebar-avatar"></div>
+                    <div>
+                        <div class="user-display-name">Loading...</div>
+                        <div class="user-email text-white-50 small"></div>
+                    </div>
+                </div>
             </div>
         </aside>
 
@@ -71,6 +77,12 @@
                         <div class="page-title">Workspace Settings</div>
                         <div class="title-meta">Manage profile, organization, sender accounts, and AI personalization.</div>
                     </div>
+
+                    <div class="d-flex align-items-center gap-2">
+                        <div class="header-avatar"></div>
+                        <button id="logout-btn" class="btn btn-sm btn-logout">Logout</button>
+                    </div>
+
                     <button id="logout-btn" class="btn btn-sm btn-logout" aria-label="Log out">Logout</button>
                 </div>
             </header>
@@ -98,6 +110,18 @@
                             <div class="mb-3">
                                 <label class="form-label small text-muted fw-semibold">Role</label>
                                 <input type="text" class="form-control" id="profile-role" disabled>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small text-muted fw-semibold">First Name</label>
+                                <input type="text" class="form-control" id="first-name" placeholder="Jane">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small text-muted fw-semibold">Last Name</label>
+                                <input type="text" class="form-control" id="last-name" placeholder="Doe">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label small text-muted fw-semibold">Avatar URL</label>
+                                <input type="url" class="form-control" id="avatar-url" placeholder="https://example.com/avatar.png">
                             </div>
                             <div class="mb-3">
                                 <label class="form-label small text-muted fw-semibold">New Password</label>
@@ -422,6 +446,9 @@
                     const user = await res.json();
                     document.getElementById('profile-email').value = user.email;
                     document.getElementById('profile-role').value = user.role || 'ADMIN';
+                    document.getElementById('first-name').value = user.first_name || '';
+                    document.getElementById('last-name').value = user.last_name || '';
+                    document.getElementById('avatar-url').value = user.avatar_url || '';
                     if (user.organization) {
                         document.getElementById('org-name').value = user.organization.name;
                         document.getElementById('org-id').value = user.organization.id;
@@ -442,11 +469,22 @@
                 saveBtn.addEventListener('click', async () => {
                     const organization_name = document.getElementById('org-name').value.trim();
                     const new_password = document.getElementById('new-password').value;
+
+                    const first_name = document.getElementById('first-name').value.trim();
+                    const last_name = document.getElementById('last-name').value.trim();
+                    const avatar_url = document.getElementById('avatar-url').value.trim();
+
                     const gemini_api_key = document.getElementById('gemini-api-key').value.trim();
                     const enable_ai_personalization = document.getElementById('enable-ai-personalization').checked;
                     const payload = {};
                     if (organization_name) payload.organization_name = organization_name;
                     if (new_password) payload.new_password = new_password;
+
+                    if (first_name) payload.first_name = first_name;
+                    if (last_name) payload.last_name = last_name;
+                    if (avatar_url) payload.avatar_url = avatar_url;
+
+                    // 1. Run the "Nothing to update" check on the text fields first
                     if (Object.keys(payload).length === 0 && gemini_api_key === '' && enable_ai_personalization === true) {
                         alert('Nothing to update.');
                         return;

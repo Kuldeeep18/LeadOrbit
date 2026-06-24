@@ -30,7 +30,14 @@ class User(AbstractBaseUser, PermissionsMixin, TenantModel):
         (ROLE_LEGACY_USER, 'User'),
     )
     email = models.EmailField(unique=True)
+
+    first_name = models.CharField(max_length=100, blank=True, null=True)
+    last_name = models.CharField(max_length=100, blank=True, null=True)
+    avatar_url = models.URLField(blank=True, null=True)
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default='USER')
+
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default=ROLE_MEMBER)
+
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
 
