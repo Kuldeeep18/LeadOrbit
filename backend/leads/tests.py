@@ -140,6 +140,20 @@ class LeadIsolationAPITests(APITestCase):
         self.assertIn(self.lead_a.email, emails)
         self.assertNotIn(self.lead_b.email, emails)
 
+    def test_list_leads_uses_prefetched_tags(self):
+        hot = Tag.objects.create(organization=self.org_a, name='Hot')
+        archived = Tag.objects.create(organization=self.org_b, name='Archived')
+        LeadTag.objects.create(lead=self.lead_a, tag=hot, organization=self.org_a)
+        LeadTag.objects.create(lead=self.lead_b, tag=archived, organization=self.org_b)
+
+        self.client.force_authenticate(self.user_a)
+        with self.assertNumQueries(3):
+            response = self.client.get('/api/v1/leads/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['tags'][0]['name'], 'Hot')
+
     def test_create_lead_attaches_to_current_users_organization(self):
         self.client.force_authenticate(self.user_b)
         response = self.client.post(

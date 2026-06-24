@@ -30,7 +30,8 @@ class LeadSerializer(serializers.ModelSerializer):
         read_only_fields = ['organization', 'score']
 
     def get_tags(self, obj):
-        tags = Tag.objects.filter(tagged_leads__lead=obj)
+        lead_tags = list(obj.lead_tags.all())
+        tags = [lead_tag.tag for lead_tag in lead_tags]
         return TagSerializer(tags, many=True).data
 
     def _set_tags(self, lead, tag_ids):

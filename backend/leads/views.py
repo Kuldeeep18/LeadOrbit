@@ -78,7 +78,7 @@ class LeadViewSet(viewsets.ModelViewSet):
                 | Q(company__icontains=search)
             )
 
-        return qs.distinct()
+        return qs.prefetch_related('lead_tags__tag').distinct()
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization)
