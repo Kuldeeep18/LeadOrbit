@@ -55,7 +55,7 @@ Execution status by step type:
 
 - Backend: Django 5, Django REST Framework, Simple JWT, Celery, `django-cors-headers`
 - Frontend: static HTML pages, ES modules, Bootstrap 5, Chart.js
-- Database: SQLite by default at `backend/db.sqlite3`
+- Database: SQLite locally, PostgreSQL via `DATABASE_URL` in production
 - Integrations: Google OAuth/Gmail API, OpenRouter, Gemini, Twilio
 - Python target: `3.11.9` via [`runtime.txt`](runtime.txt)
 
@@ -127,7 +127,19 @@ GOOGLE_REDIRECT_URI=http://127.0.0.1:8000/api/v1/auth/google/callback
 TWILIO_ACCOUNT_SID=
 TWILIO_AUTH_TOKEN=
 TWILIO_PHONE_NUMBER=
+
+DATABASE_URL=
 ```
+
+#### Production database setup
+
+For production, set `DATABASE_URL` to a PostgreSQL connection string:
+
+```env
+DATABASE_URL=postgresql://USER:PASSWORD@DB_HOST:5432/leadorbit
+```
+
+When `DATABASE_URL` is not set, the app falls back to SQLite for local development.
 
 ### 3. Run migrations
 
@@ -281,7 +293,7 @@ Execution status by step type:
 
 - Backend: Django 5, Django REST Framework, Simple JWT, Celery, `django-cors-headers`
 - Frontend: static HTML pages, ES modules, Bootstrap 5, Chart.js
-- Database: SQLite by default at `backend/db.sqlite3`
+- Database: SQLite locally, PostgreSQL via `DATABASE_URL` in production
 - Integrations: Google OAuth/Gmail API, OpenRouter, Gemini, Twilio
 - Python target: `3.11.9` via [`runtime.txt`](runtime.txt)
 
@@ -353,7 +365,19 @@ GOOGLE_REDIRECT_URI=http://127.0.0.1:8000/api/v1/auth/google/callback
 TWILIO_ACCOUNT_SID=
 TWILIO_AUTH_TOKEN=
 TWILIO_PHONE_NUMBER=
+
+DATABASE_URL=
 ```
+
+#### Production database setup
+
+For production, set `DATABASE_URL` to a PostgreSQL connection string:
+
+```env
+DATABASE_URL=postgresql://USER:PASSWORD@DB_HOST:5432/leadorbit
+```
+
+When `DATABASE_URL` is not set, the app falls back to SQLite for local development.
 
 ### 3. Run migrations
 
