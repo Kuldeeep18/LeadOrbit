@@ -1,8 +1,12 @@
+from unittest.mock import patch
+
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from tenants.models import Organization
+from users.jwt import CustomTokenObtainSerializer
 from users.models import User
+from users.views import generate_email_verification_token
 
 
 class RegisterViewTests(APITestCase):
@@ -27,6 +31,82 @@ class RegisterViewTests(APITestCase):
 
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('email', response.data)
+
+    @patch('users.views.send_mail')
+    def test_register_sends_verification_email_without_tokens(self, mock_send_mail):
+        response = self.client.post(
+            '/api/v1/auth/register/',
+            {
+                'email': 'new@example.com',
+                'password': 'StrongPass123!',
+                'organization_name': 'New Org',
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertIn('message', response.data)
+        self.assertNotIn('access', response.data)
+        self.assertNotIn('refresh', response.data)
+        user = User.objects.get(email='new@example.com')
+        self.assertFalse(user.is_email_verified)
+        mock_send_mail.assert_called_once()
+        self.assertIn('email-verification.html?token=', mock_send_mail.call_args.args[1])
+
+    def test_verify_email_endpoint_marks_user_verified(self):
+        organization = Organization.objects.create(name='Verify Org')
+        user = User.objects.create_user(
+            email='verify@example.com',
+            password='StrongPass123!',
+            organization=organization,
+            role=User.ROLE_ADMIN,
+        )
+        token = generate_email_verification_token(user)
+
+        response = self.client.get(f'/api/v1/auth/verify-email/{token}/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        user.refresh_from_db()
+        self.assertTrue(user.is_email_verified)
+        self.assertEqual(response.data['detail'], 'Email verified successfully.')
+
+    def test_token_obtain_rejects_unverified_user(self):
+        organization = Organization.objects.create(name='Login Org')
+        User.objects.create_user(
+            email='login@example.com',
+            password='StrongPass123!',
+            organization=organization,
+            role=User.ROLE_ADMIN,
+        )
+
+        response = self.client.post(
+            '/api/v1/token/',
+            {'email': 'login@example.com', 'password': 'StrongPass123!'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('detail', response.data)
+
+    def test_token_obtain_allows_verified_user(self):
+        organization = Organization.objects.create(name='Verified Login Org')
+        user = User.objects.create_user(
+            email='verified@example.com',
+            password='StrongPass123!',
+            organization=organization,
+            role=User.ROLE_ADMIN,
+            is_email_verified=True,
+        )
+
+        response = self.client.post(
+            '/api/v1/token/',
+            {'email': user.email, 'password': 'StrongPass123!'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('access', response.data)
+        self.assertIn('refresh', response.data)
 
 
 class AuthMeViewTests(APITestCase):

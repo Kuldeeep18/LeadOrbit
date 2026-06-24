@@ -146,7 +146,17 @@ export const register = async (userData) => {
         body: JSON.stringify(userData)
     });
     if (!res.ok) throw new Error("Registration failed");
-    const data = await res.json();
-    setTokens(data.access, data.refresh);
+    return await res.json();
+};
+
+export const verifyEmail = async (token) => {
+    const res = await fetch(`${API_BASE}/auth/verify-email/${encodeURIComponent(token)}/`, {
+        method: 'GET',
+        headers: { 'Content-Type': 'application/json' },
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) {
+        throw new Error(data.detail || 'Email verification failed.');
+    }
     return data;
 };

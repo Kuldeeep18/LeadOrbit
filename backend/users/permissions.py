@@ -29,3 +29,11 @@ class IsOrgAdmin(RolePermission):
 class IsOrgManager(RolePermission):
     allowed_roles = frozenset({User.ROLE_ADMIN, User.ROLE_MANAGER})
     message = 'Only organization admins or managers can perform this action.'
+
+
+class IsEmailVerified(BasePermission):
+    message = 'Please verify your email before accessing the API.'
+
+    def has_permission(self, request, view):
+        user = getattr(request, 'user', None)
+        return bool(user and user.is_authenticated and getattr(user, 'is_email_verified', False))
