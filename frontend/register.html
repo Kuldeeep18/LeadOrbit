@@ -83,16 +83,14 @@
     </a>
 </div>
 
-                        <div class="mb-3">
-                            <a href="/" class="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-2">
-                                <span>&larr;</span>
-                                <span>Back to Home</span>
-                            </a>
-                        </div>
-
                         <div class="text-center mb-4">
                             <h2 class="brand-gradient mb-1" style="font-family: 'Sora', sans-serif; font-weight: 800; font-size: 2.5rem;">LeadOrbit</h2>
                             <p class="text-white-50 small">Create your account to get started.</p>
+                        </div>
+
+                        <div id="register-error" class="alert alert-danger alert-dismissible fade d-none mb-3" role="alert">
+                            <span id="register-error-message">Registration failed.</span>
+                            <button type="button" class="btn-close btn-close-white" aria-label="Close"></button>
                         </div>
 
                         <form aria-label="Registration form">
@@ -172,9 +170,30 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             const form = document.querySelector('form');
+            const errorBanner = document.getElementById('register-error');
+            const errorMessage = document.getElementById('register-error-message');
+            const closeButton = errorBanner?.querySelector('.btn-close');
+
+            const showError = (message) => {
+                if (!errorBanner || !errorMessage) return;
+                errorMessage.textContent = message;
+                errorBanner.classList.remove('d-none');
+                errorBanner.classList.add('show');
+            };
+
+            const clearError = () => {
+                if (!errorBanner || !errorMessage) return;
+                errorMessage.textContent = '';
+                errorBanner.classList.add('d-none');
+                errorBanner.classList.remove('show');
+            };
+
+            closeButton?.addEventListener('click', clearError);
+
             if (form) {
                 form.addEventListener('submit', async (e) => {
                     e.preventDefault();
+                    clearError();
 
                     const first_name = document.getElementById('firstName').value;
                     const last_name = document.getElementById('lastName').value;
@@ -194,7 +213,7 @@
 
                         window.location.href = '/dashboard.html';
                     } catch (err) {
-                        alert('Registration failed. Please try again.');
+                        showError(err?.message || 'Registration failed. Please try again.');
                         const btn = form.querySelector('button[type="submit"]');
                         btn.disabled = false;
                         btn.textContent = 'Sign Up';

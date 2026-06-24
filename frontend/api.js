@@ -105,6 +105,39 @@ const sendApiRequest = async (endpoint, options = {}, token = getAccessToken()) 
     }
 };
 
+const extractApiErrorMessage = async (response, fallbackMessage) => {
+    try {
+        const data = await response.json();
+        const candidates = [
+            data?.detail,
+            data?.message,
+            data?.error,
+            typeof data === 'string' ? data : null,
+        ];
+
+        for (const candidate of candidates) {
+            if (typeof candidate === 'string' && candidate.trim()) {
+                return candidate.trim();
+            }
+        }
+
+        if (data && typeof data === 'object') {
+            for (const value of Object.values(data)) {
+                if (Array.isArray(value) && value.length > 0) {
+                    const first = value[0];
+                    if (typeof first === 'string' && first.trim()) {
+                        return first.trim();
+                    }
+                }
+            }
+        }
+    } catch {
+        // Fall through to fallback message.
+    }
+
+    return fallbackMessage;
+};
+
 export const fetchWithAuth = async (endpoint, options = {}) => {
     const token = getAccessToken();
     let response = await sendApiRequest(endpoint, options, token);
@@ -133,7 +166,7 @@ export const login = async (email, password) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password })
     });
-    if (!res.ok) throw new Error("Login failed");
+    if (!res.ok) throw new Error(await extractApiErrorMessage(res, "Login failed. Please check your credentials."));
     const data = await res.json();
     setTokens(data.access, data.refresh);
     return data;
@@ -145,7 +178,7 @@ export const register = async (userData) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userData)
     });
-    if (!res.ok) throw new Error("Registration failed");
+    if (!res.ok) throw new Error(await extractApiErrorMessage(res, "Registration failed. Please try again."));
     const data = await res.json();
     setTokens(data.access, data.refresh);
     return data;

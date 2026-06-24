@@ -82,17 +82,15 @@
     </a>
 </div>
 
-                       <div class="mb-3">
-                            <a href="/" class="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-2">
-                                <span>&larr;</span>
-                                <span>Back to Home</span>
-                            </a>
-                        </div>
-                        
                         <div class="text-center mb-4">
                             <!-- Applied the premium brand gradient -->
                             <h2 class="brand-gradient mb-1" style="font-family: 'Sora', sans-serif; font-weight: 800; font-size: 2.5rem;">LeadOrbit</h2>
                             <p class="text-white-50 small">Welcome back! Please enter your details.</p>
+                        </div>
+
+                        <div id="login-error" class="alert alert-danger alert-dismissible fade d-none mb-3" role="alert">
+                            <span id="login-error-message">Login failed.</span>
+                            <button type="button" class="btn-close btn-close-white" aria-label="Close"></button>
                         </div>
 
                         <form aria-label="Login form">
@@ -155,9 +153,30 @@
 
         document.addEventListener('DOMContentLoaded', () => {
             const form = document.querySelector('form');
+            const errorBanner = document.getElementById('login-error');
+            const errorMessage = document.getElementById('login-error-message');
+            const closeButton = errorBanner?.querySelector('.btn-close');
+
+            const showError = (message) => {
+                if (!errorBanner || !errorMessage) return;
+                errorMessage.textContent = message;
+                errorBanner.classList.remove('d-none');
+                errorBanner.classList.add('show');
+            };
+
+            const clearError = () => {
+                if (!errorBanner || !errorMessage) return;
+                errorMessage.textContent = '';
+                errorBanner.classList.add('d-none');
+                errorBanner.classList.remove('show');
+            };
+
+            closeButton?.addEventListener('click', clearError);
+
             if (form) {
                 form.addEventListener('submit', async (e) => {
                     e.preventDefault();
+                    clearError();
                     const email = document.getElementById('floatingInput').value;
                     const password = document.getElementById('floatingPassword').value;
                     try {
@@ -167,7 +186,7 @@
                         await login(email, password);
                         window.location.href = '/dashboard.html';
                     } catch (err) {
-                        alert('Login failed. Please check your credentials.');
+                        showError(err?.message || 'Login failed. Please check your credentials.');
                         const btn = form.querySelector('button[type="submit"]');
                         btn.disabled = false;
                         btn.textContent = 'Sign In';
