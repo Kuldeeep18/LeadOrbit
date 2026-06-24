@@ -337,6 +337,16 @@
             display: none;
         }
 
+        .flow-node.dragging {
+            opacity: 0.55;
+            border-style: dashed;
+        }
+
+        .flow-node.drop-target {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+        }
+
         .template-library-modal.hidden {
             display: none;
         }
@@ -1243,6 +1253,7 @@
         let activeTab = 'sequence';
         let availableLeads = [];
         let selectedLeadIds = new Set();
+        let draggedStepIndex = null;
         let aiComposerStep = null;
         let aiConversation = [];
         let aiLatestDraft = null;
@@ -1303,6 +1314,33 @@
             const value = String(text).trim();
             if (value.length <= limit) return value;
             return `${value.slice(0, limit)}...`;
+        }
+
+        function reorderSteps(fromIndex, toIndex) {
+            if (fromIndex === toIndex) return;
+            if (fromIndex < 0 || toIndex < 0) return;
+            if (fromIndex >= steps.length || toIndex >= steps.length) return;
+
+            const [moved] = steps.splice(fromIndex, 1);
+            steps.splice(toIndex, 0, moved);
+
+            if (selectedNodeIndex === fromIndex) {
+                selectedNodeIndex = toIndex;
+            } else if (selectedNodeIndex > fromIndex && selectedNodeIndex <= toIndex) {
+                selectedNodeIndex -= 1;
+            } else if (selectedNodeIndex < fromIndex && selectedNodeIndex >= toIndex) {
+                selectedNodeIndex += 1;
+            }
+
+            if (addInsertIndex !== null) {
+                if (addInsertIndex === fromIndex) {
+                    addInsertIndex = toIndex;
+                } else if (addInsertIndex > fromIndex && addInsertIndex <= toIndex) {
+                    addInsertIndex -= 1;
+                } else if (addInsertIndex < fromIndex && addInsertIndex >= toIndex) {
+                    addInsertIndex += 1;
+                }
+            }
         }
 
         async function loadEmailTemplates() {
@@ -1816,7 +1854,7 @@ ${rows || `
                         step.type === 'CONDITION_REPLY' ? 'Replied to email' : 'Clicked link';
                     const timeLabel = step.condition_time || '1 day';
 
-                    html += `<div class="flow-node ${selectedNodeIndex === i ? 'selected' : ''}" data-index="${i}">
+                    html += `<div class="flow-node ${selectedNodeIndex === i ? 'selected' : ''}" data-index="${i}" draggable="true">
                         <div class="d-flex align-items-center gap-3">
                             <div class="node-icon ${info.cls}"><i class="bi ${info.icon}"></i></div>
                             <div>
@@ -1872,7 +1910,7 @@ ${rows || `
                             ? '<span class="badge rounded-pill text-bg-danger me-1">No path</span>'
                             : '');
 
-                    html += `<div class="flow-node ${selectedNodeIndex === i ? 'selected' : ''}" data-index="${i}">
+                    html += `<div class="flow-node ${selectedNodeIndex === i ? 'selected' : ''}" data-index="${i}" draggable="true">
                         <div class="d-flex align-items-center gap-3">
                             <div class="node-icon ${info.cls}"><i class="bi ${info.icon}"></i></div>
                             <div class="flex-grow-1">
@@ -1910,8 +1948,55 @@ ${rows || `
 
             // Attach click listeners
             canvas.querySelectorAll('.flow-node[data-index]').forEach(node => {
+                node.addEventListener('dragstart', (event) => {
+                    draggedStepIndex = parseInt(node.dataset.index);
+                    node.classList.add('dragging');
+                    event.dataTransfer.effectAllowed = 'move';
+                    event.dataTransfer.setData('text/plain', node.dataset.index);
+                });
+
+                node.addEventListener('dragend', () => {
+                    draggedStepIndex = null;
+                    canvas.querySelectorAll('.flow-node').forEach(item => item.classList.remove('dragging', 'drop-target'));
+                });
+
+                node.addEventListener('dragover', (event) => {
+                    if (draggedStepIndex === null) return;
+                    event.preventDefault();
+                    node.classList.add('drop-target');
+                    event.dataTransfer.dropEffect = 'move';
+                });
+
+                node.addEventListener('dragleave', () => {
+                    node.classList.remove('drop-target');
+                });
+
+                node.addEventListener('drop', async (event) => {
+                    event.preventDefault();
+                    node.classList.remove('drop-target');
+
+                    const fromIndex = draggedStepIndex;
+                    const toIndex = parseInt(node.dataset.index);
+                    if (fromIndex === null || Number.isNaN(fromIndex) || Number.isNaN(toIndex)) return;
+                    if (fromIndex === toIndex) return;
+
+                    reorderSteps(fromIndex, toIndex);
+                    draggedStepIndex = null;
+                    renderCanvas();
+                    renderEditor();
+
+                    if (campaignId) {
+                        try {
+                            await saveCampaign();
+                        } catch (error) {
+                            console.warn('Unable to persist reordered steps automatically.', error);
+                        }
+                    }
+                });
+
                 node.addEventListener('click', (e) => {
                     if (e.target.closest('[data-delete]')) return;
+                    if (draggedStepIndex !== null) return;
                     selectedNodeIndex = parseInt(node.dataset.index);
                     renderCanvas();
                     renderEditor();
@@ -2759,5 +2844,4 @@ document.getElementById('setting-daily-limit').value =
 </body>
 
 </html>
-
 
