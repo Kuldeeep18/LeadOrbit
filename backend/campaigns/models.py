@@ -39,6 +39,11 @@ class ConnectedEmailAccount(TenantModel):
     imap_password = EncryptedTextField(blank=True, null=True)
     imap_use_ssl = models.BooleanField(default=True)
 
+    warmup_enabled = models.BooleanField(default=False)
+    daily_sending_limit = models.PositiveIntegerField(default=20)
+    current_daily_count = models.PositiveIntegerField(default=0)
+    warmup_started_at = models.DateField(null=True, blank=True)
+
     class Meta:
         constraints = [
             models.UniqueConstraint(
