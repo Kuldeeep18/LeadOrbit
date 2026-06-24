@@ -4,6 +4,7 @@ from rest_framework.test import APITestCase
 
 from leads.models import BlockedDomain, Lead, Tag, LeadTag, LeadImportJob
 from leads.tasks import import_leads_from_csv
+from leads.views import _decode_csv_upload
 from tenants.models import Organization
 from users.models import User
 
@@ -65,6 +66,31 @@ class LeadImportTests(APITestCase):
                 'lead_source': 'Referral',
             },
         )
+
+    def test_decode_csv_upload_prefers_utf8_sig_then_detected_encoding_then_latin1(self):
+        utf8_bytes = '\ufeffemail\nutf8@example.com\n'.encode('utf-8')
+        decoded, encoding = _decode_csv_upload(utf8_bytes)
+        self.assertEqual(decoded, 'email\nutf8@example.com\n')
+        self.assertEqual(encoding, 'utf-8-sig')
+
+        cp1252_bytes = 'email\njosé@example.com\n'.encode('cp1252')
+        decoded, encoding = _decode_csv_upload(cp1252_bytes)
+        self.assertIn('josé@example.com', decoded)
+        self.assertIn(encoding.lower(), {'windows-1252', 'cp1252', 'iso-8859-1', 'latin-1'})
+
+    def test_import_records_source_encoding_on_job(self):
+        job = LeadImportJob.objects.create(
+            organization=self.organization,
+            filename='windows-export.csv',
+        )
+        csv_data = 'email,first_name\nmaría@example.com,María\n'.encode('cp1252').decode('cp1252')
+
+        import_leads_from_csv(csv_data, str(self.organization.id), str(job.id))
+
+        job.refresh_from_db()
+        self.assertTrue(job.source_encoding)
+        self.assertIn(job.source_encoding.lower(), {'windows-1252', 'cp1252', 'iso-8859-1', 'latin-1', 'utf-8-sig'})
+        self.assertTrue(Lead.objects.filter(organization=self.organization, email='maría@example.com').exists())
 
     def test_import_records_validation_errors_in_history_job(self):
         job = LeadImportJob.objects.create(
