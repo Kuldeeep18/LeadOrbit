@@ -78,7 +78,25 @@ class LeadViewSet(viewsets.ModelViewSet):
                 | Q(company__icontains=search)
             )
 
-        return qs.distinct()
+        min_score = params.get('min_score', '').strip()
+        if min_score:
+            try:
+                qs = qs.filter(score__gte=int(min_score))
+            except ValueError:
+                return qs.none()
+
+        max_score = params.get('max_score', '').strip()
+        if max_score:
+            try:
+                qs = qs.filter(score__lte=int(max_score))
+            except ValueError:
+                return qs.none()
+
+        sort_by = params.get('sort_by', '').strip()
+        if sort_by in {'score', '-score', 'created_at', '-created_at', 'email', '-email'}:
+            return qs.order_by(sort_by).distinct()
+
+        return qs.order_by('-created_at').distinct()
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization)
