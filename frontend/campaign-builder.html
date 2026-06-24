@@ -1227,6 +1227,41 @@
   </div>
 </div>
 
+<div class="modal fade" id="activationErrorModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Cannot Activate</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        Cannot activate campaign with no sequence steps.
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal fade" id="activationWarningModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">Confirm Activation</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        You are activating a campaign with 0 leads. Are you sure?
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="confirm-activation-btn">Yes, activate</button>
+      </div>
+    </div>
+  </div>
+</div>
+
     <script type="module" src="/main.js"></script>
     <script type="module">
         import { fetchWithAuth } from './api.js';
@@ -2612,6 +2647,25 @@ ${rows || `
 
         // Status toggle
         document.getElementById('status-toggle').addEventListener('click', function () {
+            if (this.classList.contains('off')) {
+                if (steps.length === 0) {
+                    const errModal = new bootstrap.Modal(document.getElementById('activationErrorModal'));
+                    errModal.show();
+                    return;
+                }
+                if (selectedLeadIds.size === 0) {
+                    const warnModal = new bootstrap.Modal(document.getElementById('activationWarningModal'));
+                    warnModal.show();
+                    
+                    document.getElementById('confirm-activation-btn').onclick = () => {
+                        warnModal.hide();
+                        this.classList.remove('off');
+                        this.classList.add('on');
+                        if (activeTab === 'launch') renderLaunchTab();
+                    };
+                    return;
+                }
+            }
             this.classList.toggle('on');
             this.classList.toggle('off');
             if (activeTab === 'launch') renderLaunchTab();
@@ -2730,18 +2784,18 @@ document.getElementById('setting-daily-limit').value =
 
         let graph = 'graph TD\n';
         steps.forEach((step, i) => {
-            const nodeId = step${i};
+            const nodeId = `step${i}`;
             if (step.type === 'condition' || step.type === 'CONDITION') {
-                graph +=     ${nodeId}{${step.name || 'Condition'}}\n;
+                graph += `    ${nodeId}{${step.name || 'Condition'}}\n`;
             } else {
-                graph +=     ${nodeId}[${step.name || 'Action'}]\n;
+                graph += `    ${nodeId}[${step.name || 'Action'}]\n`;
             }
             if (i < steps.length - 1) {
-                graph +=     ${nodeId} --> step${i+1}\n;
+                graph += `    ${nodeId} --> step${i+1}\n`;
             }
         });
         steps.forEach((step, i) => {
-            graph +=     click step${i} openStepDetail\n;
+            graph += `    click step${i} openStepDetail\n`;
         });
 
         document.getElementById('mermaidFlowchart').textContent = graph;
