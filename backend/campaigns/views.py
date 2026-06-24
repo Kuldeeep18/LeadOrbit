@@ -46,6 +46,27 @@ class CampaignViewSet(viewsets.ModelViewSet):
             .prefetch_related('steps', 'enrolled_leads')
         )
 
+    def _parse_leads_page_param(self, request, name, default, *, minimum, maximum=None):
+        raw_value = request.query_params.get(name)
+        if raw_value in (None, ''):
+            return default, None
+
+        try:
+            value = int(raw_value)
+        except (TypeError, ValueError):
+            return None, Response(
+                {
+                    'error': f'`{name}` must be an integer.',
+                    'param': name,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        value = max(minimum, value)
+        if maximum is not None:
+            value = min(maximum, value)
+        return value, None
+
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization)
 
@@ -269,8 +290,17 @@ class CampaignViewSet(viewsets.ModelViewSet):
         """Get paginated list of enrolled leads with metrics."""
         campaign = self.get_object()
         status_filter = request.query_params.get('status')
-        limit = int(request.query_params.get('limit', 50))
-        offset = int(request.query_params.get('offset', 0))
+        limit, error_response = self._parse_leads_page_param(
+            request, 'limit', 50, minimum=1, maximum=200
+        )
+        if error_response:
+            return error_response
+
+        offset, error_response = self._parse_leads_page_param(
+            request, 'offset', 0, minimum=0
+        )
+        if error_response:
+            return error_response
 
         leads_qs = campaign.enrolled_leads.select_related('lead').order_by('-updated_at')
 
