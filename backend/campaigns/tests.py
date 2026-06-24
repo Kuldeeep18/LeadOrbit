@@ -1878,6 +1878,192 @@ class CampaignWorkflowTests(APITestCase):
         mocked_send.assert_not_called()
 
 
+class CampaignLaunchTests(APITestCase):
+    def setUp(self):
+        self.organization = Organization.objects.create(name='LaunchCorp')
+        self.user = User.objects.create_user(
+            email='launcher@launchcorp.test',
+            password='StrongPass123!',
+            organization=self.organization,
+            role='ADMIN',
+        )
+        self.client.force_authenticate(self.user)
+
+        # A valid connected account owned by self.user
+        self.account = ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=self.user,
+            email_address='launcher@launchcorp.test',
+            provider='GOOGLE',
+            access_token='token',
+            refresh_token='refresh',
+        )
+
+    def _make_campaign(self, status='DRAFT', connected_account=None):
+        return Campaign.objects.create(
+            organization=self.organization,
+            name='Test Campaign',
+            status=status,
+            connected_account=connected_account,
+        )
+
+    def _enroll_lead(self, campaign, email='lead@launchcorp.test'):
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email=email,
+        )
+        CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='ENROLLED',
+        )
+        return lead
+
+    # ── Test 1: No connected account, zero leads ─────────────────────────────
+
+    def test_launch_without_connected_account_and_no_leads_returns_400(self):
+        """Campaign with no connected account and no leads should return 400."""
+        campaign = self._make_campaign()
+        response = self.client.post(f'/api/v1/campaigns/{campaign.id}/launch/', {}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('error', response.data)
+
+    # ── Test 2: Connected account from wrong organization ────────────────────
+
+    def test_launch_with_account_from_wrong_organization_returns_400(self):
+        """Connected account belonging to another org should return 400."""
+        other_org = Organization.objects.create(name='OtherOrg')
+        other_user = User.objects.create_user(
+            email='other@otherorg.test',
+            password='StrongPass123!',
+            organization=other_org,
+            role='ADMIN',
+        )
+        foreign_account = ConnectedEmailAccount.objects.create(
+            organization=other_org,
+            connected_by=other_user,
+            email_address='other@otherorg.test',
+            provider='GOOGLE',
+            access_token='token',
+            refresh_token='refresh',
+        )
+        campaign = self._make_campaign(connected_account=foreign_account)
+        self._enroll_lead(campaign)
+
+        response = self.client.post(f'/api/v1/campaigns/{campaign.id}/launch/', {}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('error', response.data)
+        campaign.refresh_from_db()
+        self.assertEqual(campaign.status, 'DRAFT')
+
+    # ── Test 3: Connected account owned by different user ────────────────────
+
+    def test_launch_with_account_owned_by_another_user_returns_400(self):
+        """Connected account owned by a teammate should return 400."""
+        teammate = User.objects.create_user(
+            email='teammate@launchcorp.test',
+            password='StrongPass123!',
+            organization=self.organization,
+            role='USER',
+        )
+        teammate_account = ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=teammate,
+            email_address='teammate@launchcorp.test',
+            provider='GOOGLE',
+            access_token='token',
+            refresh_token='refresh',
+        )
+        campaign = self._make_campaign(connected_account=teammate_account)
+        self._enroll_lead(campaign)
+
+        response = self.client.post(f'/api/v1/campaigns/{campaign.id}/launch/', {}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('error', response.data)
+        campaign.refresh_from_db()
+        self.assertEqual(campaign.status, 'DRAFT')
+
+    # ── Test 4: Zero enrolled leads ──────────────────────────────────────────
+
+    def test_launch_with_zero_enrolled_leads_returns_400(self):
+        """Campaign with no enrolled leads should return 400."""
+        campaign = self._make_campaign(connected_account=self.account)
+
+        response = self.client.post(f'/api/v1/campaigns/{campaign.id}/launch/', {}, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('error', response.data)
+        campaign.refresh_from_db()
+        self.assertEqual(campaign.status, 'DRAFT')
+
+    # ── Test 5: Valid setup → status ACTIVE, 200 ─────────────────────────────
+
+    @override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+    def test_launch_with_valid_setup_sets_status_active_and_returns_200(self):
+        """Valid campaign with account and enrolled leads should go ACTIVE."""
+        campaign = self._make_campaign(connected_account=self.account)
+        self._enroll_lead(campaign)
+
+        with patch('campaigns.tasks.process_active_leads.delay'):
+            response = self.client.post(f'/api/v1/campaigns/{campaign.id}/launch/', {}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        campaign.refresh_from_db()
+        self.assertEqual(campaign.status, 'ACTIVE')
+        self.assertIn('campaign_id', response.data)
+        self.assertIn('enrolled_leads', response.data)
+        self.assertEqual(response.data['enrolled_leads'], 1)
+
+    # ── Test 6: Already ACTIVE campaign ──────────────────────────────────────
+
+    @override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+    def test_launch_already_active_campaign_does_not_change_status(self):
+        """Launching an already ACTIVE campaign should keep it ACTIVE and return 200."""
+        campaign = self._make_campaign(status='ACTIVE', connected_account=self.account)
+        self._enroll_lead(campaign)
+
+        with patch('campaigns.tasks.process_active_leads.delay') as mocked_delay:
+            response = self.client.post(f'/api/v1/campaigns/{campaign.id}/launch/', {}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        campaign.refresh_from_db()
+        self.assertEqual(campaign.status, 'ACTIVE')
+        mocked_delay.assert_called_once()
+
+    # ── Test 7: CELERY_TASK_ALWAYS_EAGER mode ────────────────────────────────
+
+    @override_settings(CELERY_TASK_ALWAYS_EAGER=True, LAUNCH_IMMEDIATE_PASSES=1)
+    def test_launch_in_eager_mode_processes_leads_inline(self):
+        """In eager mode, leads should be processed inline without dispatching a task."""
+        campaign = self._make_campaign(status='DRAFT', connected_account=self.account)
+        self._enroll_lead(campaign)
+
+        with patch('campaigns.tasks.process_active_leads_once') as mocked_once:
+            mocked_once.return_value = 1
+            with patch('campaigns.tasks.process_active_leads.delay') as mocked_delay:
+                response = self.client.post(f'/api/v1/campaigns/{campaign.id}/launch/', {}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        mocked_once.assert_called_once()
+        mocked_delay.assert_not_called()
+        campaign.refresh_from_db()
+        self.assertEqual(campaign.status, 'ACTIVE')
+
+    # ── Test 8: Async mode → dispatches Celery task ──────────────────────────
+
+    @override_settings(CELERY_TASK_ALWAYS_EAGER=False)
+    def test_launch_in_async_mode_dispatches_celery_task(self):
+        """In async mode, process_active_leads.delay() should be called once."""
+        campaign = self._make_campaign(connected_account=self.account)
+        self._enroll_lead(campaign)
+
+        with patch('campaigns.tasks.process_active_leads.delay') as mocked_delay:
+            response = self.client.post(f'/api/v1/campaigns/{campaign.id}/launch/', {}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        mocked_delay.assert_called_once()
+
+
 @override_settings(
     GOOGLE_CLIENT_ID='test-google-client-id',
     GOOGLE_CLIENT_SECRET='test-google-client-secret',
