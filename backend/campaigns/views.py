@@ -2,6 +2,7 @@ import logging
 
 
 import urllib.parse
+from django.db import transaction
 from django.core.signing import Signer, BadSignature
 from django.http import HttpResponseRedirect, HttpResponseBadRequest
 # ------------------------------------------
@@ -327,6 +328,40 @@ class CampaignViewSet(viewsets.ModelViewSet):
                 "message": f"Processed {processed} campaign leads immediately.",
             },
             status=status.HTTP_200_OK,
+        )
+
+    @action(detail=True, methods=['post'])
+    def duplicate(self, request, pk=None):
+        campaign = self.get_object()
+
+        with transaction.atomic():
+            duplicate_campaign = Campaign.objects.create(
+                organization=campaign.organization,
+                name=f"Copy of {campaign.name}",
+                status='DRAFT',
+                settings=campaign.settings.copy() if isinstance(campaign.settings, dict) else campaign.settings,
+                connected_account=campaign.connected_account,
+            )
+
+            steps = list(campaign.steps.all())
+            if steps:
+                SequenceStep.objects.bulk_create([
+                    SequenceStep(
+                        organization=campaign.organization,
+                        campaign=duplicate_campaign,
+                        step_order=step.step_order,
+                        channel_type=step.channel_type,
+                        delay_minutes=step.delay_minutes,
+                        template_subject=step.template_subject,
+                        template_body=step.template_body,
+                    )
+                    for step in steps
+                ])
+
+        duplicate_campaign.refresh_from_db()
+        return Response(
+            CampaignSerializer(duplicate_campaign, context=self.get_serializer_context()).data,
+            status=status.HTTP_201_CREATED,
         )
 
 class SequenceStepViewSet(viewsets.ModelViewSet):

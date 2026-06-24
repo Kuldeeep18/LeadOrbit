@@ -217,6 +217,57 @@ class CampaignWorkflowTests(APITestCase):
                 self.assertEqual(steps[index].template_subject or '', subject)
                 self.assertEqual(steps[index].template_body or '', body)
 
+    def test_duplicate_campaign_clones_steps_without_enrolled_leads(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Q2 outreach',
+            status='ACTIVE',
+            settings={'timezone': 'Asia/Kolkata', 'steps': [{'type': 'EMAIL', 'subject': 'Draft'}]},
+        )
+        first_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Hello',
+            template_body='Body',
+        )
+        SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=2,
+            channel_type='WAIT',
+            delay_minutes=1440,
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='clone-me@acme.test',
+        )
+        CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='ENROLLED',
+        )
+
+        response = self.client.post(f'/api/v1/campaigns/{campaign.id}/duplicate/', format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        duplicate = Campaign.objects.exclude(id=campaign.id).get(name='Copy of Q2 outreach')
+        self.assertEqual(response.data['id'], str(duplicate.id))
+        self.assertEqual(duplicate.status, 'DRAFT')
+        self.assertEqual(duplicate.settings, campaign.settings)
+        self.assertEqual(duplicate.connected_account_id, campaign.connected_account_id)
+        self.assertEqual(duplicate.enrolled_leads.count(), 0)
+
+        duplicate_steps = list(duplicate.steps.order_by('step_order'))
+        self.assertEqual(len(duplicate_steps), 2)
+        self.assertEqual(duplicate_steps[0].channel_type, first_step.channel_type)
+        self.assertEqual(duplicate_steps[0].template_subject, first_step.template_subject)
+        self.assertEqual(duplicate_steps[1].channel_type, 'WAIT')
+        self.assertEqual(duplicate_steps[1].delay_minutes, 1440)
+
     def test_personalize_email_replaces_custom_variables(self):
         lead = Lead.objects.create(
             organization=self.organization,

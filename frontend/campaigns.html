@@ -370,6 +370,11 @@
                                     <a href="/campaign-builder.html?id=${campaign.id}" class="btn btn-sm btn-outline-primary flex-grow-1">
                                        <i class="bi bi-pencil me-1" aria-hidden="true"></i> Edit
                                     </a>
+                                    <button class="btn btn-sm btn-outline-secondary flex-grow-1"
+                                        data-duplicate-id="${campaign.id}"
+                                        data-duplicate-name="${escapeHtml(campaign.name || 'Untitled campaign')}">
+                                        <i class="bi bi-files me-1" aria-hidden="true"></i> Duplicate
+                                    </button>
                                     ${actionButton}
                                     <button class="btn btn-sm btn-outline-danger flex-grow-1"
                                         data-delete-id="${campaign.id}"
@@ -427,6 +432,35 @@
                     const modalEl = document.getElementById('deleteCampaignModal');
                     if (modalEl && window.bootstrap) {
                         bootstrap.Modal.getOrCreateInstance(modalEl).show();
+                    }
+                });
+            });
+
+            grid.querySelectorAll('[data-duplicate-id]').forEach(button => {
+                button.addEventListener('click', async () => {
+                    const campaignId = button.dataset.duplicateId;
+                    const originalLabel = button.innerHTML;
+
+                    button.disabled = true;
+                    button.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Copying';
+
+                    try {
+                        const res = await fetchWithAuth(`/campaigns/${campaignId}/duplicate/`, {
+                            method: 'POST',
+                        });
+
+                        if (!res.ok) {
+                            throw new Error('Failed to duplicate campaign.');
+                        }
+
+                        const duplicatedCampaign = await res.json();
+                        allCampaigns = [duplicatedCampaign, ...allCampaigns];
+                        renderApp();
+                    } catch (error) {
+                        alert(error.message || 'Could not duplicate campaign.');
+                    } finally {
+                        button.disabled = false;
+                        button.innerHTML = originalLabel;
                     }
                 });
             });

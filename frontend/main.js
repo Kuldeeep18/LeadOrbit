@@ -274,6 +274,14 @@ function initPasswordVisibilityToggle() {
     });
 }
 
+function initPasswordVisibilityToggleWhenReady() {
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initPasswordVisibilityToggle, { once: true });
+    } else {
+        initPasswordVisibilityToggle();
+    }
+}
+
 // ==========================================
 // FOOTER ATTRIBUTION
 // ==========================================
@@ -367,7 +375,6 @@ async function initAppShell() {
     appShellInitialized = true;
 
     initThemeToggle();
-    initPasswordVisibilityToggle();
     injectSessionTimeoutModal();
 
     document.addEventListener('click', (event) => {
@@ -464,6 +471,8 @@ if (document.readyState === 'loading') {
 } else {
     initAppShell();
 }
+
+initPasswordVisibilityToggleWhenReady();
 
 // ==========================================
 // KEYBOARD SHORTCUTS
