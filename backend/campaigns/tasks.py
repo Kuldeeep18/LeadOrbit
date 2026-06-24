@@ -6,7 +6,7 @@ from bs4 import BeautifulSoup
 from celery import shared_task
 from django.conf import settings as django_settings
 from django.core.signing import Signer
-from django.db.models import Q
+from django.db.models import Case, F, Q, When
 from django.utils import timezone
 
 from .ai import _apply_merge_tags, personalize_email
@@ -588,6 +588,30 @@ def send_email_step(campaign_lead_id, step_id):
         # -------------------------------------------
 
         account = clead.campaign.connected_account
+        if account and account.warmup_enabled:
+            # Record when warmup began (only set once).
+            if account.warmup_started_at is None:
+                ConnectedEmailAccount.objects.filter(id=account.id).update(
+                    warmup_started_at=timezone.now().date()
+                )
+
+            # NOTE: account.current_daily_count is a stale snapshot from select_related.
+            # Two concurrent workers may both pass this check and overshoot by 1-2 emails.
+            # This is acceptable for warmup; the F() increment below prevents lost updates.
+            if account.current_daily_count >= account.daily_sending_limit:
+                logger.info(
+                    f"Warmup limit reached for {account.email_address} "
+                    f"({account.current_daily_count}/{account.daily_sending_limit}). "
+                    f"Retrying in 1 hour."
+                )
+                # Set next_execution_time so the retry passes the atomic dedup guard below.
+                clead.next_execution_time = timezone.now() + timedelta(hours=1)
+                clead.save(update_fields=['next_execution_time'])
+                raise self.retry(countdown=3600)
+            ConnectedEmailAccount.objects.filter(id=account.id).update(
+                current_daily_count=F('current_daily_count') + 1
+            )
+
         if account:
             try:
                 if account.provider == 'GOOGLE':
@@ -614,6 +638,11 @@ def send_email_step(campaign_lead_id, step_id):
                 clead.save(update_fields=['last_sent_message_id'])
             except Exception as send_err:
                 logger.error(f"Email send failed for {clead.lead.email}: {send_err}")
+                if account.warmup_enabled:
+                    ConnectedEmailAccount.objects.filter(
+                        id=account.id,
+                        current_daily_count__gt=0,
+                    ).update(current_daily_count=F('current_daily_count') - 1)
                 # Restore next_execution_time so the lead can be retried later.
                 clead.next_execution_time = timezone.now() + timedelta(minutes=15)
                 clead.save(update_fields=['next_execution_time'])
@@ -862,3 +891,27 @@ def check_imap_bounces():
                     )
 
     return f"Processed {scanned_messages} bounce emails and marked {total_bounced} campaign leads as BOUNCED."
+
+
+@shared_task
+def warmup_daily_reset():
+    """
+    Daily periodic task that resets daily send counts and increments warmup limits.
+    Runs at midnight UTC via Celery Beat.
+    """
+    max_daily = getattr(django_settings, 'WARMUP_MAX_DAILY', 100)
+
+    reset_count = ConnectedEmailAccount.objects.update(current_daily_count=0)
+
+    warmed_up = ConnectedEmailAccount.objects.filter(warmup_enabled=True).update(
+        daily_sending_limit=Case(
+            When(daily_sending_limit__gte=max_daily, then=F('daily_sending_limit')),
+            default=F('daily_sending_limit') + 5,
+        )
+    )
+
+    logger.info(
+        f"Warmup daily reset: reset {reset_count} accounts, "
+        f"incremented {warmed_up} warmup accounts (max={max_daily})."
+    )
+    return f"Reset {reset_count} accounts, incremented {warmed_up} warmup accounts."

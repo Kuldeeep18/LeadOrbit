@@ -5,6 +5,7 @@ from pathlib import Path
 import os
 import re
 import sys
+from celery.schedules import crontab
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -170,6 +171,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'campaigns.tasks.poll_gmail_for_replies',
         'schedule': 300.0,
     },
+    'warmup-daily-reset': {
+        'task': 'campaigns.tasks.warmup_daily_reset',
+        'schedule': crontab(hour=0, minute=0),
+    },
 }
 
 # SimpleJWT Configuration
@@ -203,6 +208,9 @@ ENABLE_AUTO_BOUNCE_DETECTION = os.getenv(
 
 # Limit synchronous processing inside launch API calls to keep requests responsive.
 LAUNCH_IMMEDIATE_PASSES = int(os.getenv('LAUNCH_IMMEDIATE_PASSES', '1' if DEBUG else '0'))
+
+# Warmup: max daily sending limit for accounts with warmup enabled
+WARMUP_MAX_DAILY = int(os.getenv('WARMUP_MAX_DAILY', '100'))
 
 # Email backend (console for dev)
 EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
