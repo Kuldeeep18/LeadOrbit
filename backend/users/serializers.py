@@ -5,7 +5,7 @@ from tenants.models import Organization
 class OrganizationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Organization
-        fields = '__all__'
+        fields = ['id', 'name', 'billing_plan', 'created_at', 'enable_ai_personalization']
 
 class UserSerializer(serializers.ModelSerializer):
     organization = OrganizationSerializer(read_only=True)
