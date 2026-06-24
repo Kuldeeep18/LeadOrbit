@@ -1681,6 +1681,9 @@ class CampaignWorkflowTests(APITestCase):
         self.assertEqual(response.data['emails_sent'], 0)
         self.assertEqual(response.data['replied'], 0)
         self.assertEqual(response.data['campaign_stats'], [])
+        self.assertIn('benchmarks', response.data)
+        self.assertEqual(response.data['benchmarks']['open_rate'], 20.0)
+        self.assertEqual(response.data['benchmarks']['reply_rate'], 5.0)
 
         # org2 user should only see their own data
         self.client.force_authenticate(other_user)
@@ -1689,6 +1692,9 @@ class CampaignWorkflowTests(APITestCase):
         self.assertEqual(response.data['total_leads'], 1)
         self.assertEqual(response.data['active_campaigns'], 1)
         self.assertEqual(response.data['replied'], 1)
+        self.assertIn('benchmarks', response.data)
+        self.assertEqual(response.data['benchmarks']['open_rate'], 20.0)
+        self.assertEqual(response.data['benchmarks']['reply_rate'], 5.0)
 
     def test_dashboard_analytics_requires_authentication(self):
         self.client.force_authenticate(user=None)

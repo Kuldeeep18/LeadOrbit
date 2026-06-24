@@ -619,6 +619,10 @@ class DashboardAnalyticsView(APIView):
             'reply_rate': reply_rate,
             'click_rate': click_rate,
             'bounce_rate': bounce_rate,
+            'benchmarks': {
+                'open_rate': 20.0,
+                'reply_rate': 5.0,
+            },
             'time_series': {
                 'labels': labels,
                 'sent': sent_series,
