@@ -145,7 +145,20 @@ export const register = async (userData) => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(userData)
     });
-    if (!res.ok) throw new Error("Registration failed");
+    if (!res.ok) {
+        let message = 'Registration failed. Please try again.';
+        let responseData = null;
+        try {
+            responseData = await res.json();
+            message = responseData.detail || responseData.non_field_errors?.[0] || responseData.email?.[0] || message;
+        } catch {
+            // Keep the generic fallback when the backend does not return JSON.
+        }
+
+        const error = new Error(message);
+        error.responseData = responseData;
+        throw error;
+    }
     const data = await res.json();
     setTokens(data.access, data.refresh);
     return data;
