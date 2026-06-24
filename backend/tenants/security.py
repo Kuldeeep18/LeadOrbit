@@ -5,6 +5,8 @@ import time
 import logging
 from django.http import JsonResponse
 from django.utils.deprecation import MiddlewareMixin
+import redis
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +15,13 @@ class RateLimitMiddleware(MiddlewareMixin):
     Simple in-memory rate limiter for API endpoints.
     Limits each IP to a max number of requests per window.
     """
+    redis_client = redis.from_url(settings.REDIS_URL)
+    
+    RATE_LIMITS = {
+    "/api/v1/token/": (10, 60),
+    "/api/v1/auth/register/": (5, 60),
+    }
+    DEFAULT_LIMIT = (100, 60)
     # { ip_address: [timestamp1, timestamp2, ...] }
     _requests = {}
     MAX_REQUESTS = 100  # per window
@@ -23,22 +32,51 @@ class RateLimitMiddleware(MiddlewareMixin):
             return None
 
         ip = self._get_client_ip(request)
-        now = time.time()
 
-        # Clean old entries
-        if ip in self._requests:
-            self._requests[ip] = [t for t in self._requests[ip] if now - t < self.WINDOW_SECONDS]
-        else:
-            self._requests[ip] = []
+        limit, window = self.RATE_LIMITS.get(
+            request.path,
+            self.DEFAULT_LIMIT
+        )
 
-        if len(self._requests[ip]) >= self.MAX_REQUESTS:
-            logger.warning(f"Rate limit exceeded for IP: {ip}")
-            return JsonResponse(
-                {'error': 'Too many requests. Please slow down.'},
-                status=429
+        key = f"ratelimit:{request.path}:{ip}"
+
+        try:
+            client = self.redis_client
+            count = client.incr(key)
+
+            if count == 1:
+                client.expire(key, window)
+
+            if count > limit:
+                return JsonResponse(
+                    {"error": "Too many requests"},
+                    status=429
+                )
+
+        except Exception:
+            logger.warning(
+                "Redis unavailable, using fallback",
+                exc_info=True,
             )
 
-        self._requests[ip].append(now)
+            now = time.time()
+
+            if ip in self._requests:
+                self._requests[ip] = [
+                    t for t in self._requests[ip]
+                    if now - t < window
+                ]
+            else:
+                self._requests[ip] = []
+
+            if len(self._requests[ip]) >= limit:
+                return JsonResponse(
+                    {"error": "Too many requests"},
+                 status=429
+                )
+
+            self._requests[ip].append(now)
+
         return None
 
     def _get_client_ip(self, request):
