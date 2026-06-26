@@ -214,6 +214,37 @@ Core endpoints exposed by the current backend:
 
 ## Testing
 
+### Frontend E2E Tests (Playwright)
+
+**Prerequisites:** Node.js 18+
+
+**Install dependencies:**
+
+    cd frontend
+    npm install
+    npx playwright install --with-deps chromium
+
+**Run all E2E tests (single command):**
+
+    cd frontend
+    npm run test:e2e
+
+**Other commands:**
+
+    npm run test:e2e:headed   # Run with visible browser window
+    npm run test:e2e:debug    # Run in debug mode
+    npm run test:e2e:report   # View the last HTML test report
+
+**How it works:**
+- Tests live in frontend/tests/
+- API responses are mocked — no real backend needed
+- A lightweight static file server serves the frontend on port 8081
+- Tests cover 7 core user flows: Login, Registration, Dashboard, Campaigns, Leads, Settings
+
+**CI:** E2E tests run automatically on every PR targeting main via GitHub Actions (.github/workflows/e2e.yml).
+
+### Backend Tests
+
 Run the backend test suite from `backend/`:
 
 ```sh
@@ -440,6 +471,8 @@ Core endpoints exposed by the current backend:
 
 ## Testing
 
+
+
 Run the backend test suite from `backend/`:
 
 ```sh
@@ -469,3 +502,34 @@ Current repo state: `27` backend tests pass. The suite covers auth/profile updat
 Thanks to all contributors for their valuable efforts and support in making LeadOrbit better! ❤️
 
 [![Contributors](https://contrib.rocks/image?repo=Kuldeeep18/LeadOrbit)](https://github.com/Kuldeeep18/LeadOrbit/graphs/contributors)
+### Frontend E2E Tests (Playwright)
+
+**Prerequisites:** Node.js 18+
+
+**Install dependencies:**
+```bash
+cd frontend
+npm install
+npx playwright install --with-deps chromium
+```
+
+**Run all E2E tests (single command):**
+```bash
+cd frontend
+npm run test:e2e
+```
+
+**Other commands:**
+```bash
+npm run test:e2e:headed   # Run with visible browser window
+npm run test:e2e:debug    # Run in debug mode (step through tests)
+npm run test:e2e:report   # View the last HTML test report
+```
+
+**How it works:**
+- Tests live in `frontend/tests/`
+- API responses are mocked via Playwright's `page.route()` — no real backend needed
+- A lightweight static file server (`static-server.js`) serves the frontend on port 8081
+- Tests cover 7 core user flows: Login, Registration, Dashboard, Campaigns, Leads, Settings, and Campaign Builder
+
+**CI:** E2E tests run automatically on every PR targeting `main` via GitHub Actions (`.github/workflows/e2e.yml`).

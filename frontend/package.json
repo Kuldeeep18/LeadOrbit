@@ -1,0 +1,19 @@
+{
+  "name": "frontend",
+  "version": "1.0.0",
+  "description": "LeadOrbit frontend E2E tests",
+  "scripts": {
+    "serve": "node static-server.js",
+    "test:e2e": "node run-tests.js",
+    "test:e2e:headed": "node run-tests.js --headed",
+    "test:e2e:debug": "node_modules/.bin/playwright test --debug",
+    "test:e2e:report": "node_modules/.bin/playwright show-report"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "devDependencies": {
+    "@playwright/test": "^1.61.0",
+    "http-server": "^14.1.1"
+  }
+}
