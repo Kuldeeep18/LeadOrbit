@@ -4,9 +4,11 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from users.permissions import IsOrgManager
-from .models import BlockedDomain, Lead, LeadImportJob, Tag, LeadTag
-from .serializers import BlockedDomainSerializer, LeadImportJobSerializer, LeadSerializer, TagSerializer
+from .models import BlockedDomain, Lead, LeadImportJob, Tag, LeadTag, LeadScrapeJob
+from .serializers import BlockedDomainSerializer, LeadImportJobSerializer, LeadSerializer, TagSerializer, LeadScrapeJobSerializer
 
+from django.utils import timezone
+from datetime import timedelta
 
 class LeadImportJobPagination(PageNumberPagination):
     page_size = 10
@@ -23,6 +25,9 @@ class LeadViewSet(viewsets.ModelViewSet):
         'delete_all',
         'import_csv',
         'assign_tags',
+        'scrape_leads',
+        'scrape_status',
+        'scrape_history',
     })
 
     def get_permissions(self):
@@ -116,6 +121,74 @@ class LeadViewSet(viewsets.ModelViewSet):
             },
             status=status.HTTP_202_ACCEPTED,
         )
+    
+    @action(detail=False, methods=['post'], url_path='scrape')
+    def scrape_leads(self, request):
+        org = request.user.organization
+        query = request.data.get('query', '').strip()
+        limit = request.data.get('limit', 50)
+
+        if not query:
+            return Response({"error": "Search query is required."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Ensure limit is an integer and within the 1 to 200 safety bound
+        try:
+            limit = int(limit)
+            if limit < 1 or limit > 200:
+                return Response({"error": "Limit must be between 1 and 200."}, status=status.HTTP_400_BAD_REQUEST)
+        except (ValueError, TypeError):
+            return Response({"error": "Limit must be a valid number."}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Safety Check 1: Limit to 1 concurrent scrape job per organization
+        if LeadScrapeJob.objects.filter(organization=org, status__in=['PENDING', 'RUNNING']).exists():
+            return Response({
+                "error": "Your organization already has an active lead scraping job running."
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Safety Check 2: Cooldown period of 5 minutes between completed scrape jobs
+        five_minutes_ago = timezone.now() - timedelta(minutes=5)
+        recent_job = LeadScrapeJob.objects.filter(
+            organization=org, 
+            status='COMPLETED', 
+            completed_at__gte=five_minutes_ago
+        ).exists()
+        
+        if recent_job:
+            return Response({
+                "error": "Please wait 5 minutes between lead generation requests."
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+        # Create the tracking job model cleanly
+        job = LeadScrapeJob.objects.create(
+            organization=org,
+            query=query,
+            limit=limit,
+            status='PENDING'
+        )
+
+        # Delay import to avoid circular dependency issues at runtime
+        from .tasks import scrape_leads_task
+        scrape_leads_task.delay(job.id, query, limit, org.id)
+
+        return Response({
+            "message": "AI Lead Generation background agent launched successfully.",
+            "job_id": str(job.id)
+        }, status=status.HTTP_201_CREATED)
+
+    @action(detail=False, methods=['get'], url_path='scrape/(?P<job_id>[^/.]+)/status')
+    def scrape_status(self, request, job_id=None):
+        try:
+            job = LeadScrapeJob.objects.get(organization=request.user.organization, id=job_id)
+            serializer = LeadScrapeJobSerializer(job)
+            return Response(serializer.data, status=status.HTTP_200_OK)
+        except LeadScrapeJob.DoesNotExist:
+            return Response({"error": "Scrape job not found."}, status=status.HTTP_404_NOT_FOUND)
+
+    @action(detail=False, methods=['get'], url_path='scrape_history')
+    def scrape_history(self, request):
+        jobs = LeadScrapeJob.objects.filter(organization=request.user.organization).order_by('-created_at')
+        serializer = LeadScrapeJobSerializer(jobs, many=True)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
     @action(detail=True, methods=['post'], url_path='tags')
     def assign_tags(self, request, pk=None):

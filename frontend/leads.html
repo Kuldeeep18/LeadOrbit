@@ -203,29 +203,15 @@
                         <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#uploadModal">
                             <i class="bi bi-upload me-1" aria-hidden="true"></i> Import CSV
                         </button>
+                        <button class="btn btn-outline-info me-2" data-bs-toggle="modal" data-bs-target="#aiScrapeModal">
+                            <i class="bi bi-robot me-1" aria-hidden="true"></i> Generate Leads with AI
+                        </button>
                         <button id="logout-btn" class="btn btn-sm btn-logout" aria-label="Log out">Logout</button>
                     </div>
                 </div>
             </header>
             
-            <nav aria-label="breadcrumb" class="mt-2 px-3">
-                <ol class="breadcrumb small">
-                    <li class="breadcrumb-item">
-                        <a href="dashboard.html">Dashboard</a>
-                    </li>
-                    <li class="breadcrumb-item active" aria-current="page">
-                         Leads
-                    </li>
-                </ol>
-            </nav>
 
-            <!-- Breadcrumb Navigation -->
-            <nav aria-label="breadcrumb" class="container mt-3">
-                <ol class="breadcrumb">
-                    <li class="breadcrumb-item"><a href="/dashboard.html">Home</a></li>
-                    <li class="breadcrumb-item active" aria-current="page">Leads</li>
-                </ol>
-            </nav>
 
             <section class="content-wrap">
                 <!-- KPI Cards -->
@@ -444,7 +430,143 @@
             </div>
         </div>
     </div>
+<!-- AI BROWSER EXTRACTION MODAL (FIXED TAB TOGGLING & BLUE ACTIVE OVERRIDES) -->
+<div class="modal fade" id="aiScrapeModal" data-bs-backdrop="static" tabindex="-1" aria-labelledby="aiScrapeModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-md modal-dialog-centered">
+        <div class="modal-content rounded-3 shadow border-0 text-white" style="background-color: #0b1329; font-family: 'Manrope', sans-serif;">
+            
+            <!-- Explicit styles to kill Bootstrap's default blue override on active tabs
+            <style>
+                /* 1. Reset all buttons inside the navigation layout container */
+                #aiScrapeModal ul#scrapeTabs .nav-link {
+                    color: rgba(255, 255, 255, 0.5) !important;
+                    background: transparent !important;
+                    background-color: transparent !important;
+                    border: none !important;
+                }
+                
+                /* 2. Target ONLY the active button to turn teal (Notice the extra 'button' tag here) */
+                #aiScrapeModal ul#scrapeTabs .nav-link.active,
+                #aiScrapeModal ul#scrapeTabs .nav-link[aria-selected="true"] {
+                color: #ffffff !important;
+                background-color: #14b8a6 !important;
+            }
+            </style> -->
+            <style>
+                /* 1. Base style for both tab links (Unselected State) */
+                #aiScrapeModal ul#scrapeTabs button.nav-link {
+                    color: rgba(255, 255, 255, 0.5) !important;
+                    background: transparent !important;
+                    background-color: transparent !important;
+                    border: none !important;
+                    width: 100% !important;
+                }
+                
+                /* 2. Force ONLY the genuinely active tab to turn teal based on its aria selection state */
+                #aiScrapeModal ul#scrapeTabs button.nav-link[aria-selected="true"] {
+                    color: #ffffff !important;
+                    background-color: #14b8a6 !important;
+                }
+                
+                /* 3. Keep the layout background clean */
+                #aiScrapeModal ul#scrapeTabs {
+                    background-color: #070a14 !important;
+                    display: flex !important;
+                    width: 100% !important;
+                }
+                #aiScrapeModal ul#scrapeTabs .nav-item {
+                    flex: 1 1 auto !important;
+                    text-align: center !important;
+                }
+            </style>
+            <div class="modal-header border-0 px-4 pt-4 pb-2">
+                <div>
+                    <h5 class="modal-title fw-bold d-flex align-items-center text-white" id="aiScrapeModalLabel">
+                        <i class="bi bi-robot me-2" style="color: #14b8a6;"></i> AI-Driven Browser Agent
+                    </h5>
+                    <div class="text-white-50 small mt-1">Configure parameters to deploy autonomous extraction clusters.</div>
+                </div>
+                <button type="button" class="btn-close btn-close-white shadow-none align-self-start" data-bs-dismiss="modal" aria-label="Close" id="closeScrapeModalBtn"></button>
+            </div>
+            
+            <div class="modal-body p-4">
+                <!-- Nav Tabs with native target controls restored -->
+                <ul class="nav nav-pills nav-justified p-1 rounded-3 mb-4" id="scrapeTabs" role="tablist" style="background-color: #070a14;">
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link active fw-bold small text-uppercase tracking-wider py-2" id="agent-tab" data-bs-toggle="tab" data-bs-target="#agent-panel" type="button" role="tab" aria-controls="agent-panel" aria-selected="true" style="border-radius: 6px;">
+                            Deploy Agent
+                        </button>
+                    </li>
+                    <li class="nav-item" role="presentation">
+                        <button class="nav-link fw-bold small text-uppercase tracking-wider py-2" id="history-tab" data-bs-toggle="tab" data-bs-target="#history-panel" type="button" role="tab" aria-controls="history-panel" aria-selected="false" onclick="loadScrapeHistory()" style="border-radius: 6px;">
+                            Scrape History
+                        </button>
+                    </li>
+                </ul>
 
+                <div class="tab-content" id="scrapeTabsContent">
+                    <!-- Agent Tab Panel -->
+                    <div class="tab-pane fade show active" id="agent-panel" role="tabpanel" aria-labelledby="agent-tab">
+                        <form id="aiScrapeForm">
+                            <div class="mb-3">
+                                <label for="scrapeQuery" class="form-label small fw-bold text-white-50 text-uppercase tracking-wide">Search Query / Target Profiles</label>
+                                <input type="text" class="form-control px-3 py-2 rounded-2 text-white border-0" id="scrapeQuery" placeholder="e.g., Software startups in Austin, TX" required style="background-color: #111a36;">
+                                <div class="form-text text-white-50 mt-1 fs-7">Describe the exact industry, niche, or location to discover.</div>
+                            </div>
+                            
+                            <div class="mb-4">
+                                <label for="scrapeLimit" class="form-label small fw-bold text-white-50 text-uppercase tracking-wide">Target Record Limit</label>
+                                <input type="number" class="form-control px-3 py-2 rounded-2 text-white border-0" id="scrapeLimit" min="1" max="200" value="50" required style="background-color: #111a36;">
+                                <div class="form-text text-white-50 mt-1 fs-7">Maximum 200 leads per execution cycle.</div>
+                            </div>
+
+                            <div class="d-grid mt-4">
+                                <button type="submit" class="btn fw-bold py-2 rounded-2 text-white shadow-sm" id="submitAgentBtn" style="background-color: #14b8a6;">
+                                    <i class="bi bi-cpu me-2"></i> Deploy Extraction Agent
+                                </button>
+                            </div>
+                        </form>
+
+                        <div id="scrapeLiveStatusPanel" class="d-none mt-4 p-3 border-0 rounded-3" style="background-color: #111a36;">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <div id="liveStatusText" class="small fw-semibold d-flex align-items-center" style="color: #14b8a6;">
+                                    <span class="spinner-border spinner-border-sm me-2"></span>Initializing sandbox clusters...
+                                </div>
+                                <div class="badge border border-secondary px-2.5 py-1 text-white rounded-pill" id="liveCountText" style="background-color: #070a14;">0 parsed</div>
+                            </div>
+                            <div class="progress rounded-pill" style="height: 6px; background-color: #070a14;">
+                                <div id="liveProgressBar" class="progress-bar progress-bar-striped progress-bar-animated rounded-pill" role="progressbar" style="width: 15%; background-color: #14b8a6;"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- History Tab Panel -->
+                    <div class="tab-pane fade" id="history-panel" role="tabpanel" aria-labelledby="history-tab">
+                        <div class="table-responsive border-0 rounded-3" style="max-height: 300px; background-color: #111a36;">
+                            <table class="table table-dark table-hover align-middle small mb-0 w-100" style="--bs-table-bg: transparent;">
+                                <thead style="background-color: #070a14;">
+                                    <tr>
+                                        <th class="px-3 py-2 text-white-50 text-uppercase fw-bold fs-7 border-0">Target Query</th>
+                                        <th class="px-3 py-2 text-white-50 text-uppercase fw-bold fs-7 border-0">Leads</th>
+                                        <th class="px-3 py-2 text-white-50 text-uppercase fw-bold fs-7 border-0">Status</th>
+                                        <th class="px-3 py-2 text-white-50 text-uppercase fw-bold fs-7 border-0">Timestamp</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="scrapeHistoryTableBody" class="border-0">
+                                    <tr>
+                                        <td colspan="4" class="text-center text-white-50 py-4 border-0">Loading system logs...</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+</div>
+</div>
     <script type="module" src="./main.js"></script>
     <script type="module">
         import { fetchWithAuth } from './api.js';
@@ -846,44 +968,221 @@
                 }
             });
 
-            document.getElementById('upload-form').addEventListener('submit', async (e) => {
-                e.preventDefault();
-                const fileInput = document.getElementById('csv-file');
-                if (!fileInput.files.length) return;
+const uploadForm = document.getElementById('upload-form');
+            if (uploadForm) {
+                uploadForm.addEventListener('submit', async function (e) {
+                    e.preventDefault();
+                    const btn = document.getElementById('upload-btn');
+                    const statusEl = document.getElementById('uploadStatus');
+                    const fileInput = document.getElementById('csvFile');
 
-                const btn = document.getElementById('upload-btn');
-                const statusEl = document.getElementById('upload-status');
+                    if (!fileInput.files.length) return;
 
-                btn.disabled = true;
-                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span> Uploading...';
-                const formData = new FormData();
-                formData.append('file', fileInput.files[0]);
+                    btn.disabled = true;
+                    statusEl.innerHTML = '<span class="text-info"><i class="bi bg-spinner me-1"></i>Uploading...</span>';
 
+                    const formData = new FormData();
+                    formData.append('file', fileInput.files[0]);
+
+                    try {
+                        const res = await fetchWithAuth('/leads/import_csv/', {
+                            method: 'POST',
+                            body: formData,
+                        });
+
+                        if (res.status === 202) {
+                            statusEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>File uploaded. Processing now...</span>';
+                            await loadLeads();
+                            await loadImportHistory();
+                            fileInput.value = '';
+                            bootstrap.Modal.getOrCreateInstance(document.getElementById('uploadModal')).hide();
+                        } else {
+                            statusEl.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle me-1" aria-hidden="true"></i>Upload failed.</span>';
+                        }
+                    } catch (err) {
+                        statusEl.innerHTML = `<span class="text-danger">Error: ${err.message}</span>`;
+                    } finally {
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="bi bi-cloud-upload me-1" aria-hidden="true"></i> Upload and Process';
+                    }
+                });
+            }
+        });
+
+        // ==========================================
+        // AI BROWSER EXTRACTION CONTROL ENGINE
+        // ==========================================
+        let scrapePollInterval = null;
+
+        // Form submission to trigger AI generation
+        document.getElementById('aiScrapeForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const query = document.getElementById('scrapeQuery').value.trim();
+            const limit = parseInt(document.getElementById('scrapeLimit').value);
+            const btn = document.getElementById('submitAgentBtn');
+            const statusPanel = document.getElementById('scrapeLiveStatusPanel');
+            const closeBtn = document.getElementById('closeScrapeModalBtn');
+            
+            if (!query) return;
+
+            btn.disabled = true;
+            closeBtn.disabled = true;
+            btn.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span>Spawning Browser Sandbox...`;
+            
+            statusPanel.classList.remove('d-none');
+            document.getElementById('liveStatusText').innerHTML = `<span class="spinner-border spinner-border-sm text-info me-2"></span>Deploying AI extraction workers...`;
+            document.getElementById('liveCountText').textContent = "0 records found";
+            document.getElementById('liveProgressBar').style.width = "15%";
+            document.getElementById('liveProgressBar').className = "progress-bar progress-bar-striped progress-bar-animated bg-info";
+
+            try {
+                const response = await fetchWithAuth('/leads/scrape/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ query: query, limit: limit })
+                });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || "Failed to initialize pipeline.");
+                }
+
+                startScrapeJobPolling(data.job_id);
+
+            } catch (err) {
+                if (scrapePollInterval) clearInterval(scrapePollInterval);
+                document.getElementById('liveStatusText').innerHTML = `<i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>Deployment Aborted: ${err.message}`;
+                document.getElementById('liveProgressBar').style.width = "100%";
+                document.getElementById('liveProgressBar').className = "progress-bar bg-danger";
+                btn.disabled = false;
+                closeBtn.disabled = false;
+                btn.innerHTML = `<i class="bi bi-cpu me-1"></i> Re-Deploy AI Browser Agent`;
+            }
+        });
+
+        // Safe Polling Loop Execution
+        function startScrapeJobPolling(jobId) {
+            if (scrapePollInterval) clearInterval(scrapePollInterval);
+            
+            const statusText = document.getElementById('liveStatusText');
+            const countText = document.getElementById('liveCountText');
+            const bar = document.getElementById('liveProgressBar');
+            const btn = document.getElementById('submitAgentBtn');
+            const closeBtn = document.getElementById('closeScrapeModalBtn');
+
+            scrapePollInterval = setInterval(async () => {
                 try {
-                    const res = await fetchWithAuth('/leads/import_csv/', {
-                        method: 'POST',
-                        body: formData,
-                    });
+                    const response = await fetchWithAuth(`/leads/scrape/${jobId}/status/`);
+                    
+                    if (!response.ok) {
+                        console.warn(`Connection status error: ${response.status}`);
+                        return; 
+                    }
 
-                    if (res.status === 202) {
-                        statusEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>File uploaded. Processing now...</span>';
+                    const data = await response.json();
+
+                    if (data.status === 'RUNNING' || data.status === 'PENDING') {
+                        statusText.innerHTML = `<span class="spinner-border spinner-border-sm text-info me-2"></span>Agent actively processing web sources and executing structured extraction...`;
+                        countText.textContent = `${data.leads_found || 0} leads parsed`;
+                        bar.style.width = '65%';
+                    } else if (data.status === 'COMPLETED') {
+                        clearInterval(scrapePollInterval);
+                        statusText.innerHTML = `<i class="bi bi-check-circle-fill text-success me-2"></i>Sequence complete! Successfully extracted records.`;
+                        countText.textContent = `${data.leads_found || 0} leads added`;
+                        bar.style.width = '100%';
+                        bar.className = "progress-bar bg-success";
+                        
+                        btn.disabled = false;
+                        closeBtn.disabled = false;
+                        btn.innerHTML = `<i class="bi bi-cpu me-1"></i> Deploy AI Browser Agent`;
+                        
+                        document.getElementById('scrapeQuery').value = '';
                         await loadLeads();
-                        await loadImportHistory();
-                        fileInput.value = '';
-                        bootstrap.Modal.getOrCreateInstance(document.getElementById('uploadModal')).hide();
-                    } else {
-                        statusEl.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle me-1" aria-hidden="true"></i>Upload failed.</span>';
+                    } else if (data.status === 'FAILED') {
+                        clearInterval(scrapePollInterval);
+                        statusText.innerHTML = `<i class="bi bi-exclamation-triangle-fill text-danger me-2"></i>Error: ${data.error_message || 'Sandbox timeout'}`;
+                        bar.style.width = '100%';
+                        bar.className = "progress-bar bg-danger";
+                        
+                        btn.disabled = false;
+                        closeBtn.disabled = false;
+                        btn.innerHTML = `<i class="bi bi-cpu me-1"></i> Re-Deploy AI Browser Agent`;
                     }
                 } catch (err) {
-                    statusEl.innerHTML = `<span class="text-danger">Error: ${err.message}</span>`;
-                } finally {
-                    btn.disabled = false;
-                    btn.innerHTML = '<i class="bi bi-cloud-upload me-1" aria-hidden="true"></i> Upload and Process';
+                    console.error('Polling metrics exception:', err);
                 }
+            }, 3000);
+        }
+
+        
+        // Fetch and Render Scrape History Records with safe date formatting
+        async function loadScrapeHistory() {
+            const tbody = document.getElementById('scrapeHistoryTableBody');
+            if (!tbody) return;
+            
+            try {
+                const response = await fetchWithAuth('/leads/scrape_history/');
+                if (!response.ok) throw new Error("Could not fetch history data.");
+                
+                const data = await response.json();
+                
+                if (!data || data.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="4" class="text-center text-muted py-4 border-0" style="background-color: #090d16 !important;">No historical tracking entries found.</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = data.map(job => {
+                    let badgeClass = 'bg-secondary';
+                    if (job.status === 'COMPLETED') badgeClass = 'bg-success';
+                    if (job.status === 'RUNNING' || job.status === 'PENDING') badgeClass = 'bg-info text-dark';
+                    if (job.status === 'FAILED') badgeClass = 'bg-danger';
+
+                    // Fallback string manipulation to ensure safe parsing of ISO/Django strings
+                    let dateStr = "Recent";
+                    if (job.created_at) {
+                        const parsedDate = new Date(job.created_at);
+                        if (!isNaN(parsedDate.getTime())) {
+                            dateStr = parsedDate.toLocaleString();
+                        } else {
+                            // Secondary fallback parser for alternative serialization structures
+                            dateStr = job.created_at.replace('T', ' ').split('.')[0] || job.created_at;
+                        }
+                    }
+
+                    return `
+                        <tr style="background-color: #090d16 !important;">
+                            <td class="px-3 py-3 fw-semibold text-info" style="border-bottom: 1px solid #1f2937 !important;">${escapeHtml(job.query)}</td>
+                            <td class="px-3 py-3" style="border-bottom: 1px solid #1f2937 !important;"><span class="badge bg-black border border-secondary text-light">${job.leads_found || 0}</span></td>
+                            <td class="px-3 py-3" style="border-bottom: 1px solid #1f2937 !important;"><span class="badge ${badgeClass}">${job.status}</span></td>
+                            <td class="px-3 py-3 text-muted text-nowrap fs-7" style="border-bottom: 1px solid #1f2937 !important; color: #9ca3af !important;">${dateStr}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="4" class="text-center text-danger py-4 border-0" style="background-color: #090d16 !important;">Error fetching tracking logs: ${err.message}</td></tr>`;
+            }
+        }
+
+        const historyTabButton = document.getElementById('history-tab');
+        if (historyTabButton) {
+            historyTabButton.addEventListener('shown.bs.tab', function () {
+                loadScrapeHistory();
             });
+        }
+        
+
+        // Clear poll interval completely if user explicitly closes the modal out early
+        document.getElementById('aiScrapeModal').addEventListener('hidden.bs.modal', function () {
+            if (scrapePollInterval) {
+                clearInterval(scrapePollInterval);
+            }
+            const statusPanel = document.getElementById('scrapeLiveStatusPanel');
+            if (statusPanel) statusPanel.classList.add('d-none');
         });
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
-
 </html>

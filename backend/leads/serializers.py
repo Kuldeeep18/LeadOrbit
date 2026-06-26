@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.core.exceptions import ValidationError as DjangoValidationError
 
 from .models import BlockedDomain, Lead, LeadImportJob, Tag, LeadTag, validate_domain
-
+from .models import LeadScrapeJob
 
 class TagSerializer(serializers.ModelSerializer):
     class Meta:
@@ -104,3 +104,19 @@ class BlockedDomainSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({'domain': 'This domain is already blocked.'})
 
         return attrs
+
+class LeadScrapeJobSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LeadScrapeJob
+        fields = [
+            'id',
+            'query',
+            'limit',
+            'status',
+            'leads_found',
+            'error_message',
+            'started_at',
+            'completed_at',
+            'created_at',
+        ]
+        read_only_fields = ['id', 'status', 'leads_found', 'error_message', 'started_at', 'completed_at', 'created_at']
