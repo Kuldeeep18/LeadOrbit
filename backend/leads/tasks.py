@@ -174,3 +174,103 @@ def import_leads_from_csv(file_contents, organization_id, job_id=None):
     summary = f"Processed {leads_created} new, {leads_updated} updated, {failed_count} failed for organization {org.name}"
     logger.info(summary)
     return summary
+
+
+import json
+from django.utils import timezone
+import google.generativeai as genai
+from .models import LeadScrapeJob, Lead
+
+
+logger = logging.getLogger(__name__)
+
+@shared_task
+def scrape_leads_task(job_id, query, limit, organization_id):
+    try:
+        # 1. Update the job status to RUNNING
+        job = LeadScrapeJob.objects.get(id=job_id)
+        job.status = 'RUNNING'
+        job.started_at = timezone.now()
+        job.save()
+
+        org = Organization.objects.get(id=organization_id)
+
+        # 2. Configure the Gemini model
+        # Using gemini-2.0-flash as specified in the issue architecture requirements
+        model = genai.GenerativeModel('gemini-2.5-flash')
+        
+        prompt = f"""
+        You are an advanced automated B2B lead generation assistant.
+        Generate exactly {limit} highly realistic business or professional leads matching the prospecting query: "{query}".
+        
+        Return the response strictly as a JSON array containing objects with the following keys:
+        - first_name (string or null)
+        - last_name (string or null)
+        - email (string, must be a valid email structure)
+        - company (string or null)
+        - phone (string, include country code if possible, or null)
+        - linkedin_url (string, valid LinkedIn URL format, or null)
+        
+        Do not wrap the response in markdown code blocks like ```json ... ```. Output raw JSON only.
+        """
+
+        # 3. Call the API
+        response = model.generate_content(prompt)
+        
+        # Clean response text in case markdown tags sneaked in
+        clean_text = response.text.strip()
+        if clean_text.startswith("```json"):
+            clean_text = clean_text[7:]
+        if clean_text.endswith("```"):
+            clean_text = clean_text[:-3]
+        clean_text = clean_text.strip()
+
+        leads_data = json.loads(clean_text)
+        
+        if not isinstance(leads_data, list):
+            raise ValueError("Gemini did not return a valid list array of leads.")
+
+        leads_created = 0
+
+        # 4. Filter and process records dynamically
+        for item in leads_data:
+            email = (item.get('email') or '').strip().lower()
+            if not email:
+                continue
+
+            # Deduplicate against existing emails within this specific organization tenant
+            if Lead.objects.filter(organization=org, email=email).exists():
+                continue
+
+            # Safely build standard parameters and provide structural defaults
+            # Including 'custom_variables' fixes the NOT NULL constraint failure mentioned in the PR feedback
+            Lead.objects.create(
+                organization_id=organization_id,
+                email=email,
+                first_name=item.get('first_name'),
+                last_name=item.get('last_name'),
+                company=item.get('company'),
+                phone=item.get('phone'),
+                linkedin_url=item.get('linkedin_url'),
+                custom_variables={}
+            )
+            leads_created += 1
+
+        # 5. Finalize status tracking model
+        job.status = 'COMPLETED'
+        job.leads_found = leads_created
+        job.completed_at = timezone.now()
+        job.save()
+
+        logger.info(f"Scrape job {job_id} finalized successfully. Found {leads_created} records.")
+
+    except Exception as e:
+        logger.exception(f"AI Lead Scraper crashed for job {job_id}")
+        try:
+            job = LeadScrapeJob.objects.get(id=job_id)
+            job.status = 'FAILED'
+            job.error_message = str(e)
+            job.completed_at = timezone.now()
+            job.save()
+        except Exception:
+            pass
