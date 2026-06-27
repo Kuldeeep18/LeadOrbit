@@ -34,18 +34,21 @@ class LeadSerializer(serializers.ModelSerializer):
         return TagSerializer(tags, many=True).data
 
     def _set_tags(self, lead, tag_ids):
-        """Replace the lead's tags with the given list of Tag UUIDs."""
         org = lead.organization
         tags = Tag.objects.filter(id__in=tag_ids, organization=org)
-        # Remove tags not in the new set
         LeadTag.objects.filter(lead=lead).exclude(tag__in=tags).delete()
-        # Add new tags that are not already assigned
         existing_tag_ids = set(
             LeadTag.objects.filter(lead=lead).values_list('tag_id', flat=True)
         )
-        for tag in tags:
-            if tag.id not in existing_tag_ids:
-                LeadTag.objects.create(lead=lead, tag=tag, organization=org)
+        new_tags = [tag for tag in tags if tag.id not in existing_tag_ids]
+        duplicate_tags = [tag for tag in tags if tag.id in existing_tag_ids]
+        if duplicate_tags:
+            duplicate_names = [tag.name for tag in duplicate_tags]
+            raise serializers.ValidationError(
+                {"tag_ids": f"Tags already assigned to this lead: {', '.join(duplicate_names)}"}
+            )
+        for tag in new_tags:
+            LeadTag.objects.create(lead=lead, tag=tag, organization=org)
 
     def create(self, validated_data):
         tag_ids = validated_data.pop('tag_ids', None)
