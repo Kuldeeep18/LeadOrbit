@@ -4,6 +4,7 @@ Django settings for backend project.
 from pathlib import Path
 import os
 import re
+import sys
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -50,6 +51,11 @@ def _normalize_google_redirect_uri(raw_uri: str, backend_base_url: str) -> str:
 
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-fallback-key-change-me')
 DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes')
+TESTING = 'test' in sys.argv
+MAILBOX_CREDENTIALS_ENCRYPTION_KEY = os.getenv(
+    'MAILBOX_CREDENTIALS_ENCRYPTION_KEY',
+    'fallback-insecure-key-for-local-dev-and-testing' if (DEBUG or TESTING) else '',
+)
 ALLOWED_HOSTS = ['*']
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
@@ -156,6 +162,10 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'campaigns.tasks.process_active_leads',
         'schedule': 60.0,
     },
+    'check-imap-bounces-every-5-minutes': {
+        'task': 'campaigns.tasks.check_imap_bounces',
+        'schedule': 300.0,
+    },
     'poll-gmail-replies-every-5-minutes': {
         'task': 'campaigns.tasks.poll_gmail_for_replies',
         'schedule': 300.0,
@@ -185,6 +195,10 @@ OPENROUTER_APP_NAME = os.getenv('OPENROUTER_APP_NAME', _read_local_env_value('OP
 ENABLE_AUTO_REPLY_DETECTION = os.getenv(
     'ENABLE_AUTO_REPLY_DETECTION',
     'false',
+).lower() in ('true', '1', 'yes')
+ENABLE_AUTO_BOUNCE_DETECTION = os.getenv(
+    'ENABLE_AUTO_BOUNCE_DETECTION',
+    'true',
 ).lower() in ('true', '1', 'yes')
 
 # Limit synchronous processing inside launch API calls to keep requests responsive.

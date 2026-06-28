@@ -10,7 +10,9 @@ class CustomTokenObtainPairView(BaseTokenObtainPairView):
     serializer_class = CustomTokenObtainSerializer
 
 from users.views import AuthViewSet
-from leads.views import BlockedDomainViewSet, LeadViewSet, TagViewSet
+from leads.views import BlockedDomainViewSet, LeadImportJobViewSet, LeadViewSet, TagViewSet
+
+
 from campaigns.views import (
     CampaignViewSet,
     SequenceStepViewSet,
@@ -18,9 +20,15 @@ from campaigns.views import (
     WebhookView,
     DashboardAnalyticsView,
     AIGenerateView,
-    unsubscribe_view
+    unsubscribe_view,
+    ClickTrackingView
 )
-from campaigns.google_auth_views import GoogleOAuthLoginView, GoogleOAuthCallbackView, ConnectedAccountsListView
+from campaigns.google_auth_views import (
+    GoogleOAuthLoginView,
+    GoogleOAuthCallbackView,
+    ConnectedAccountsListView,
+    ConnectedAccountDetailView,
+)
 
 
 def api_root(_request):
@@ -33,6 +41,7 @@ def api_root(_request):
 router = DefaultRouter()
 router.register(r'auth', AuthViewSet, basename='auth')
 router.register(r'leads', LeadViewSet, basename='leads')
+router.register(r'lead-import-jobs', LeadImportJobViewSet, basename='lead-import-jobs')
 router.register(r'tags', TagViewSet, basename='tags')
 router.register(r'blocked-domains', BlockedDomainViewSet, basename='blocked-domains')
 router.register(r'campaigns', CampaignViewSet, basename='campaigns')
@@ -46,13 +55,18 @@ urlpatterns = [
     path('api/v1/webhooks/email/', WebhookView.as_view(), name='email_webhook'),
     path('api/v1/analytics/dashboard/', DashboardAnalyticsView.as_view(), name='dashboard_analytics'),
     path('api/v1/campaigns/ai-generate/', AIGenerateView.as_view(), name='ai_generate'),
+    
+    
+    path('api/v1/clicks/track/', ClickTrackingView.as_view(), name='click-tracking'),
+    # --------------------------------------------------------
+
     # Google OAuth
     path('api/v1/auth/google/login', GoogleOAuthLoginView.as_view(), name='google_oauth_login'),
     path('api/v1/auth/google/callback', GoogleOAuthCallbackView.as_view(), name='google_oauth_callback'),
     path('auth/google/login', GoogleOAuthLoginView.as_view(), name='google_oauth_login_fallback'),
     path('auth/google/callback', GoogleOAuthCallbackView.as_view(), name='google_oauth_callback_fallback'),
     path('api/v1/connected-accounts/', ConnectedAccountsListView.as_view(), name='connected_accounts'),
+    path('api/v1/connected-accounts/<uuid:account_id>/', ConnectedAccountDetailView.as_view(), name='connected_account_detail'),
     path('api/v1/unsubscribe/<uuid:lead_id>/<str:token>/', unsubscribe_view, name='unsubscribe'),
     path('api/v1/', include(router.urls)),
 ]
-

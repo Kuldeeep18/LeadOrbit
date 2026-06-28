@@ -10,6 +10,7 @@ google-generativeai>=0.8,<0.9
 google-api-python-client>=2.154,<3.0
 google-auth>=2.36,<3.0
 google-auth-oauthlib>=1.2,<2.0
+cryptography>=48.0.1
 firebase-admin>=6.5,<7.0
 twilio>=9.0,<10.0
 gunicorn>=20.1,<21.0

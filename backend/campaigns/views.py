@@ -1,11 +1,18 @@
 import logging
 
+
+import urllib.parse
+from django.core.signing import Signer, BadSignature
+from django.http import HttpResponseRedirect, HttpResponseBadRequest
+# ------------------------------------------
+
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
 from leads.models import Lead
+from users.permissions import IsOrgManager
 
 from .models import Campaign, CampaignLead, SequenceStep, EmailTemplate
 from .serializers import CampaignSerializer, SequenceStepSerializer, EmailTemplateSerializer
@@ -15,6 +22,22 @@ logger = logging.getLogger(__name__)
 class CampaignViewSet(viewsets.ModelViewSet):
     serializer_class = CampaignSerializer
     queryset = Campaign.objects.all()
+    manager_actions = frozenset({
+        'create',
+        'update',
+        'partial_update',
+        'destroy',
+        'enroll',
+        'launch',
+        'pause',
+        'resume',
+    })
+
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.action in self.manager_actions:
+            permissions.append(IsOrgManager())
+        return permissions
 
     def get_queryset(self):
         return (
@@ -43,8 +66,17 @@ class CampaignViewSet(viewsets.ModelViewSet):
                 enrolled_count += 1
             except Lead.DoesNotExist:
                 continue
-                
-        return Response({"message": f"Successfully enrolled {enrolled_count} leads."}, status=status.HTTP_200_OK)
+        
+        # Refresh campaign to get updated cached counters from signals
+        campaign.refresh_from_db()
+        
+        return Response(
+            {
+                "message": f"Successfully enrolled {enrolled_count} leads.",
+                "total_enrolled": campaign.leads_count,
+            },
+            status=status.HTTP_200_OK
+        )
 
     @action(detail=True, methods=['post'])
     def launch(self, request, pk=None):
@@ -65,7 +97,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
             except ConnectedEmailAccount.DoesNotExist:
                 return Response(
                     {
-                        "error": "Connected email account not found. Please reconnect your Gmail account in Settings.",
+                        "error": "Connected email account not found. Please reconnect your sender account in Settings.",
                         "campaign_id": str(campaign.id),
                     },
                     status=status.HTTP_400_BAD_REQUEST,
@@ -92,13 +124,13 @@ class CampaignViewSet(viewsets.ModelViewSet):
                 return Response(
                     {
                         "error": "Selected sender account belongs to another user. "
-                                 "Choose your own connected Gmail account before launch.",
+                                 "Choose your own connected email account before launch.",
                         "campaign_id": str(campaign.id),
                     },
                     status=status.HTTP_400_BAD_REQUEST,
                 )
 
-        enrolled_count = campaign.enrolled_leads.count()
+        enrolled_count = campaign.leads_count
         if enrolled_count == 0:
             return Response(
                 {
@@ -192,9 +224,121 @@ class CampaignViewSet(viewsets.ModelViewSet):
             status=status.HTTP_200_OK,
         )
 
+    @action(detail=True, methods=['get'])
+    def metrics(self, request, pk=None):
+        """Get comprehensive campaign performance metrics."""
+        campaign = self.get_object()
+        enrolled_leads = campaign.enrolled_leads.all()
+        total = enrolled_leads.count()
+
+        if total == 0:
+            return Response({
+                'total_leads': 0,
+                'active': 0,
+                'replied': 0,
+                'bounced': 0,
+                'opened': 0,
+                'clicked': 0,
+                'engagement_rate': 0,
+                'conversion_rate': 0,
+                'click_through_rate': 0,
+            })
+
+        active = enrolled_leads.filter(status='ACTIVE').count()
+        replied = enrolled_leads.filter(status='REPLIED').count()
+        bounced = enrolled_leads.filter(status='BOUNCED').count()
+        opened = enrolled_leads.filter(last_opened_at__isnull=False).count()
+        clicked = enrolled_leads.filter(last_clicked_at__isnull=False).count()
+
+        return Response({
+            'campaign_id': str(campaign.id),
+            'campaign_name': campaign.name,
+            'total_leads': total,
+            'active': active,
+            'replied': replied,
+            'bounced': bounced,
+            'opened': opened,
+            'clicked': clicked,
+            'engagement_rate': round((opened / total * 100) if total > 0 else 0, 2),
+            'conversion_rate': round((replied / total * 100) if total > 0 else 0, 2),
+            'click_through_rate': round((clicked / total * 100) if total > 0 else 0, 2),
+        })
+
+    @action(detail=True, methods=['get'])
+    def leads(self, request, pk=None):
+        """Get paginated list of enrolled leads with metrics."""
+        campaign = self.get_object()
+        status_filter = request.query_params.get('status')
+        limit = int(request.query_params.get('limit', 50))
+        offset = int(request.query_params.get('offset', 0))
+
+        leads_qs = campaign.enrolled_leads.select_related('lead').order_by('-updated_at')
+
+        if status_filter:
+            leads_qs = leads_qs.filter(status=status_filter)
+
+        total = leads_qs.count()
+        leads_data = []
+
+        for cl in leads_qs[offset:offset+limit]:
+            leads_data.append({
+                'lead_id': str(cl.lead.id),
+                'email': cl.lead.email,
+                'status': cl.status,
+                'current_step': cl.current_step.step_order if cl.current_step else None,
+                'last_sent_at': cl.last_sent_message_id,
+                'last_opened_at': cl.last_opened_at.isoformat() if cl.last_opened_at else None,
+                'last_clicked_at': cl.last_clicked_at.isoformat() if cl.last_clicked_at else None,
+                'last_replied_at': cl.last_replied_at.isoformat() if cl.last_replied_at else None,
+                'next_execution': cl.next_execution_time.isoformat() if cl.next_execution_time else None,
+            })
+
+        return Response({
+            'campaign_id': str(campaign.id),
+            'total_leads': total,
+            'offset': offset,
+            'limit': limit,
+            'leads': leads_data,
+        })
+
+    @action(detail=True, methods=['post'])
+    def process_now(self, request, pk=None):
+        """Immediately process all pending leads in the campaign."""
+        from .tasks import process_active_leads_once
+
+        campaign = self.get_object()
+
+        if campaign.status != 'ACTIVE':
+            return Response(
+                {
+                    "error": "Campaign must be active to process leads.",
+                    "campaign_id": str(campaign.id),
+                    "status": campaign.status,
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        processed = process_active_leads_once()
+
+        return Response(
+            {
+                "success": True,
+                "processed_leads": processed,
+                "message": f"Processed {processed} campaign leads immediately.",
+            },
+            status=status.HTTP_200_OK,
+        )
+
 class SequenceStepViewSet(viewsets.ModelViewSet):
     serializer_class = SequenceStepSerializer
     queryset = SequenceStep.objects.all()
+    manager_actions = frozenset({'create', 'update', 'partial_update', 'destroy'})
+
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.action in self.manager_actions:
+            permissions.append(IsOrgManager())
+        return permissions
 
     def get_queryset(self):
         return SequenceStep.objects.filter(organization=self.request.user.organization)
@@ -226,19 +370,60 @@ class WebhookView(APIView):
     to track opens, clicks, bounces.
     """
     permission_classes = [AllowAny] # Webhooks need to be publicly accessible
+
+    @staticmethod
+    def _extract_bounce_details(payload):
+        bounce_payload = payload.get('bounce')
+        if not isinstance(bounce_payload, dict):
+            bounce_payload = {}
+
+        bounce_type = (
+            payload.get('bounce_type')
+            or bounce_payload.get('type')
+            or bounce_payload.get('bounce_type')
+            or payload.get('type')
+            or ''
+        )
+        bounce_code = (
+            payload.get('code')
+            or bounce_payload.get('code')
+            or bounce_payload.get('smtp_code')
+            or bounce_payload.get('status')
+            or ''
+        )
+        bounce_reason = (
+            payload.get('reason')
+            or payload.get('description')
+            or bounce_payload.get('reason')
+            or bounce_payload.get('description')
+            or bounce_payload.get('detail')
+            or payload.get('message')
+            or ''
+        )
+
+        return {
+            'bounce_type': str(bounce_type).strip().lower() or None,
+            'bounce_code': str(bounce_code).strip() or None,
+            'bounce_reason': str(bounce_reason).strip() or None,
+        }
     
     def post(self, request, *args, **kwargs):
         event_type = (request.data.get('event') or '').strip().lower()
         lead_email = request.data.get('email')
         message_id = request.data.get('message_id') or request.data.get('messageId')
+        bounce_details = self._extract_bounce_details(request.data)
         
         # Simple MVP tracking
         if event_type and lead_email:
             try:
+                tracked_statuses = ['ACTIVE', 'ENROLLED']
+                if event_type in {'bounce', 'reply'} and message_id:
+                    tracked_statuses.append('FINISHED')
+
                 # Find active campaign lead matching this email
                 base_qs = CampaignLead.objects.filter(
                     lead__email=lead_email,
-                    status__in=['ACTIVE', 'ENROLLED'],
+                    status__in=tracked_statuses,
                 )
                 if message_id:
                     base_qs = base_qs.filter(last_sent_message_id=message_id)
@@ -250,12 +435,18 @@ class WebhookView(APIView):
                     _execute_condition_click_step,
                     _execute_condition_open_step,
                     _execute_condition_reply_step,
+                    _mark_campaign_lead_bounced,
                 )
 
                 for cl in cleads:
                     if event_type == 'bounce':
-                        cl.status = 'BOUNCED'
-                        cl.save(update_fields=['status'])
+                        _mark_campaign_lead_bounced(
+                            cl,
+                            now=now,
+                            bounce_type=bounce_details['bounce_type'],
+                            bounce_code=bounce_details['bounce_code'],
+                            bounce_reason=bounce_details['bounce_reason'],
+                        )
                     elif event_type == 'reply':
                         cl.last_replied_at = now
                         # Only hard-stop if there is no reply-yes branch configured.
@@ -286,6 +477,11 @@ class WebhookView(APIView):
                     e,
                 )
                 
+                return Response(
+                    {"error": "Webhook processing failed"},
+                    status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                )
+                            
         return Response({"status": "received"}, status=status.HTTP_200_OK)
 
 class DashboardAnalyticsView(APIView):
@@ -298,7 +494,7 @@ class DashboardAnalyticsView(APIView):
     def get(self, request, *args, **kwargs):
         from django.utils import timezone
         from datetime import timedelta
-        from django.db.models import Count, Q
+        from django.db.models import Count, Q, Sum
         from django.db.models.functions import TruncDate
 
         org = getattr(request.user, 'organization', None)
@@ -317,15 +513,21 @@ class DashboardAnalyticsView(APIView):
 
         cutoff = timezone.now() - timedelta(days=days)
 
-        # ── Aggregate KPIs from CampaignLead ──
-        all_cls = CampaignLead.objects.filter(organization=org)
-
-        sent_statuses = ['ACTIVE', 'FINISHED', 'REPLIED', 'BOUNCED']
-        emails_sent = all_cls.filter(status__in=sent_statuses).count()
-        opened = all_cls.filter(last_opened_at__isnull=False).count()
-        replied = all_cls.filter(status='REPLIED').count()
-        clicked = all_cls.filter(last_clicked_at__isnull=False).count()
-        bounced = all_cls.filter(status='BOUNCED').count()
+        # ── Aggregate KPIs using cached counters on Campaign ──
+        # Sum cached counters across all campaigns for instant metrics
+        campaign_agg = Campaign.objects.filter(organization=org).aggregate(
+            emails_sent=Sum('sent_count'),
+            opened=Sum('open_count'),
+            replied=Sum('reply_count'),
+            clicked=Sum('clicked_count'),
+            bounced=Sum('bounced_count'),
+        )
+        
+        emails_sent = campaign_agg['emails_sent'] or 0
+        opened = campaign_agg['opened'] or 0
+        replied = campaign_agg['replied'] or 0
+        clicked = campaign_agg['clicked'] or 0
+        bounced = campaign_agg['bounced'] or 0
 
         total_leads = Lead.objects.filter(organization=org).count()
         active_campaigns = Campaign.objects.filter(organization=org, status='ACTIVE').count()
@@ -336,24 +538,26 @@ class DashboardAnalyticsView(APIView):
         bounce_rate = round((bounced / emails_sent * 100) if emails_sent > 0 else 0, 1)
 
         # ── Time-series: daily aggregates within the window ──
-        ts_qs = all_cls.filter(created_at__gte=cutoff)
+        # Still need to query CampaignLead for time-series breakdown
+        all_cls = CampaignLead.objects.filter(organization=org, created_at__gte=cutoff)
 
+        sent_statuses = ['ACTIVE', 'FINISHED', 'REPLIED', 'BOUNCED']
         sent_by_day = dict(
-            ts_qs.filter(status__in=sent_statuses)
+            all_cls.filter(status__in=sent_statuses)
             .annotate(day=TruncDate('created_at'))
             .values('day')
             .annotate(count=Count('id'))
             .values_list('day', 'count')
         )
         opened_by_day = dict(
-            ts_qs.filter(last_opened_at__isnull=False)
+            all_cls.filter(last_opened_at__isnull=False)
             .annotate(day=TruncDate('last_opened_at'))
             .values('day')
             .annotate(count=Count('id'))
             .values_list('day', 'count')
         )
         replied_by_day = dict(
-            ts_qs.filter(last_replied_at__isnull=False)
+            all_cls.filter(last_replied_at__isnull=False)
             .annotate(day=TruncDate('last_replied_at'))
             .values('day')
             .annotate(count=Count('id'))
@@ -372,28 +576,29 @@ class DashboardAnalyticsView(APIView):
             opened_series.append(opened_by_day.get(d, 0))
             replied_series.append(replied_by_day.get(d, 0))
 
-        # ── Per-campaign breakdown ──
+        # ── Per-campaign breakdown: use cached counters directly ──
         campaign_stats = []
         for c in Campaign.objects.filter(organization=org).order_by('-created_at')[:20]:
-            cls = CampaignLead.objects.filter(campaign=c, organization=org)
-            c_sent = cls.filter(status__in=sent_statuses).count()
-            c_opened = cls.filter(last_opened_at__isnull=False).count()
-            c_replied = cls.filter(status='REPLIED').count()
-            c_bounced = cls.filter(status='BOUNCED').count()
             campaign_stats.append({
                 'id': str(c.id),
                 'name': c.name,
                 'status': c.status,
-                'enrolled': cls.count(),
-                'sent': c_sent,
-                'opened': c_opened,
-                'replied': c_replied,
-                'bounced': c_bounced,
+                'enrolled': c.leads_count,
+                'sent': c.sent_count,
+                'opened': c.open_count,
+                'replied': c.reply_count,
+                'bounced': c.bounced_count,
             })
 
         # ── Recent activity (real data) ──
         recent = []
-        for cl in all_cls.order_by('-updated_at')[:10]:
+        for cl in (
+            CampaignLead.objects
+            .filter(organization=org)
+            .select_related('lead', 'campaign')
+            .order_by('-updated_at')[:10]
+        ):
+        
             action = cl.status.lower()
             lead_name = cl.lead.email if cl.lead else 'Unknown'
             recent.append({
@@ -567,3 +772,44 @@ def unsubscribe_view(request, lead_id, token):
     )
 
     return HttpResponse(html, content_type='text/html')
+
+# --- New ClickTrackingView (Issue #259) ---
+class ClickTrackingView(APIView):
+    """
+    Unauthenticated endpoint to track email link clicks and redirect to the destination.
+    """
+    permission_classes = [AllowAny]
+
+    def get(self, request, *args, **kwargs):
+        signed_token = request.GET.get('t')
+        dest_url = request.GET.get('dest')
+
+        if not signed_token or not dest_url:
+            return HttpResponseBadRequest("Missing tracking parameters.")
+
+        signer = Signer()
+        try:
+            # Decode and verify the token signature
+            unsigned_payload = signer.unsign(signed_token)
+            campaign_lead_id, step_id = unsigned_payload.split(':')
+        except (BadSignature, ValueError):
+            return HttpResponseBadRequest("Invalid or tampered tracking token.")
+
+        # Analytics ko update karna
+        try:
+            lead = CampaignLead.objects.get(id=campaign_lead_id)
+            lead.last_clicked_at = timezone.now()
+            lead.save(update_fields=['last_clicked_at'])
+
+            # Optional: Agar conditionally aage badhana hai sequence ko
+            if lead.current_step and lead.current_step.channel_type == 'CONDITION_CLICK':
+                from .tasks import _execute_condition_click_step
+                _execute_condition_click_step(lead, lead.current_step, now=timezone.now())
+
+        except CampaignLead.DoesNotExist:
+            pass # Failsafe: Continue to redirect even if the lead was deleted
+
+        # Original Destination par redirect karna
+        decoded_dest = urllib.parse.unquote(dest_url)
+        return HttpResponseRedirect(decoded_dest)
+# ------------------------------------------

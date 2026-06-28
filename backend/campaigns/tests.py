@@ -1,14 +1,21 @@
 from datetime import timedelta
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlparse
 
+from django.core import signing
+from django.core.exceptions import ImproperlyConfigured
+from django.db import connection
 from django.test import override_settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
 from campaigns.models import Campaign, CampaignLead, ConnectedEmailAccount, EmailVariant, SequenceStep
+from campaigns.fields import decrypt_mailbox_credential, encrypt_mailbox_credential
 from campaigns.ai import personalize_email
 from campaigns.tasks import (
+    _execute_condition_event_step,
+    check_imap_bounces,
     _get_campaign_steps,
     poll_gmail_for_replies,
     process_active_leads,
@@ -111,6 +118,103 @@ class CampaignWorkflowTests(APITestCase):
         self.assertEqual(variants[1].variant_label, 'B')
         self.assertEqual(variants[1].body, 'Body B')
         self.assertEqual(response.data['steps'][0]['variants'][0]['variant_label'], 'A')
+
+    def test_create_custom_connected_account_from_settings(self):
+        payload = {
+            'email_address': 'custom-sender@acme.test',
+            'smtp_host': 'smtp.acme.test',
+            'smtp_port': 587,
+            'smtp_username': 'smtp-user',
+            'smtp_password': 'smtp-pass',
+            'smtp_use_tls': True,
+            'smtp_use_ssl': False,
+            'imap_host': 'imap.acme.test',
+            'imap_port': 993,
+            'imap_username': 'imap-user',
+            'imap_password': 'imap-pass',
+            'imap_use_ssl': True,
+        }
+
+        response = self.client.post('/api/v1/connected-accounts/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(response.data['provider'], 'CUSTOM')
+        self.assertTrue(response.data['supports_smtp'])
+        self.assertTrue(response.data['supports_imap'])
+
+        account = ConnectedEmailAccount.objects.get(email_address='custom-sender@acme.test')
+        self.assertEqual(account.provider, 'CUSTOM')
+        self.assertEqual(account.smtp_host, 'smtp.acme.test')
+        self.assertEqual(account.imap_host, 'imap.acme.test')
+        self.assertEqual(account.connected_by, self.user)
+
+    def test_create_custom_connected_account_requires_secure_smtp_transport(self):
+        payload = {
+            'email_address': 'insecure-sender@acme.test',
+            'smtp_host': 'smtp.acme.test',
+            'smtp_port': 25,
+            'smtp_username': 'smtp-user',
+            'smtp_password': 'smtp-pass',
+            'smtp_use_tls': False,
+            'smtp_use_ssl': False,
+            'imap_host': 'imap.acme.test',
+            'imap_port': 993,
+            'imap_username': 'imap-user',
+            'imap_password': 'imap-pass',
+            'imap_use_ssl': True,
+        }
+
+        response = self.client.post('/api/v1/connected-accounts/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('smtp_use_tls', response.data)
+
+    def test_custom_connected_account_passwords_are_encrypted_at_rest(self):
+        payload = {
+            'email_address': 'encrypted-sender@acme.test',
+            'smtp_host': 'smtp.acme.test',
+            'smtp_port': 587,
+            'smtp_username': 'smtp-user',
+            'smtp_password': 'smtp-pass',
+            'smtp_use_tls': True,
+            'smtp_use_ssl': False,
+            'imap_host': 'imap.acme.test',
+            'imap_port': 993,
+            'imap_username': 'imap-user',
+            'imap_password': 'imap-pass',
+            'imap_use_ssl': True,
+        }
+
+        response = self.client.post('/api/v1/connected-accounts/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_201_CREATED)
+
+        account = ConnectedEmailAccount.objects.get(email_address='encrypted-sender@acme.test')
+        self.assertEqual(account.smtp_password, 'smtp-pass')
+        self.assertEqual(account.imap_password, 'imap-pass')
+
+        with connection.cursor() as cursor:
+            param = account.id.hex if connection.vendor == 'sqlite' else str(account.id)
+            cursor.execute(
+                "SELECT smtp_password, imap_password FROM campaigns_connectedemailaccount WHERE id = %s",
+                [param],
+            )
+            stored_smtp_password, stored_imap_password = cursor.fetchone()
+
+        self.assertNotEqual(stored_smtp_password, 'smtp-pass')
+        self.assertNotEqual(stored_imap_password, 'imap-pass')
+        self.assertTrue(stored_smtp_password.startswith('enc::'))
+        self.assertTrue(stored_imap_password.startswith('enc::'))
+
+    def test_encrypt_mailbox_credential_encrypts_plaintext_with_prefix(self):
+        raw_password = 'enc::not-actually-encrypted'
+        encrypted_password = encrypt_mailbox_credential(raw_password)
+
+        self.assertNotEqual(encrypted_password, raw_password)
+        self.assertTrue(encrypted_password.startswith('enc::'))
+        self.assertEqual(decrypt_mailbox_credential(encrypted_password), raw_password)
+
+    @override_settings(DEBUG=False, MAILBOX_CREDENTIALS_ENCRYPTION_KEY='')
+    def test_encrypt_mailbox_credential_requires_dedicated_key_outside_debug(self):
+        with self.assertRaises(ImproperlyConfigured):
+            encrypt_mailbox_credential('smtp-pass')
 
     def test_create_campaign_supports_all_step_and_condition_types(self):
         payload = {
@@ -955,6 +1059,104 @@ class CampaignWorkflowTests(APITestCase):
         self.assertEqual(campaign_lead.status, 'FINISHED')
         self.assertIsNone(campaign_lead.current_step_id)
 
+    def test_condition_open_waits_for_window_before_routing_to_no_branch(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Condition open wait flow',
+            status='ACTIVE',
+            settings={
+                'steps': [
+                    {'type': 'CONDITION_OPEN', 'condition_time': '1 day'},
+                    {'type': 'EMAIL', 'subject': 'No path', 'body': 'no', 'condition_branch': 'no', 'condition_parent_index': 0},
+                ]
+            },
+        )
+        condition_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='CONDITION_OPEN',
+            delay_minutes=1440,
+        )
+        SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=2,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='No path',
+            template_body='no',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='condition-open@acme.test',
+        )
+        next_check = timezone.now() + timedelta(hours=1)
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=condition_step,
+            status='ACTIVE',
+            next_execution_time=next_check,
+        )
+
+        _execute_condition_event_step(campaign_lead, condition_step, event_detected=False, now=timezone.now())
+
+        campaign_lead.refresh_from_db()
+        self.assertEqual(campaign_lead.current_step_id, condition_step.id)
+        self.assertEqual(campaign_lead.status, 'ACTIVE')
+        self.assertEqual(campaign_lead.next_execution_time, next_check)
+
+    def test_condition_click_waits_for_window_before_routing_to_no_branch(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Condition click wait flow',
+            status='ACTIVE',
+            settings={
+                'steps': [
+                    {'type': 'CONDITION_CLICK', 'condition_time': '1 day'},
+                    {'type': 'EMAIL', 'subject': 'No path', 'body': 'no', 'condition_branch': 'no', 'condition_parent_index': 0},
+                ]
+            },
+        )
+        condition_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='CONDITION_CLICK',
+            delay_minutes=1440,
+        )
+        SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=2,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='No path',
+            template_body='no',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='condition-click@acme.test',
+        )
+        next_check = timezone.now() + timedelta(hours=1)
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=condition_step,
+            status='ACTIVE',
+            next_execution_time=next_check,
+        )
+
+        _execute_condition_event_step(campaign_lead, condition_step, event_detected=False, now=timezone.now())
+
+        campaign_lead.refresh_from_db()
+        self.assertEqual(campaign_lead.current_step_id, condition_step.id)
+        self.assertEqual(campaign_lead.status, 'ACTIVE')
+        self.assertEqual(campaign_lead.next_execution_time, next_check)
+
     @override_settings(ENABLE_AUTO_REPLY_DETECTION=True)
     def test_poll_replies_defers_terminal_status_when_reply_yes_branch_exists(self):
         campaign = Campaign.objects.create(
@@ -1041,6 +1243,226 @@ class CampaignWorkflowTests(APITestCase):
 
         campaign_lead.refresh_from_db()
         self.assertEqual(campaign_lead.status, 'REPLIED')
+
+    @override_settings(ENABLE_AUTO_BOUNCE_DETECTION=True)
+    def test_check_imap_bounces_marks_matching_campaign_lead_bounced(self):
+        account = ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=self.user,
+            email_address='sender-bounce@acme.test',
+            provider='GOOGLE',
+            access_token='token',
+            refresh_token='refresh',
+        )
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Bounce polling flow',
+            status='ACTIVE',
+            connected_account=account,
+        )
+        step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Hello',
+            template_body='World',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='bounced-lead@acme.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=step,
+            status='ACTIVE',
+            next_execution_time=timezone.now() + timedelta(minutes=10),
+            last_sent_message_id='sent-mid-1',
+        )
+
+        with patch(
+            'campaigns.tasks.find_gmail_bounce_candidates',
+            return_value=[{'message_id': 'bounce-1', 'failed_recipients': ['bounced-lead@acme.test']}],
+        ) as mocked_find:
+            with patch('campaigns.tasks.mark_gmail_message_as_read') as mocked_mark_read:
+                with patch('campaigns.tasks.notify_email_bounced') as mocked_notify:
+                    result = check_imap_bounces()
+
+        campaign_lead.refresh_from_db()
+        self.assertEqual(campaign_lead.status, 'BOUNCED')
+        self.assertIsNone(campaign_lead.current_step)
+        self.assertIsNone(campaign_lead.next_execution_time)
+        self.assertIn('marked 1 campaign leads as BOUNCED', result)
+        mocked_find.assert_called_once_with(account)
+        mocked_mark_read.assert_called_once_with(account, 'bounce-1')
+        mocked_notify.assert_called_once_with(self.organization.id, 'bounced-lead@acme.test')
+
+    @override_settings(ENABLE_AUTO_BOUNCE_DETECTION=True)
+    def test_check_imap_bounces_marks_unmatched_message_as_read(self):
+        account = ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=self.user,
+            email_address='sender-unmatched@acme.test',
+            provider='GOOGLE',
+            access_token='token',
+            refresh_token='refresh',
+        )
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Bounce unmatched flow',
+            status='ACTIVE',
+            connected_account=account,
+        )
+        SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Hello',
+            template_body='World',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='safe-lead@acme.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='ACTIVE',
+            last_sent_message_id='sent-mid-2',
+        )
+
+        with patch(
+            'campaigns.tasks.find_gmail_bounce_candidates',
+            return_value=[{'message_id': 'bounce-404', 'failed_recipients': ['missing@acme.test']}],
+        ):
+            with patch('campaigns.tasks.mark_gmail_message_as_read') as mocked_mark_read:
+                with patch('campaigns.tasks.notify_email_bounced') as mocked_notify:
+                    result = check_imap_bounces()
+
+        campaign_lead.refresh_from_db()
+        self.assertEqual(campaign_lead.status, 'ACTIVE')
+        self.assertIn('marked 0 campaign leads as BOUNCED', result)
+        mocked_mark_read.assert_called_once_with(account, 'bounce-404')
+        mocked_notify.assert_not_called()
+
+    @override_settings(ENABLE_AUTO_BOUNCE_DETECTION=True)
+    def test_check_imap_bounces_supports_custom_imap_accounts(self):
+        account = ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=self.user,
+            email_address='custom-bounce@acme.test',
+            provider='CUSTOM',
+            smtp_host='smtp.acme.test',
+            smtp_port=587,
+            smtp_username='smtp-user',
+            smtp_password='smtp-pass',
+            smtp_use_tls=True,
+            smtp_use_ssl=False,
+            imap_host='imap.acme.test',
+            imap_port=993,
+            imap_username='imap-user',
+            imap_password='imap-pass',
+            imap_use_ssl=True,
+        )
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Custom bounce polling flow',
+            status='ACTIVE',
+            connected_account=account,
+        )
+        step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Hello',
+            template_body='World',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='custom-bounced@acme.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=step,
+            status='ACTIVE',
+            next_execution_time=timezone.now() + timedelta(minutes=10),
+            last_sent_message_id='custom-mid-1',
+        )
+
+        with patch(
+            'campaigns.tasks.find_imap_bounce_candidates',
+            return_value=[{'message_id': 'imap-bounce-1', 'failed_recipients': ['custom-bounced@acme.test']}],
+        ) as mocked_find:
+            with patch('campaigns.tasks.mark_imap_message_as_read') as mocked_mark_read:
+                result = check_imap_bounces()
+
+        campaign_lead.refresh_from_db()
+        self.assertEqual(campaign_lead.status, 'BOUNCED')
+        self.assertIsNone(campaign_lead.current_step)
+        self.assertIn('marked 1 campaign leads as BOUNCED', result)
+        mocked_find.assert_called_once_with(account)
+        mocked_mark_read.assert_called_once_with(account, 'imap-bounce-1')
+
+    @override_settings(ENABLE_AUTO_BOUNCE_DETECTION=True)
+    def test_check_imap_bounces_keeps_message_unread_when_processing_fails(self):
+        account = ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=self.user,
+            email_address='sender-processing-error@acme.test',
+            provider='GOOGLE',
+            access_token='token',
+            refresh_token='refresh',
+        )
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Bounce processing error flow',
+            status='ACTIVE',
+            connected_account=account,
+        )
+        SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Hello',
+            template_body='World',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='error-lead@acme.test',
+        )
+        CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='ACTIVE',
+            last_sent_message_id='sent-mid-error',
+        )
+
+        with patch(
+            'campaigns.tasks.find_gmail_bounce_candidates',
+            return_value=[{'message_id': 'bounce-error', 'failed_recipients': ['error-lead@acme.test']}],
+        ):
+            with patch(
+                'campaigns.tasks._mark_matching_account_leads_bounced',
+                side_effect=RuntimeError('db unavailable'),
+            ):
+                with patch('campaigns.tasks.mark_gmail_message_as_read') as mocked_mark_read:
+                    result = check_imap_bounces()
+
+        self.assertIn('marked 0 campaign leads as BOUNCED', result)
+        mocked_mark_read.assert_not_called()
 
     @override_settings(CELERY_TASK_ALWAYS_EAGER=False)
     def test_launch_action_activates_campaign_and_triggers_processing(self):
@@ -1223,10 +1645,123 @@ class CampaignWorkflowTests(APITestCase):
                     format='json',
                 )
 
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(
+            response.status_code,
+            status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
         self.assertTrue(
             any('Webhook processing error for event=open email=lead@acme.test' in entry for entry in logs.output)
         )
+
+    def test_email_webhook_bounce_marks_lead_bounced_and_stops_sequence(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Webhook bounce flow',
+            status='ACTIVE',
+        )
+        step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Hi',
+            template_body='Body',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='webhook-bounce@acme.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=step,
+            status='ACTIVE',
+            next_execution_time=timezone.now() + timedelta(minutes=5),
+        )
+
+        with patch('campaigns.tasks.notify_email_bounced') as mocked_notify:
+            response = self.client.post(
+                '/api/v1/webhooks/email/',
+                {'event': 'bounce', 'email': 'webhook-bounce@acme.test'},
+                format='json',
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        campaign_lead.refresh_from_db()
+        self.assertEqual(campaign_lead.status, 'BOUNCED')
+        self.assertIsNone(campaign_lead.current_step)
+        self.assertIsNone(campaign_lead.next_execution_time)
+        mocked_notify.assert_called_once_with(self.organization.id, 'webhook-bounce@acme.test')
+
+    def test_email_webhook_persists_bounce_metadata(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Bounce metadata flow',
+            status='ACTIVE',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='bounce@acme.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='ACTIVE',
+            last_sent_message_id='msg-123',
+        )
+
+        response = self.client.post(
+            '/api/v1/webhooks/email/',
+            {
+                'event': 'bounce',
+                'email': 'bounce@acme.test',
+                'message_id': 'msg-123',
+                'bounce': {
+                    'type': 'soft',
+                    'code': 'mailbox_full',
+                    'reason': 'Mailbox full',
+                },
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        campaign_lead.refresh_from_db()
+        self.assertEqual(campaign_lead.status, 'BOUNCED')
+        self.assertEqual(campaign_lead.bounce_type, 'soft')
+        self.assertEqual(campaign_lead.bounce_code, 'mailbox_full')
+        self.assertEqual(campaign_lead.bounce_reason, 'Mailbox full')
+
+    def test_email_webhook_does_not_bounce_finished_lead_without_message_id(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Finished lead webhook safety',
+            status='ACTIVE',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='finished-webhook@acme.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='FINISHED',
+            last_sent_message_id='finished-mid-2',
+        )
+
+        response = self.client.post(
+            '/api/v1/webhooks/email/',
+            {'event': 'bounce', 'email': 'finished-webhook@acme.test'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        campaign_lead.refresh_from_db()
+        self.assertEqual(campaign_lead.status, 'FINISHED')
 
     def test_dashboard_analytics_isolates_data_by_tenant(self):
         org2 = Organization.objects.create(name='Other Corp')
@@ -1350,6 +1885,60 @@ class CampaignWorkflowTests(APITestCase):
         self.assertIsNone(campaign_lead.current_step)
         self.assertIsNone(campaign_lead.next_execution_time)
 
+    def test_send_email_step_uses_custom_smtp_account(self):
+        account = ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=self.user,
+            email_address='custom-mailbox@acme.test',
+            provider='CUSTOM',
+            smtp_host='smtp.acme.test',
+            smtp_port=587,
+            smtp_username='smtp-user',
+            smtp_password='smtp-pass',
+            smtp_use_tls=True,
+            smtp_use_ssl=False,
+            imap_host='imap.acme.test',
+            imap_port=993,
+            imap_username='imap-user',
+            imap_password='imap-pass',
+            imap_use_ssl=True,
+        )
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Custom SMTP flow',
+            status='ACTIVE',
+            connected_account=account,
+        )
+        email_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Hello',
+            template_body='Hi there',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='custom-recipient@acme.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=email_step,
+            status='ACTIVE',
+            next_execution_time=timezone.now() - timedelta(minutes=1),
+        )
+
+        with patch('campaigns.tasks.send_smtp_email', return_value='smtp-msg-1') as mocked_send:
+            send_email_step(campaign_lead.id, email_step.id)
+
+        campaign_lead.refresh_from_db()
+        self.assertEqual(campaign_lead.last_sent_message_id, 'smtp-msg-1')
+        self.assertEqual(campaign_lead.status, 'FINISHED')
+        mocked_send.assert_called_once()
+
     def test_send_email_step_skips_blocked_domain_leads(self):
         BlockedDomain.objects.create(
             organization=self.organization,
@@ -1401,3 +1990,88 @@ class CampaignWorkflowTests(APITestCase):
         self.assertIsNone(campaign_lead.next_execution_time)
         self.assertEqual(campaign.status, 'COMPLETED')
         mocked_send.assert_not_called()
+
+
+@override_settings(
+    GOOGLE_CLIENT_ID='test-google-client-id',
+    GOOGLE_CLIENT_SECRET='test-google-client-secret',
+    GOOGLE_REDIRECT_URI='https://example.test/api/v1/auth/google/callback',
+    GOOGLE_SCOPES=['https://www.googleapis.com/auth/gmail.send'],
+)
+class GoogleOAuthStateTests(APITestCase):
+    def setUp(self):
+        self.organization = Organization.objects.create(name='OAuth Org')
+        self.user = User.objects.create_user(
+            email='oauth-owner@acme.test',
+            password='StrongPass123!',
+            organization=self.organization,
+            role='ADMIN',
+        )
+        self.client.force_authenticate(self.user)
+
+    def test_login_view_signs_oauth_state(self):
+        response = self.client.get(
+            '/api/v1/auth/google/login',
+            {'frontend_origin': 'https://app.example.test'},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
+        redirect_url = response['Location']
+        parsed = urlparse(redirect_url)
+        params = parse_qs(parsed.query)
+        state = params['state'][0]
+
+        state_data = signing.loads(
+            state,
+            salt='leadorbit-google-oauth-state',
+            max_age=600,
+        )
+        self.assertEqual(state_data['user_id'], str(self.user.id))
+        self.assertEqual(state_data['org_id'], str(self.organization.id))
+        self.assertEqual(state_data['frontend_origin'], 'https://app.example.test')
+
+    def test_callback_rejects_tampered_state_and_accepts_signed_state(self):
+        with patch('campaigns.google_auth_views.requests.post') as mock_post, patch(
+            'campaigns.google_auth_views.requests.get'
+        ) as mock_get:
+            mock_post.return_value.status_code = 200
+            mock_post.return_value.json.return_value = {
+                'access_token': 'access-token',
+                'refresh_token': 'refresh-token',
+                'expires_in': 3600,
+            }
+            mock_get.return_value.json.return_value = {'email': 'sender@example.test'}
+
+            signed_state = signing.dumps(
+                {
+                    'user_id': str(self.user.id),
+                    'org_id': str(self.organization.id),
+                    'frontend_origin': 'https://app.example.test',
+                },
+                salt='leadorbit-google-oauth-state',
+            )
+            response = self.client.get(
+                '/api/v1/auth/google/callback',
+                {'code': 'authorization-code', 'state': signed_state},
+            )
+
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
+        self.assertIn('google_auth=connected', response['Location'])
+        self.assertTrue(
+            ConnectedEmailAccount.objects.filter(
+                organization=self.organization,
+                connected_by=self.user,
+                provider='GOOGLE',
+                email_address='sender@example.test',
+            ).exists()
+        )
+
+        tampered_state = signed_state[:-1] + ('x' if signed_state[-1] != 'x' else 'y')
+        response = self.client.get(
+            '/api/v1/auth/google/callback',
+            {'code': 'authorization-code', 'state': tampered_state},
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
+        self.assertIn('google_auth=error', response['Location'])
+        self.assertIn('reason=no_user', response['Location'])
