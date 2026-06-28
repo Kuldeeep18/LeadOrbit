@@ -357,7 +357,7 @@ class WebhookView(APIView):
                     _execute_condition_reply_step,
                 )
 
-                processed_leads = set()
+                leads_to_score = {}
                 for cl in cleads:
                     if event_type == 'bounce':
                         cl.status = 'BOUNCED'
@@ -385,9 +385,10 @@ class WebhookView(APIView):
                         if cl.current_step and cl.current_step.channel_type == 'CONDITION_CLICK':
                             _execute_condition_click_step(cl, cl.current_step, now=now)
 
-                    if cl.lead_id not in processed_leads:
-                        update_lead_score(cl.lead)
-                        processed_leads.add(cl.lead_id)
+                    leads_to_score[cl.lead_id] = cl.lead
+
+                for lead in leads_to_score.values():
+                    update_lead_score(lead)
             except Exception as e:
                 logger.exception(
                     'Webhook processing error for event=%s email=%s: %s',

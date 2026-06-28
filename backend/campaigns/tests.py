@@ -1286,7 +1286,7 @@ class CampaignWorkflowTests(APITestCase):
         lead.refresh_from_db()
         self.assertEqual(lead.score, 41)
 
-    def test_webhook_updates_lead_score_after_engagement_event(self):
+    def test_webhook_updates_lead_score_after_all_matching_engagement_events(self):
         campaign = Campaign.objects.create(
             organization=self.organization,
             name='Webhook score test',
@@ -1301,7 +1301,14 @@ class CampaignWorkflowTests(APITestCase):
             campaign=campaign,
             lead=lead,
             status='ACTIVE',
-            last_sent_message_id='webhook-msg',
+            last_sent_message_id='webhook-msg-1',
+        )
+        CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='ACTIVE',
+            last_sent_message_id='webhook-msg-2',
         )
 
         response = self.client.post(
@@ -1309,14 +1316,13 @@ class CampaignWorkflowTests(APITestCase):
             {
                 'event': 'open',
                 'email': lead.email,
-                'message_id': 'webhook-msg',
             },
             format='json',
         )
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         lead.refresh_from_db()
-        self.assertEqual(lead.score, 6)
+        self.assertEqual(lead.score, 12)
 
     def test_unsubscribe_get_shows_confirmation_without_updating_lead(self):
         lead = Lead.objects.create(
