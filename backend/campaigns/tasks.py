@@ -25,7 +25,7 @@ from .mailbox_service import (
 from .notifications import notify_email_bounced
 from .sms_service import initiate_call, send_sms
 from .models import CampaignLead, ConnectedEmailAccount, SequenceStep
-from leads.models import BlockedDomain, normalize_domain
+from leads.models import BlockedDomain, LeadEngagementEvent, normalize_domain
 
 logger = logging.getLogger(__name__)
 
@@ -612,6 +612,15 @@ def send_email_step(campaign_lead_id, step_id):
                     raise RuntimeError(f"Unsupported email provider: {account.provider}")
                 clead.last_sent_message_id = message_id
                 clead.save(update_fields=['last_sent_message_id'])
+
+                LeadEngagementEvent.objects.create(
+                    organization=clead.organization,
+                    lead=clead.lead,
+                    campaign=clead.campaign,
+                    event_type='EMAIL_SENT',
+                    occurred_at=timezone.now(),
+                    metadata={'message_id': message_id, 'provider': account.provider},
+                )
             except Exception as send_err:
                 logger.error(f"Email send failed for {clead.lead.email}: {send_err}")
                 # Restore next_execution_time so the lead can be retried later.
@@ -620,6 +629,15 @@ def send_email_step(campaign_lead_id, step_id):
                 return
         else:
             logger.info(f"Mock SENDING EMAIL to {clead.lead.email} | Subject: {subject}")
+
+            LeadEngagementEvent.objects.create(
+                organization=clead.organization,
+                lead=clead.lead,
+                campaign=clead.campaign,
+                event_type='EMAIL_SENT',
+                occurred_at=timezone.now(),
+                metadata={'mock': True, 'subject': subject},
+            )
 
         _advance_to_next_step(clead, step)
 

@@ -4,8 +4,14 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from users.permissions import IsOrgManager
-from .models import BlockedDomain, Lead, LeadImportJob, Tag, LeadTag
-from .serializers import BlockedDomainSerializer, LeadImportJobSerializer, LeadSerializer, TagSerializer
+from .models import BlockedDomain, Lead, LeadImportJob, Tag, LeadTag, LeadEngagementEvent
+from .serializers import (
+    BlockedDomainSerializer,
+    LeadImportJobSerializer,
+    LeadSerializer,
+    TagSerializer,
+    LeadEngagementEventSerializer,
+)
 
 
 class LeadImportJobPagination(PageNumberPagination):
@@ -188,3 +194,21 @@ class BlockedDomainViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization)
+
+
+class LeadEngagementEventViewSet(viewsets.ReadOnlyModelViewSet):
+    serializer_class = LeadEngagementEventSerializer
+    queryset = LeadEngagementEvent.objects.all()
+
+    def get_queryset(self):
+        qs = LeadEngagementEvent.objects.filter(organization=self.request.user.organization)
+        lead_id = self.request.query_params.get('lead_id')
+        campaign_id = self.request.query_params.get('campaign_id')
+        event_type = self.request.query_params.get('event_type')
+        if lead_id:
+            qs = qs.filter(lead_id=lead_id)
+        if campaign_id:
+            qs = qs.filter(campaign_id=campaign_id)
+        if event_type:
+            qs = qs.filter(event_type=event_type)
+        return qs.select_related('lead', 'campaign')

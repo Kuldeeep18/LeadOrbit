@@ -365,17 +365,51 @@
                                     <th>Tags</th>
                                     <th>Score</th>
                                     <th>Status</th>
+                                    <th>Engagement</th>
                                 </tr>
                             </thead>
                             <tbody id="leads-table-body">
                                 <tr>
-                                    <td colspan="7" class="text-center py-4 text-muted">
+                                    <td colspan="8" class="text-center py-4 text-muted">
                                         <div class="spinner-border spinner-border-sm text-primary me-2" role="status" aria-label="Loading leads"></div>
                                         Loading leads...
                                     </td>
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+                </div>
+
+                <div class="modal fade" id="leadEngagementModal" tabindex="-1" aria-labelledby="leadEngagementModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                        <div class="modal-content rounded-3 shadow">
+                            <div class="modal-header border-0">
+                                <div>
+                                    <h5 class="modal-title fw-bold" id="leadEngagementModalLabel">Lead Engagement History</h5>
+                                    <div class="text-muted small" id="lead-engagement-meta"></div>
+                                </div>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="table-responsive">
+                                    <table class="table table-sm align-middle mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Event</th>
+                                                <th>Campaign</th>
+                                                <th>Time</th>
+                                                <th>Details</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="lead-engagement-body">
+                                            <tr>
+                                                <td colspan="4" class="text-center py-4 text-muted">No events selected.</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </section>
@@ -581,12 +615,71 @@
                     <td>${lead.global_unsubscribe
                         ? '<span class="chip" style="background:#fee2e2;color:#b91c1c;">Unsubscribed</span>'
                         : '<span class="chip" style="background:#dcfce7;color:#166534;">Active</span>'}</td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary view-engagement-btn" data-lead-id="${lead.id}" data-lead-email="${escapeHtml(lead.email)}">
+                            <i class="bi bi-clock-history me-1" aria-hidden="true"></i>View
+                        </button>
+                    </td>
                 </tr>
             `).join('');
 
             document.querySelectorAll('.copy-email-btn').forEach(btn => {
                 btn.addEventListener('click', () => copyToClipboard(btn.dataset.email, btn));
             });
+
+            document.querySelectorAll('.view-engagement-btn').forEach(btn => {
+                btn.addEventListener('click', () => openLeadEngagement(btn.dataset.leadId, btn.dataset.leadEmail));
+            });
+        }
+
+        async function openLeadEngagement(leadId, leadEmail) {
+            const modalBody = document.getElementById('lead-engagement-body');
+            const modalMeta = document.getElementById('lead-engagement-meta');
+            modalBody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-muted"><div class="spinner-border spinner-border-sm text-primary me-2" role="status" aria-label="Loading engagement"></div>Loading...</td></tr>';
+            modalMeta.textContent = `${leadEmail}`;
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('leadEngagementModal')).show();
+
+            try {
+                const res = await fetchWithAuth(`/lead-engagement-events/?lead_id=${leadId}`);
+                if (!res.ok) throw new Error('Failed to load engagement events');
+                const events = await res.json();
+
+                if (!events.length) {
+                    modalBody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-muted">No engagement events found.</td></tr>';
+                    return;
+                }
+
+                const eventIcons = {
+                    EMAIL_SENT: 'bi-send',
+                    EMAIL_OPENED: 'bi-envelope-open',
+                    LINK_CLICKED: 'bi-link-45deg',
+                    EMAIL_REPLIED: 'bi-reply',
+                    EMAIL_BOUNCED: 'bi-exclamation-triangle',
+                    SMS_SENT: 'bi-chat-dots',
+                    CALL_INITIATED: 'bi-telephone',
+                    UNSUBSCRIBED: 'bi-person-x',
+                };
+
+                modalBody.innerHTML = events.map(ev => {
+                    const icon = eventIcons[ev.event_type] || 'bi-circle';
+                    const time = ev.occurred_at ? new Date(ev.occurred_at).toLocaleString() : '-';
+                    const campaign = ev.campaign ? `<a href="/campaigns.html">${escapeHtml(ev.campaign.name)}</a>` : '<span class="text-muted">-</span>';
+                    const details = ev.metadata && Object.keys(ev.metadata).length
+                        ? Object.entries(ev.metadata).map(([k, v]) => `<span class="badge bg-light text-dark me-1">${escapeHtml(k)}: ${escapeHtml(String(v))}</span>`).join(' ')
+                        : '<span class="text-muted">-</span>';
+                    return `
+                        <tr>
+                            <td><i class="bi ${icon} me-1" aria-hidden="true"></i>${escapeHtml(ev.event_type_display || ev.event_type)}</td>
+                            <td>${campaign}</td>
+                            <td>${time}</td>
+                            <td>${details}</td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (e) {
+                console.error(e);
+                modalBody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-danger">Failed to load engagement events.</td></tr>';
+            }
         }
 
         function renderImportHistory(jobs) {
