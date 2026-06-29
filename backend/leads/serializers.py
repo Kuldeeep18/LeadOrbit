@@ -1,13 +1,25 @@
 from rest_framework import serializers
 from django.core.exceptions import ValidationError as DjangoValidationError
 
-from .models import BlockedDomain, Lead, LeadImportJob, Tag, LeadTag, validate_domain
+from .models import BlockedDomain, Lead, LeadImportJob, Tag, LeadTag, LeadEngagementEvent, validate_domain
 
 
 class TagSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tag
         fields = ['id', 'name', 'color']
+
+
+class LeadEngagementEventSerializer(serializers.ModelSerializer):
+    event_type_display = serializers.CharField(source='get_event_type_display', read_only=True)
+
+    class Meta:
+        model = LeadEngagementEvent
+        fields = [
+            'id', 'lead', 'campaign', 'event_type', 'event_type_display',
+            'occurred_at', 'metadata', 'created_at',
+        ]
+        read_only_fields = ['organization']
 
 
 class LeadSerializer(serializers.ModelSerializer):

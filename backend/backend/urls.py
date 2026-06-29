@@ -10,7 +10,13 @@ class CustomTokenObtainPairView(BaseTokenObtainPairView):
     serializer_class = CustomTokenObtainSerializer
 
 from users.views import AuthViewSet
-from leads.views import BlockedDomainViewSet, LeadImportJobViewSet, LeadViewSet, TagViewSet
+from leads.views import (
+    BlockedDomainViewSet,
+    LeadImportJobViewSet,
+    LeadViewSet,
+    TagViewSet,
+    LeadEngagementEventViewSet,
+)
 
 
 from campaigns.views import (
@@ -44,6 +50,7 @@ router.register(r'leads', LeadViewSet, basename='leads')
 router.register(r'lead-import-jobs', LeadImportJobViewSet, basename='lead-import-jobs')
 router.register(r'tags', TagViewSet, basename='tags')
 router.register(r'blocked-domains', BlockedDomainViewSet, basename='blocked-domains')
+router.register(r'lead-engagement-events', LeadEngagementEventViewSet, basename='lead-engagement-events')
 router.register(r'campaigns', CampaignViewSet, basename='campaigns')
 router.register(r'email-templates', EmailTemplateViewSet, basename='email-templates')
 

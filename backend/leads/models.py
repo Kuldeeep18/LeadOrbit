@@ -93,3 +93,39 @@ class BlockedDomain(TenantModel):
 
     def __str__(self):
         return self.domain
+
+class LeadEngagementEvent(TenantModel):
+    EVENT_TYPE_CHOICES = (
+        ('EMAIL_SENT', 'Email Sent'),
+        ('EMAIL_OPENED', 'Email Opened'),
+        ('LINK_CLICKED', 'Link Clicked'),
+        ('EMAIL_REPLIED', 'Email Replied'),
+        ('EMAIL_BOUNCED', 'Email Bounced'),
+        ('SMS_SENT', 'SMS Sent'),
+        ('CALL_INITIATED', 'Call Initiated'),
+        ('UNSUBSCRIBED', 'Unsubscribed'),
+    )
+
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name='engagement_events')
+    campaign = models.ForeignKey(
+        'campaigns.Campaign',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='engagement_events',
+    )
+    event_type = models.CharField(max_length=20, choices=EVENT_TYPE_CHOICES)
+    occurred_at = models.DateTimeField()
+    metadata = models.JSONField(default=dict, blank=True)
+
+    class Meta:
+        ordering = ['-occurred_at']
+        indexes = [
+            models.Index(fields=['lead', 'occurred_at']),
+            models.Index(fields=['campaign', 'occurred_at']),
+            models.Index(fields=['event_type', 'occurred_at']),
+        ]
+
+    def __str__(self):
+        return f"{self.event_type} - {self.lead.email} at {self.occurred_at}"
