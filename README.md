@@ -1,5 +1,9 @@
 # LeadOrbit
-
+![Python](https://img.shields.io/badge/Python-3.11-blue)
+![Django](https://img.shields.io/badge/Django-5.0-green)
+![License](https://img.shields.io/badge/License-MIT-yellow.svg)
+![LastCommit](https://img.shields.io/github/last-commit/Kuldeeep18/LeadOrbit)
+![Stars](https://img.shields.io/github/stars/Kuldeeep18/LeadOrbit)
 Current branding note: the active app is branded as `LeadOrbit`; older planning documents in the repo may still mention the original `Lime` name.
 
 LeadOrbit is a multi-tenant outbound outreach MVP built with Django REST Framework and a static HTML/JavaScript frontend. The implemented code supports organization signup, JWT auth, CSV lead import, campaign building, lead enrollment, Gmail sender connection, AI-assisted email drafting, webhook-based engagement tracking, and analytics pages.
@@ -18,6 +22,15 @@ This README is based on the current codebase, not the older planning documents i
 - [Testing](#testing)
 - [Current Caveats](#current-caveats)
 - [Integration Notes](#integration-notes)
+- [Contributors](#contributors)
+
+## Code of Conduct
+
+This project adheres to the Contributor Covenant [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you agree to abide by its terms.
+
+## Contributing
+
+... existing contributing content ...
 
 ## What Works Today
 
@@ -451,3 +464,8 @@ Current repo state: `27` backend tests pass. The suite covers auth/profile updat
 - If no AI credentials are configured, the campaign builder AI composer still returns a deterministic fallback draft instead of failing hard.
 
 
+## Contributors
+
+Thanks to all contributors for their valuable efforts and support in making LeadOrbit better! ❤️
+
+[![Contributors](https://contrib.rocks/image?repo=Kuldeeep18/LeadOrbit)](https://github.com/Kuldeeep18/LeadOrbit/graphs/contributors)

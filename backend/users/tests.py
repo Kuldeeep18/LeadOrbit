@@ -12,7 +12,7 @@ class RegisterViewTests(APITestCase):
             email='Admin@Example.com',
             password='StrongPass123!',
             organization=organization,
-            role='ADMIN',
+            role=User.ROLE_ADMIN,
         )
 
         response = self.client.post(
@@ -36,7 +36,7 @@ class AuthMeViewTests(APITestCase):
             email='admin@example.com',
             password='StrongPass123!',
             organization=self.organization,
-            role='ADMIN',
+            role=User.ROLE_ADMIN,
         )
         self.client.force_authenticate(self.user)
 
@@ -66,3 +66,41 @@ class AuthMeViewTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertFalse(Organization.objects.filter(id=self.organization.id).exists())
         self.assertFalse(User.objects.filter(id=self.user.id).exists())
+
+    def test_member_can_update_own_password(self):
+        self.user.role = User.ROLE_MEMBER
+        self.user.save(update_fields=['role'])
+
+        response = self.client.patch(
+            '/api/v1/auth/me/',
+            {'new_password': 'MemberStrong123!'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.check_password('MemberStrong123!'))
+
+    def test_member_cannot_update_organization_settings(self):
+        self.user.role = User.ROLE_MEMBER
+        self.user.save(update_fields=['role'])
+
+        response = self.client.patch(
+            '/api/v1/auth/me/',
+            {'organization_name': 'Member Rename Attempt'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.organization.refresh_from_db()
+        self.assertEqual(self.organization.name, 'Org Before')
+
+    def test_member_cannot_delete_organization(self):
+        self.user.role = User.ROLE_MEMBER
+        self.user.save(update_fields=['role'])
+
+        response = self.client.delete('/api/v1/auth/delete-organization/')
+
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertTrue(Organization.objects.filter(id=self.organization.id).exists())
+        self.assertTrue(User.objects.filter(id=self.user.id).exists())
