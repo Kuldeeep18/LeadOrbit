@@ -8,6 +8,7 @@ from django.conf import settings as django_settings
 from django.core.signing import Signer
 from django.db.models import Q
 from django.utils import timezone
+from django.core.cache import cache
 
 from .ai import _apply_merge_tags, personalize_email
 from .gmail_service import (
@@ -448,6 +449,12 @@ def _mark_matching_account_leads_bounced(account, failed_recipients, now=None):
     ).select_related('campaign', 'lead')
 
     for clead in matching_leads:
+        # Deduplicate using cache.add() (48 hours TTL)
+        dedupe_key = f"evt_dedupe:{clead.lead_id}:{clead.campaign_id}:bounce:{clead.last_sent_message_id or ''}"
+        if not cache.add(dedupe_key, True, timeout=172800):
+            logger.info("Duplicate bounce event ignored via task: key=%s", dedupe_key)
+            continue
+
         if _mark_campaign_lead_bounced(clead, now=now):
             bounced += 1
 
@@ -747,6 +754,12 @@ def poll_gmail_for_replies():
 
         for clead in leads:
             if clead.last_sent_message_id in replies:
+                # Deduplicate using cache.add() (48 hours TTL)
+                dedupe_key = f"evt_dedupe:{clead.lead_id}:{clead.campaign_id}:reply:{clead.last_sent_message_id}"
+                if not cache.add(dedupe_key, True, timeout=172800):
+                    logger.info("Duplicate reply event ignored via task: key=%s", dedupe_key)
+                    continue
+
                 campaign_id = clead.campaign_id
                 uses_reply_yes_branch = campaign_branching_cache.get(campaign_id)
                 if uses_reply_yes_branch is None:

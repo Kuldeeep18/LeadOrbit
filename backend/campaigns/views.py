@@ -363,6 +363,66 @@ from rest_framework.views import APIView
 from django.utils import timezone
 from django.conf import settings as django_settings
 from pathlib import Path
+from django.core.cache import cache
+
+def process_email_event(cl, event_type, provider_event_id=None, message_id=None, bounce_details=None, now=None):
+    """
+    Deduplicates and processes email events (open, click, reply, bounce) for a CampaignLead.
+    Uses Django's cache.add() (which is atomic in Redis) with a 48-hour TTL (172800 seconds).
+    """
+    from django.utils import timezone
+    from campaigns.tasks import (
+        _campaign_has_condition_reply_yes_branch,
+        _execute_condition_reply_step,
+        _execute_condition_open_step,
+        _execute_condition_click_step,
+        _mark_campaign_lead_bounced,
+    )
+
+    now = now or timezone.now()
+    
+    # Generate stable deduplication key
+    # Format: evt_dedupe:<lead_id>:<campaign_id>:<event_type>:<provider_event_id or message_id>
+    suffix = provider_event_id or message_id or ''
+    dedupe_key = f"evt_dedupe:{cl.lead_id}:{cl.campaign_id}:{event_type}:{suffix}"
+    
+    # Atomically check and set the key in the cache (48 hours TTL = 172800 seconds)
+    if not cache.add(dedupe_key, True, timeout=172800):
+        logger.info("Duplicate event ignored: key=%s", dedupe_key)
+        return False
+        
+    # Execute the actual updates based on event type
+    if event_type == 'bounce':
+        _mark_campaign_lead_bounced(
+            cl,
+            now=now,
+            bounce_type=bounce_details.get('bounce_type') if bounce_details else None,
+            bounce_code=bounce_details.get('bounce_code') if bounce_details else None,
+            bounce_reason=bounce_details.get('bounce_reason') if bounce_details else None,
+        )
+    elif event_type == 'reply':
+        cl.last_replied_at = now
+        if not _campaign_has_condition_reply_yes_branch(cl.campaign):
+            cl.status = 'REPLIED'
+            cl.current_step = None
+            cl.next_execution_time = None
+            cl.save(update_fields=['status', 'current_step', 'next_execution_time', 'last_replied_at'])
+        else:
+            cl.save(update_fields=['last_replied_at'])
+            if cl.current_step and cl.current_step.channel_type == 'CONDITION_REPLY':
+                _execute_condition_reply_step(cl, cl.current_step, now=now)
+    elif event_type == 'open':
+        cl.last_opened_at = now
+        cl.save(update_fields=['last_opened_at'])
+        if cl.current_step and cl.current_step.channel_type == 'CONDITION_OPEN':
+            _execute_condition_open_step(cl, cl.current_step, now=now)
+    elif event_type == 'click':
+        cl.last_clicked_at = now
+        cl.save(update_fields=['last_clicked_at'])
+        if cl.current_step and cl.current_step.channel_type == 'CONDITION_CLICK':
+            _execute_condition_click_step(cl, cl.current_step, now=now)
+            
+    return True
 
 class WebhookView(APIView):
     """
@@ -411,6 +471,12 @@ class WebhookView(APIView):
         event_type = (request.data.get('event') or '').strip().lower()
         lead_email = request.data.get('email')
         message_id = request.data.get('message_id') or request.data.get('messageId')
+        provider_event_id = (
+            request.data.get('sg_event_id')
+            or request.data.get('event_id')
+            or request.data.get('id')
+            or request.data.get('provider_event_id')
+        )
         bounce_details = self._extract_bounce_details(request.data)
         
         # Simple MVP tracking
@@ -427,48 +493,35 @@ class WebhookView(APIView):
                 )
                 if message_id:
                     base_qs = base_qs.filter(last_sent_message_id=message_id)
+                
+                campaign_id = request.data.get('campaign_id') or request.data.get('campaignId')
+                if campaign_id:
+                    base_qs = base_qs.filter(campaign_id=campaign_id)
+                
+                org_id = request.data.get('organization_id') or request.data.get('org_id') or request.data.get('orgId')
+                if org_id:
+                    base_qs = base_qs.filter(organization_id=org_id)
+
                 cleads = list(base_qs)
 
-                now = timezone.now()
-                from campaigns.tasks import (
-                    _campaign_has_condition_reply_yes_branch,
-                    _execute_condition_click_step,
-                    _execute_condition_open_step,
-                    _execute_condition_reply_step,
-                    _mark_campaign_lead_bounced,
-                )
+                # Prevent cross-tenant metrics leakage in case of ambiguous matches
+                if len(cleads) > 1 and not (message_id or campaign_id or org_id):
+                    logger.warning(
+                        "Ambiguous webhook event for email %s: multiple campaign leads found across different tenants. Ignoring to prevent cross-tenant leakage.",
+                        lead_email
+                    )
+                    return Response({"status": "ignored", "reason": "ambiguous tenant"}, status=status.HTTP_200_OK)
 
+                now = timezone.now()
                 for cl in cleads:
-                    if event_type == 'bounce':
-                        _mark_campaign_lead_bounced(
-                            cl,
-                            now=now,
-                            bounce_type=bounce_details['bounce_type'],
-                            bounce_code=bounce_details['bounce_code'],
-                            bounce_reason=bounce_details['bounce_reason'],
-                        )
-                    elif event_type == 'reply':
-                        cl.last_replied_at = now
-                        # Only hard-stop if there is no reply-yes branch configured.
-                        if not _campaign_has_condition_reply_yes_branch(cl.campaign):
-                            cl.status = 'REPLIED'
-                            cl.current_step = None
-                            cl.next_execution_time = None
-                            cl.save(update_fields=['status', 'current_step', 'next_execution_time', 'last_replied_at'])
-                        else:
-                            cl.save(update_fields=['last_replied_at'])
-                            if cl.current_step and cl.current_step.channel_type == 'CONDITION_REPLY':
-                                _execute_condition_reply_step(cl, cl.current_step, now=now)
-                    elif event_type == 'open':
-                        cl.last_opened_at = now
-                        cl.save(update_fields=['last_opened_at'])
-                        if cl.current_step and cl.current_step.channel_type == 'CONDITION_OPEN':
-                            _execute_condition_open_step(cl, cl.current_step, now=now)
-                    elif event_type == 'click':
-                        cl.last_clicked_at = now
-                        cl.save(update_fields=['last_clicked_at'])
-                        if cl.current_step and cl.current_step.channel_type == 'CONDITION_CLICK':
-                            _execute_condition_click_step(cl, cl.current_step, now=now)
+                    process_email_event(
+                        cl=cl,
+                        event_type=event_type,
+                        provider_event_id=provider_event_id,
+                        message_id=message_id,
+                        bounce_details=bounce_details,
+                        now=now,
+                    )
             except Exception as e:
                 logger.exception(
                     'Webhook processing error for event=%s email=%s: %s',
@@ -798,14 +851,12 @@ class ClickTrackingView(APIView):
         # Analytics ko update karna
         try:
             lead = CampaignLead.objects.get(id=campaign_lead_id)
-            lead.last_clicked_at = timezone.now()
-            lead.save(update_fields=['last_clicked_at'])
-
-            # Optional: Agar conditionally aage badhana hai sequence ko
-            if lead.current_step and lead.current_step.channel_type == 'CONDITION_CLICK':
-                from .tasks import _execute_condition_click_step
-                _execute_condition_click_step(lead, lead.current_step, now=timezone.now())
-
+            process_email_event(
+                cl=lead,
+                event_type='click',
+                provider_event_id=step_id,
+                now=timezone.now(),
+            )
         except CampaignLead.DoesNotExist:
             pass # Failsafe: Continue to redirect even if the lead was deleted
 
