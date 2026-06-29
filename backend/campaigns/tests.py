@@ -1961,3 +1961,171 @@ class GoogleOAuthStateTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_302_FOUND)
         self.assertIn('google_auth=error', response['Location'])
         self.assertIn('reason=no_user', response['Location'])
+
+
+from django.core.cache import cache
+
+class CampaignAnalyticsPatchTests(APITestCase):
+    def setUp(self):
+        # Clear the cache before each test
+        cache.clear()
+        
+        self.org_a = Organization.objects.create(name='Org A')
+        self.org_b = Organization.objects.create(name='Org B')
+        
+        self.user_a = User.objects.create_user(
+            email='user_a@orga.test',
+            password='StrongPass123!',
+            organization=self.org_a,
+            role='ADMIN',
+        )
+        self.user_b = User.objects.create_user(
+            email='user_b@orgb.test',
+            password='StrongPass123!',
+            organization=self.org_b,
+            role='ADMIN',
+        )
+
+    def test_webhook_tenant_isolation(self):
+        # Create campaigns
+        campaign_a = Campaign.objects.create(organization=self.org_a, name='Camp A', status='ACTIVE')
+        campaign_b = Campaign.objects.create(organization=self.org_b, name='Camp B', status='ACTIVE')
+        
+        # Create leads with the exact same email address
+        email = 'target-lead@example.com'
+        lead_a = Lead.objects.create(organization=self.org_a, email=email)
+        lead_b = Lead.objects.create(organization=self.org_b, email=email)
+        
+        # Enroll them
+        cl_a = CampaignLead.objects.create(
+            organization=self.org_a,
+            campaign=campaign_a,
+            lead=lead_a,
+            status='ACTIVE',
+            last_sent_message_id='msg-a-123'
+        )
+        cl_b = CampaignLead.objects.create(
+            organization=self.org_b,
+            campaign=campaign_b,
+            lead=lead_b,
+            status='ACTIVE',
+            last_sent_message_id='msg-b-123'
+        )
+
+        # 1. Send webhook with message_id (disambiguated)
+        payload = {
+            'event': 'open',
+            'email': email,
+            'message_id': 'msg-a-123'
+        }
+        response = self.client.post('/api/v1/webhooks/email/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        cl_a.refresh_from_db()
+        cl_b.refresh_from_db()
+        self.assertIsNotNone(cl_a.last_opened_at)
+        self.assertIsNone(cl_b.last_opened_at)
+
+        # Reset cl_a
+        cl_a.last_opened_at = None
+        cl_a.save()
+        cache.clear()
+
+        # 2. Send webhook without message_id (ambiguous - matching multiple orgs)
+        payload = {
+            'event': 'open',
+            'email': email
+        }
+        response = self.client.post('/api/v1/webhooks/email/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        cl_a.refresh_from_db()
+        cl_b.refresh_from_db()
+        # Both must remain None to prevent cross-tenant leakage
+        self.assertIsNone(cl_a.last_opened_at)
+        self.assertIsNone(cl_b.last_opened_at)
+
+    def test_webhook_deduplication(self):
+        campaign = Campaign.objects.create(organization=self.org_a, name='Camp', status='ACTIVE')
+        lead = Lead.objects.create(organization=self.org_a, email='lead@example.com')
+        cl = CampaignLead.objects.create(
+            organization=self.org_a,
+            campaign=campaign,
+            lead=lead,
+            status='ACTIVE',
+            last_sent_message_id='msg-123'
+        )
+
+        # Send open event first time
+        payload = {
+            'event': 'open',
+            'email': 'lead@example.com',
+            'message_id': 'msg-123',
+            'event_id': 'evt-unique-123'
+        }
+        response = self.client.post('/api/v1/webhooks/email/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        cl.refresh_from_db()
+        first_opened_at = cl.last_opened_at
+        self.assertIsNotNone(first_opened_at)
+
+        # Send open event second time (with same event_id / sg_event_id)
+        # We manually change cl.last_opened_at to a dummy value to see if it gets overwritten
+        dummy_time = timezone.now() - timedelta(hours=1)
+        cl.last_opened_at = dummy_time
+        cl.save()
+
+        response = self.client.post('/api/v1/webhooks/email/', payload, format='json')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        
+        cl.refresh_from_db()
+        # It should NOT be overwritten (remains dummy_time) because it was deduplicated
+        self.assertEqual(cl.last_opened_at, dummy_time)
+
+    def test_click_tracking_deduplication(self):
+        campaign = Campaign.objects.create(organization=self.org_a, name='Camp', status='ACTIVE')
+        step = SequenceStep.objects.create(
+            organization=self.org_a,
+            campaign=campaign,
+            step_order=1,
+            channel_type='CONDITION_CLICK',
+            delay_minutes=0
+        )
+        lead = Lead.objects.create(organization=self.org_a, email='click@example.com')
+        cl = CampaignLead.objects.create(
+            organization=self.org_a,
+            campaign=campaign,
+            lead=lead,
+            current_step=step,
+            status='ACTIVE',
+            last_sent_message_id='msg-click'
+        )
+
+        # Generate a signed token
+        from django.core.signing import Signer
+        signer = Signer()
+        token = signer.sign(f"{cl.id}:{step.id}")
+
+        # Perform first click
+        url = f"/api/v1/clicks/track/?t={token}&dest=https%3A%2F%2Fgoogle.com"
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
+        self.assertEqual(response['Location'], 'https://google.com')
+
+        cl.refresh_from_db()
+        self.assertIsNotNone(cl.last_clicked_at)
+        
+        # Reset last_clicked_at to dummy value
+        dummy_time = timezone.now() - timedelta(hours=1)
+        cl.last_clicked_at = dummy_time
+        cl.save()
+
+        # Perform second click (duplicate)
+        response = self.client.get(url)
+        self.assertEqual(response.status_code, status.HTTP_302_FOUND)
+        self.assertEqual(response['Location'], 'https://google.com')
+
+        cl.refresh_from_db()
+        # Should not have changed from dummy_time
+        self.assertEqual(cl.last_clicked_at, dummy_time)
