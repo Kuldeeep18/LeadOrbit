@@ -30,7 +30,35 @@ This project adheres to the Contributor Covenant [Code of Conduct](CODE_OF_CONDU
 
 ## Contributing
 
-... existing contributing content ...
+We welcome contributions of all kinds, including bug fixes, new features, documentation improvements, and code refactoring.
+
+To contribute:
+
+1. Fork the repository.
+2. Clone your fork locally.
+3. Create a new branch for your changes.
+   ```sh
+   git checkout -b feature/your-feature-name
+   ```
+4. Make your changes and ensure the project continues to work as expected.
+5. Commit your changes with a clear and descriptive commit message.
+   ```sh
+   git commit -m "docs: improve README contributing section"
+   ```
+6. Push your branch to your fork.
+   ```sh
+   git push origin feature/your-feature-name
+   ```
+7. Open a Pull Request describing your changes and referencing any related issues.
+
+### Before Submitting
+
+- Follow the existing code style and project structure.
+- Keep pull requests focused on a single issue or feature.
+- Update documentation when necessary.
+- Ensure all relevant tests pass before submitting.
+
+Thank you for helping improve LeadOrbit! 🚀
 
 ## What Works Today
 
@@ -128,6 +156,37 @@ TWILIO_ACCOUNT_SID=
 TWILIO_AUTH_TOKEN=
 TWILIO_PHONE_NUMBER=
 ```
+
+#### Environment Variable Descriptions
+
+- `DEBUG` – Enables or disables Django's debug mode.
+- `SECRET_KEY` – Secret key used by Django for cryptographic operations.
+- `BACKEND_BASE_URL` – Base URL where the backend server is hosted.
+- `FRONTEND_BASE_URL` – Base URL where the frontend application is served.
+
+**Celery**
+- `CELERY_TASK_ALWAYS_EAGER` – Executes Celery tasks synchronously during development.
+- `CELERY_BROKER_URL` – URL of the message broker (Redis).
+- `ENABLE_AUTO_REPLY_DETECTION` – Enables background email reply polling.
+- `LAUNCH_IMMEDIATE_PASSES` – Controls immediate campaign processing behavior.
+
+**AI Integrations**
+- `OPENROUTER_API_KEY` – API key for AI-powered email draft generation.
+- `OPENROUTER_MODEL` – AI model used for draft generation.
+- `OPENROUTER_APP_URL` – Application URL sent to OpenRouter.
+- `OPENROUTER_APP_NAME` – Application name used by OpenRouter.
+- `GEMINI_API_KEY` – API key for Gemini-based personalization.
+
+**Google OAuth**
+- `GOOGLE_CLIENT_ID` – Google OAuth client ID.
+- `GOOGLE_CLIENT_SECRET` – Google OAuth client secret.
+- `GOOGLE_REDIRECT_URI` – OAuth callback URL registered in Google Cloud.
+
+**Twilio**
+- `TWILIO_ACCOUNT_SID` – Twilio account identifier.
+- `TWILIO_AUTH_TOKEN` – Authentication token for the Twilio account.
+- `TWILIO_PHONE_NUMBER` – Twilio phone number used for SMS and voice calls.
+
 
 ### 3. Run migrations
 
