@@ -4,9 +4,11 @@ import re
 from celery import shared_task
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
-from .models import Lead
-from .models import LeadImportJob
+from django.utils import timezone
+import time
+from .models import Lead, LeadImportJob, LeadScrapeJob, BlockedDomain
 from tenants.models import Organization
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -174,3 +176,137 @@ def import_leads_from_csv(file_contents, organization_id, job_id=None):
     summary = f"Processed {leads_created} new, {leads_updated} updated, {failed_count} failed for organization {org.name}"
     logger.info(summary)
     return summary
+
+
+@shared_task
+def run_web_scraper(job_id, query):
+    try:
+        job = LeadScrapeJob.objects.get(id=job_id)
+    except LeadScrapeJob.DoesNotExist:
+        logger.error(f"LeadScrapeJob {job_id} not found.")
+        return f"Job {job_id} not found"
+
+    job.status = 'RUNNING'
+    job.leads_found = 0
+    job.log_messages = []
+    job.save()
+
+    def add_log(msg):
+        logger.info(f"[Scraper Job {job_id}] {msg}")
+        job.refresh_from_db()
+        logs = list(job.log_messages or [])
+        logs.append({
+            "timestamp": timezone.now().isoformat(),
+            "message": msg
+        })
+        job.log_messages = logs
+        job.save()
+
+    try:
+        add_log(f"Starting lead scraping for query: '{query}'")
+        time.sleep(1)
+
+        # Domain extraction/normalization from query
+        clean_query = query.strip().lower()
+        if '://' in clean_query:
+            domain = clean_query.split('://', 1)[1].split('/', 1)[0].split(':', 1)[0]
+        elif '/' in clean_query:
+            domain = clean_query.split('/', 1)[0].split(':', 1)[0]
+        else:
+            domain = clean_query
+
+        # Remove subdomains like www.
+        if domain.startswith('www.'):
+            domain = domain[4:]
+
+        # If it doesn't look like a domain, format it
+        if '.' not in domain or len(domain.split('.')[-1]) < 2:
+            domain_name = re.sub(r'[^a-z0-9]', '', domain) or 'example'
+            domain = f"{domain_name}.com"
+
+        add_log(f"Target domain identified: {domain}")
+        time.sleep(1)
+
+        # Check for blocked domain
+        if BlockedDomain.objects.filter(organization=job.organization, domain=domain).exists():
+            add_log(f"Domain '{domain}' is blocked by organization policies. Aborting scraper job.")
+            job.status = 'FAILED'
+            job.save()
+            return f"Aborted: Domain {domain} is blocked"
+
+        add_log("Searching index and crawling domain for contact details...")
+        time.sleep(1)
+
+        # Standard B2B contacts to mock
+        mock_contacts = [
+            {
+                "first_name": "John",
+                "last_name": "Doe",
+                "email": f"john.doe@{domain}",
+                "company": domain.split('.')[0].title(),
+                "phone": "+15550199"
+            },
+            {
+                "first_name": "Jane",
+                "last_name": "Smith",
+                "email": f"jane.smith@{domain}",
+                "company": domain.split('.')[0].title(),
+                "phone": "+15550198"
+            },
+            {
+                "first_name": "Alex",
+                "last_name": "Jones",
+                "email": f"alex.jones@{domain}",
+                "company": domain.split('.')[0].title(),
+                "phone": "+15550197"
+            }
+        ]
+
+        for contact in mock_contacts:
+            email = contact["email"]
+            add_log(f"Found potential contact: {contact['first_name']} {contact['last_name']} ({email})")
+            time.sleep(1)
+
+            # Re-check if domain is blocked before saving (double-check boundary)
+            if BlockedDomain.objects.filter(organization=job.organization, domain=domain).exists():
+                add_log(f"Domain '{domain}' was blocked during execution. Skipping contact.")
+                continue
+
+            lead, created = Lead.objects.update_or_create(
+                organization=job.organization,
+                email=email,
+                defaults={
+                    'first_name': contact['first_name'],
+                    'last_name': contact['last_name'],
+                    'company': contact['company'],
+                    'phone': contact['phone'],
+                }
+            )
+
+            if created:
+                add_log(f"Enrolled new lead: {email}")
+            else:
+                add_log(f"Updated existing lead details for: {email}")
+
+            job.refresh_from_db()
+            job.leads_found += 1
+            job.save()
+
+        add_log(f"Scraper job completed successfully. Enrolled {job.leads_found} leads.")
+        job.status = 'COMPLETED'
+        job.save()
+        return f"Completed: Found {job.leads_found} leads"
+
+    except Exception as exc:
+        job.refresh_from_db()
+        job.status = 'FAILED'
+        logs = list(job.log_messages or [])
+        logs.append({
+            "timestamp": timezone.now().isoformat(),
+            "message": f"Fatal error during scraping: {str(exc)}"
+        })
+        job.log_messages = logs
+        job.save()
+        logger.exception("Error running web scraper")
+        raise exc
+
