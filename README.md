@@ -51,6 +51,52 @@ Execution status by step type:
 - Fully implemented: `EMAIL`, `SMS`, `CALL`, `WAIT`, `CONDITION_OPEN`, `CONDITION_REPLY`, `CONDITION_CLICK`
 - Builder-visible but currently placeholder/auto-advance steps: `WHATSAPP`, `LINKEDIN`, `MANUAL`
 
+## 🚀 Quick Start
+
+Follow these steps to get LeadOrbit running locally:
+
+```sh
+# Clone the repository
+git clone https://github.com/Kuldeeep18/LeadOrbit.git
+
+# Navigate to the project directory
+cd LeadOrbit
+
+# Create and activate a virtual environment
+python -m venv .venv
+
+# Windows
+.venv\Scripts\activate
+
+# macOS/Linux
+source .venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Apply database migrations
+python backend/manage.py migrate
+
+# Start the backend server
+cd backend
+python manage.py runserver 8000
+```
+
+In a new terminal, serve the frontend:
+
+```sh
+cd frontend
+python -m http.server 8080
+```
+
+Open your browser and visit:
+
+```
+http://127.0.0.1:8080/login.html
+```
+
+For detailed configuration, including environment variables and background jobs, refer to the **Local Setup** and **Background Jobs** sections below.
+
 ## Stack
 
 - Backend: Django 5, Django REST Framework, Simple JWT, Celery, `django-cors-headers`
