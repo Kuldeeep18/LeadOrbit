@@ -30,7 +30,35 @@ This project adheres to the Contributor Covenant [Code of Conduct](CODE_OF_CONDU
 
 ## Contributing
 
-... existing contributing content ...
+We welcome contributions of all kinds, including bug fixes, new features, documentation improvements, and code refactoring.
+
+To contribute:
+
+1. Fork the repository.
+2. Clone your fork locally.
+3. Create a new branch for your changes.
+   ```sh
+   git checkout -b feature/your-feature-name
+   ```
+4. Make your changes and ensure the project continues to work as expected.
+5. Commit your changes with a clear and descriptive commit message.
+   ```sh
+   git commit -m "docs: improve README contributing section"
+   ```
+6. Push your branch to your fork.
+   ```sh
+   git push origin feature/your-feature-name
+   ```
+7. Open a Pull Request describing your changes and referencing any related issues.
+
+### Before Submitting
+
+- Follow the existing code style and project structure.
+- Keep pull requests focused on a single issue or feature.
+- Update documentation when necessary.
+- Ensure all relevant tests pass before submitting.
+
+Thank you for helping improve LeadOrbit! 🚀
 
 ## What Works Today
 
