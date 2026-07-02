@@ -542,6 +542,77 @@
             background: #dbeafe;
         }
 
+        .subject-preview-shell {
+            background: linear-gradient(160deg, #e9f1fb 0%, #f7fbff 100%);
+            border: 1px solid #dbe7f5;
+            border-radius: 14px;
+            padding: 12px;
+        }
+
+        .subject-preview-phone {
+            max-width: 280px;
+            margin: 0 auto;
+            background: #0f172a;
+            border-radius: 22px;
+            padding: 10px;
+            box-shadow: inset 0 0 0 1px rgba(148, 163, 184, 0.25);
+        }
+
+        .subject-preview-notch {
+            width: 88px;
+            height: 14px;
+            border-radius: 0 0 12px 12px;
+            background: #020617;
+            margin: 0 auto 10px;
+        }
+
+        .subject-preview-notification {
+            background: rgba(241, 245, 249, 0.96);
+            border: 1px solid #dbe4ef;
+            border-radius: 12px;
+            padding: 10px;
+        }
+
+        .subject-preview-meta {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.66rem;
+            color: #64748b;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            font-weight: 700;
+        }
+
+        .subject-preview-sender {
+            font-size: 0.74rem;
+            color: #0f172a;
+            font-weight: 700;
+            margin-bottom: 2px;
+        }
+
+        .subject-preview-subject {
+            font-size: 0.78rem;
+            color: #0f172a;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            font-weight: 600;
+        }
+
+        .subject-preview-subject.subject-preview-placeholder {
+            color: #94a3b8;
+            font-weight: 500;
+        }
+
+        .subject-preview-hint {
+            font-size: 0.7rem;
+            color: #64748b;
+            margin-top: 8px;
+            text-align: center;
+        }
+
         .ai-btn {
             background: linear-gradient(135deg, #8b5cf6, #6366f1);
             color: #fff;
@@ -2057,6 +2128,23 @@ ${rows || `
                     <input type="text" class="ep-input" id="ep-subject" placeholder="Subject" value="${step.subject || ''}">
                 </div>
                 <div class="mb-3">
+                    <div class="ep-label">Mobile Inbox Preview</div>
+                    <div class="subject-preview-shell">
+                        <div class="subject-preview-phone">
+                            <div class="subject-preview-notch"></div>
+                            <div class="subject-preview-notification" role="status" aria-live="polite">
+                                <div class="subject-preview-meta">
+                                    <span>Mail</span>
+                                    <span>now</span>
+                                </div>
+                                <div class="subject-preview-sender">LeadOrbit Campaign</div>
+                                <div class="subject-preview-subject" id="ep-subject-preview"></div>
+                            </div>
+                        </div>
+                        <div class="subject-preview-hint">Long subjects truncate on small screens.</div>
+                    </div>
+                </div>
+                <div class="mb-3">
                     <div class="ep-label">Body</div>
                     <textarea class="ep-textarea" id="ep-body" placeholder="Write your email content...">${step.body || ''}</textarea>
                 </div>
@@ -2085,17 +2173,42 @@ ${rows || `
             `;
 
             // Bind inputs
-            document.getElementById('ep-subject').addEventListener('input', (e) => { step.subject = e.target.value; });
-            document.getElementById('ep-body').addEventListener('input', (e) => { step.body = e.target.value; });
+            const subjectInput = document.getElementById('ep-subject');
+            const bodyInput = document.getElementById('ep-body');
+            const subjectPreview = document.getElementById('ep-subject-preview');
 
-            let activeEditor = document.getElementById('ep-body');
+            const syncSubjectPreview = (value) => {
+                if (!subjectPreview) return;
+                const trimmed = (value || '').trim();
+                subjectPreview.textContent = trimmed || 'Your subject line will appear here';
+                subjectPreview.classList.toggle('subject-preview-placeholder', !trimmed);
+            };
 
-            document.getElementById('ep-subject').addEventListener('focus', () => {
-                activeEditor = document.getElementById('ep-subject');
+            const syncSubjectFromInput = (value) => {
+                step.subject = value;
+                syncSubjectPreview(value);
+            };
+
+            syncSubjectPreview(step.subject);
+
+            subjectInput.addEventListener('input', (e) => {
+                syncSubjectFromInput(e.target.value);
             });
 
-            document.getElementById('ep-body').addEventListener('focus', () => {
-                activeEditor = document.getElementById('ep-body');
+            subjectInput.addEventListener('keyup', (e) => {
+                syncSubjectFromInput(e.target.value);
+            });
+
+            bodyInput.addEventListener('input', (e) => { step.body = e.target.value; });
+
+            let activeEditor = bodyInput;
+
+            subjectInput.addEventListener('focus', () => {
+                activeEditor = subjectInput;
+            });
+
+            bodyInput.addEventListener('focus', () => {
+                activeEditor = bodyInput;
             });
 
 
@@ -2117,7 +2230,7 @@ ${rows || `
                 body.value.substring(end);
 
             if (body.id === 'ep-subject') {
-                step.subject = body.value;
+                syncSubjectFromInput(body.value);
             } else {
                 step.body = body.value;
             }
@@ -2448,7 +2561,10 @@ ${rows || `
 
             const subjectInput = document.getElementById('ep-subject');
             const bodyInput = document.getElementById('ep-body');
-            if (subjectInput) subjectInput.value = aiComposerStep.subject;
+            if (subjectInput) {
+                subjectInput.value = aiComposerStep.subject;
+                subjectInput.dispatchEvent(new Event('input', { bubbles: true }));
+            }
             if (bodyInput) bodyInput.value = aiComposerStep.body;
 
             renderCanvas();
