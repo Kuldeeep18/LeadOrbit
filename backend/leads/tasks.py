@@ -8,6 +8,8 @@ from .models import Lead
 from .models import LeadImportJob
 from tenants.models import Organization
 import logging
+from datetime import datetime
+from dateutil import parser
 
 logger = logging.getLogger(__name__)
 
@@ -54,15 +56,50 @@ def _get_field(row, *keys):
 
 def _extract_custom_variables(row):
     custom_variables = {}
+
     for key, value in row.items():
         if _normalize_key(key) in STANDARD_CSV_HEADERS:
             continue
+
         custom_key = _normalize_custom_variable_key(key)
         if not custom_key:
             continue
-        custom_variables[custom_key] = (value or '').strip()
+
+        clean_value = (value or "").strip()
+
+        # Parse only fields that appear to represent dates
+        if "date" in custom_key:
+            parsed_value = _parse_date_value(clean_value)
+            custom_variables[custom_key] = parsed_value
+        else:
+            custom_variables[custom_key] = clean_value
+
     return custom_variables
 
+def _parse_date_value(value):
+    if not value:
+        return value
+
+    
+    try:
+        return datetime.fromisoformat(value).date().isoformat()
+    except (ValueError, TypeError):
+        pass
+
+    
+    try:
+        return parser.parse(value, dayfirst=True).date().isoformat()
+    except (ValueError, TypeError):
+        pass
+
+   
+    try:
+        return parser.parse(value, yearfirst=True).date().isoformat()
+    except (ValueError, TypeError):
+        pass
+
+    logger.warning("Unable to parse date value '%s'", value)
+    return value
 
 @shared_task
 def import_leads_from_csv(file_contents, organization_id, job_id=None):

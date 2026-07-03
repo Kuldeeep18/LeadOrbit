@@ -6,6 +6,8 @@ from leads.models import BlockedDomain, Lead, Tag, LeadTag, LeadImportJob
 from leads.tasks import import_leads_from_csv
 from tenants.models import Organization
 from users.models import User
+from datetime import datetime
+from dateutil import parser
 
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
@@ -64,6 +66,42 @@ class LeadImportTests(APITestCase):
                 'meeting_time': '10:30 AM',
                 'lead_source': 'Referral',
             },
+        )
+
+    def test_import_keeps_invalid_custom_date(self):
+        csv_data = (
+            "email,Start Date\n"
+            "alice@example.com,not-a-date\n"
+        )
+
+        import_leads_from_csv(csv_data, str(self.organization.id))
+
+        lead = Lead.objects.get(
+            organization=self.organization,
+            email="alice@example.com",
+        )
+
+        self.assertEqual(
+            lead.custom_variables["start_date"],
+            "not-a-date",
+        )
+
+    def test_import_parses_custom_date_field(self):
+        csv_data = (
+            "email,Start Date\n"
+            "alice@example.com,03/07/2026\n"
+        )
+
+        import_leads_from_csv(csv_data, str(self.organization.id))
+
+        lead = Lead.objects.get(
+            organization=self.organization,
+            email="alice@example.com",
+        )
+
+        self.assertEqual(
+            lead.custom_variables["start_date"],
+            "2026-07-03",
         )
 
     def test_import_records_validation_errors_in_history_job(self):
