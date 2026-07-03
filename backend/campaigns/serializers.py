@@ -90,6 +90,13 @@ class CampaignSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Connected account not found for the current user.")
         return value
 
+    def validate(self, attrs):
+        steps_payload = self._extract_steps_payload()
+        if steps_payload is not None:
+            for index, raw_step in enumerate(steps_payload):
+                self._normalize_step(raw_step, index)
+        return attrs
+
     def create(self, validated_data):
         connected_account_id = validated_data.pop('connected_account_id', None)
         steps_payload = self._extract_steps_payload()
@@ -154,20 +161,42 @@ class CampaignSerializer(serializers.ModelSerializer):
         return value
 
     def _sync_sequence_steps(self, campaign, raw_steps):
-        SequenceStep.objects.filter(campaign=campaign).delete()
+        existing_steps = {
+            step.step_order: step
+            for step in SequenceStep.objects.filter(campaign=campaign)
+        }
+        seen_orders = []
 
         for index, raw_step in enumerate(raw_steps):
             normalized = self._normalize_step(raw_step, index)
-            step = SequenceStep.objects.create(
-                organization=campaign.organization,
-                campaign=campaign,
-                step_order=index + 1,
-                channel_type=normalized['channel_type'],
-                delay_minutes=normalized['delay_minutes'],
-                template_subject=normalized['template_subject'],
-                template_body=normalized['template_body'],
-            )
+            step_order = index + 1
+            seen_orders.append(step_order)
+            step = existing_steps.get(step_order)
+
+            if step is None:
+                step = SequenceStep.objects.create(
+                    organization=campaign.organization,
+                    campaign=campaign,
+                    step_order=step_order,
+                    channel_type=normalized['channel_type'],
+                    delay_minutes=normalized['delay_minutes'],
+                    template_subject=normalized['template_subject'],
+                    template_body=normalized['template_body'],
+                )
+            else:
+                step.channel_type = normalized['channel_type']
+                step.delay_minutes = normalized['delay_minutes']
+                step.template_subject = normalized['template_subject']
+                step.template_body = normalized['template_body']
+                step.save(update_fields=[
+                    'channel_type',
+                    'delay_minutes',
+                    'template_subject',
+                    'template_body',
+                ])
             self._sync_email_variants(step, normalized['variants'])
+
+        SequenceStep.objects.filter(campaign=campaign).exclude(step_order__in=seen_orders).delete()
 
     def _normalize_step(self, raw_step, index):
         if not isinstance(raw_step, dict):
@@ -203,19 +232,24 @@ class CampaignSerializer(serializers.ModelSerializer):
 
     def _sync_email_variants(self, step, variants):
         if not variants:
+            step.variants.all().delete()
             return
 
-        EmailVariant.objects.bulk_create([
-            EmailVariant(
-                organization=step.organization,
+        seen_labels = []
+        for variant in variants:
+            seen_labels.append(variant['variant_label'])
+            EmailVariant.objects.update_or_create(
                 step=step,
                 variant_label=variant['variant_label'],
-                subject=variant['subject'],
-                body=variant['body'],
-                weight=variant['weight'],
+                defaults={
+                    'organization': step.organization,
+                    'subject': variant['subject'],
+                    'body': variant['body'],
+                    'weight': variant['weight'],
+                },
             )
-            for variant in variants
-        ])
+
+        step.variants.exclude(variant_label__in=seen_labels).delete()
 
     def _normalize_variants(self, raw_step, channel_type, default_subject, default_body):
         raw_variants = raw_step.get('variants')
@@ -223,6 +257,7 @@ class CampaignSerializer(serializers.ModelSerializer):
             return []
 
         variants = []
+        seen_labels = set()
         for index, raw_variant in enumerate(raw_variants):
             if not isinstance(raw_variant, dict):
                 continue
@@ -232,9 +267,15 @@ class CampaignSerializer(serializers.ModelSerializer):
                 or raw_variant.get('label')
                 or chr(65 + index)
             ).strip()[:10]
+            label = label or chr(65 + index)
+            if label in seen_labels:
+                raise serializers.ValidationError({
+                    'steps': f"Duplicate email variant label '{label}' in step {raw_step.get('step_order') or 1}."
+                })
+            seen_labels.add(label)
             weight = self._coerce_int(raw_variant.get('weight'))
             variants.append({
-                'variant_label': label or chr(65 + index),
+                'variant_label': label,
                 'subject': raw_variant.get('subject') or default_subject or '',
                 'body': raw_variant.get('body') or default_body or '',
                 'weight': max(weight if weight is not None else 50, 0),

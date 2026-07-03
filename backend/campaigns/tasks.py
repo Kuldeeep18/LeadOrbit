@@ -1,4 +1,5 @@
 import logging
+import json
 import random
 import urllib.parse
 from datetime import timedelta
@@ -541,9 +542,6 @@ def rewrite_email_links(html_body, campaign_lead_id, step_id):
     soup = BeautifulSoup(html_body, 'html.parser')
     signer = Signer()
 
-    token_payload = f"{campaign_lead_id}:{step_id}"
-    signed_token = signer.sign(token_payload)
-
     base_url = getattr(django_settings, 'BACKEND_BASE_URL', 'http://127.0.0.1:8000').rstrip('/')
     tracking_endpoint = f"{base_url}/api/v1/clicks/track/"
 
@@ -553,9 +551,15 @@ def rewrite_email_links(html_body, campaign_lead_id, step_id):
         if not original_url or original_url.startswith(('mailto:', 'tel:')) or tracking_endpoint in original_url:
             continue
 
-        encoded_dest = urllib.parse.quote(original_url, safe='')
+        token_payload = json.dumps({
+            'campaign_lead_id': str(campaign_lead_id),
+            'step_id': str(step_id),
+            'dest': original_url,
+        }, separators=(',', ':'))
+        signed_token = signer.sign(token_payload)
+        encoded_token = urllib.parse.quote(signed_token, safe='')
 
-        tracking_url = f"{tracking_endpoint}?t={signed_token}&dest={encoded_dest}"
+        tracking_url = f"{tracking_endpoint}?t={encoded_token}"
         a_tag['href'] = tracking_url
 
     return str(soup)
