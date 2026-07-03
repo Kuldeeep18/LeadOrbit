@@ -20,6 +20,9 @@ class CampaignsConfig(AppConfig):
         execute campaign processing + reply polling in-process so delayed steps
         and reply tracking still work locally.
         """
+        # Register signal handlers for cache counter updates
+        from . import signals
+        
         from django.conf import settings
 
         if not settings.DEBUG or not settings.CELERY_TASK_ALWAYS_EAGER:
@@ -44,7 +47,7 @@ class CampaignsConfig(AppConfig):
         try:
             # Import task callables on the main thread so the scheduler thread
             # does not race Django startup imports.
-            from .tasks import poll_gmail_for_replies, process_active_leads_once
+            from .tasks import check_imap_bounces, poll_gmail_for_replies, process_active_leads_once
         except Exception as exc:
             logger.exception(f"[DevScheduler] failed to initialize: {exc}")
             with _dev_scheduler_lock:
@@ -62,6 +65,7 @@ class CampaignsConfig(AppConfig):
                     if processed:
                         logger.info(f"[DevScheduler] processed campaign leads: {processed}")
                     if tick % 4 == 0:
+                        check_imap_bounces()
                         poll_gmail_for_replies()
                 except Exception as exc:
                     logger.exception(f"[DevScheduler] loop error: {exc}")

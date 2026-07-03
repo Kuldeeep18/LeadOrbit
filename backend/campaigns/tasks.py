@@ -1,14 +1,30 @@
 import logging
+import urllib.parse
 from datetime import timedelta
 
+from bs4 import BeautifulSoup
 from celery import shared_task
 from django.conf import settings as django_settings
+from django.core.signing import Signer
+from django.db.models import Q
 from django.utils import timezone
 
 from .ai import _apply_merge_tags, personalize_email
-from .gmail_service import build_unsubscribe_url, check_for_replies, send_gmail
-from .sms_service import send_sms, initiate_call
-from .models import CampaignLead, SequenceStep
+from .gmail_service import (
+    build_unsubscribe_url,
+    check_for_replies,
+    find_gmail_bounce_candidates,
+    mark_gmail_message_as_read,
+    send_gmail,
+)
+from .mailbox_service import (
+    find_imap_bounce_candidates,
+    mark_imap_message_as_read,
+    send_smtp_email,
+)
+from .notifications import notify_email_bounced
+from .sms_service import initiate_call, send_sms
+from .models import CampaignLead, ConnectedEmailAccount, SequenceStep
 from leads.models import BlockedDomain, normalize_domain
 
 logger = logging.getLogger(__name__)
@@ -111,6 +127,53 @@ def _maybe_mark_campaign_completed(campaign):
     campaign.status = 'COMPLETED'
     campaign.save(update_fields=['status'])
     logger.info(f"Campaign marked COMPLETED: {campaign.id}")
+
+
+def _mark_campaign_lead_bounced(
+    clead,
+    now=None,
+    bounce_type=None,
+    bounce_code=None,
+    bounce_reason=None,
+):
+    now = now or timezone.now()
+    was_bounced = clead.status == 'BOUNCED'
+
+    update_fields = []
+    if clead.status != 'BOUNCED':
+        clead.status = 'BOUNCED'
+        update_fields.append('status')
+    if clead.current_step_id is not None:
+        clead.current_step = None
+        update_fields.append('current_step')
+    if clead.next_execution_time is not None:
+        clead.next_execution_time = None
+        update_fields.append('next_execution_time')
+    if bounce_type and clead.bounce_type != bounce_type:
+        clead.bounce_type = bounce_type
+        update_fields.append('bounce_type')
+    if bounce_code and clead.bounce_code != bounce_code:
+        clead.bounce_code = bounce_code
+        update_fields.append('bounce_code')
+    if bounce_reason and clead.bounce_reason != bounce_reason:
+        clead.bounce_reason = bounce_reason
+        update_fields.append('bounce_reason')
+
+    if update_fields:
+        clead.save(update_fields=update_fields)
+
+    if not was_bounced:
+        notify_email_bounced(clead.organization_id, clead.lead.email)
+    _maybe_mark_campaign_completed(clead.campaign)
+    logger.info(
+        "Bounce detected for %s in campaign %s at %s (type=%s, code=%s)",
+        clead.lead.email,
+        clead.campaign.name,
+        now.isoformat(),
+        clead.bounce_type or 'unknown',
+        clead.bounce_code or 'unknown',
+    )
+    return not was_bounced
 
 
 def _advance_to_next_step(clead, completed_step, now=None):
@@ -262,7 +325,7 @@ def _execute_condition_reply_step(clead, step, now=None):
         if yes_branch_step_order and yes_branch_step_order > step.step_order:
             steps = _get_campaign_steps(clead.campaign)
             yes_step = next((s for s in steps if s.step_order == yes_branch_step_order), None)
-            
+
             if yes_step:
                 _activate_step(clead, yes_step, now=now)
                 logger.info(
@@ -305,7 +368,7 @@ def _execute_condition_reply_step(clead, step, now=None):
     if no_branch_step_order and no_branch_step_order > step.step_order:
         steps = _get_campaign_steps(clead.campaign)
         no_step = next((s for s in steps if s.step_order == no_branch_step_order), None)
-        
+
         if no_step:
             _activate_step(clead, no_step, now=now)
             logger.info(
@@ -363,6 +426,34 @@ def _skip_blocked_domain_lead(clead):
     return True
 
 
+def _mark_matching_account_leads_bounced(account, failed_recipients, now=None):
+    now = now or timezone.now()
+    normalized_recipients = {
+        str(recipient or '').strip().lower()
+        for recipient in failed_recipients
+        if str(recipient or '').strip()
+    }
+    if not normalized_recipients:
+        return 0
+
+    email_query = Q()
+    for recipient in normalized_recipients:
+        email_query |= Q(lead__email__iexact=recipient)
+
+    bounced = 0
+    matching_leads = CampaignLead.objects.filter(
+        email_query,
+        campaign__connected_account=account,
+        status__in=['ACTIVE', 'ENROLLED', 'FINISHED'],
+    ).select_related('campaign', 'lead')
+
+    for clead in matching_leads:
+        if _mark_campaign_lead_bounced(clead, now=now):
+            bounced += 1
+
+    return bounced
+
+
 def _execute_sms_step(clead, step, now=None):
     """Send an SMS to the lead's phone number via Twilio."""
     now = now or timezone.now()
@@ -409,7 +500,7 @@ def _execute_call_step(clead, step, now=None):
         sid = initiate_call(phone, call_script or None)
         logger.info(f"Call initiated to {clead.lead.email} ({phone}) | sid={sid}")
     except RuntimeError:
-        # Twilio not configured — treat as manual step
+
         logger.info(f"CALL step (manual) for {clead.lead.email} ({phone}): {call_script or 'No script'}")
     except Exception as err:
         logger.error(f"Call failed for {clead.lead.email}: {err}")
@@ -417,14 +508,47 @@ def _execute_call_step(clead, step, now=None):
     _advance_to_next_step(clead, step, now=now)
 
 
+
+def rewrite_email_links(html_body, campaign_lead_id, step_id):
+    """
+    Parses the email body, finds all anchor tags, and replaces the href
+    with our tracking redirect URL.
+    """
+    if not html_body:
+        return html_body
+
+    soup = BeautifulSoup(html_body, 'html.parser')
+    signer = Signer()
+
+    token_payload = f"{campaign_lead_id}:{step_id}"
+    signed_token = signer.sign(token_payload)
+
+    base_url = getattr(django_settings, 'BACKEND_BASE_URL', 'http://127.0.0.1:8000').rstrip('/')
+    tracking_endpoint = f"{base_url}/api/v1/clicks/track/"
+
+    for a_tag in soup.find_all('a', href=True):
+        original_url = a_tag.get('href', '')
+
+        if not original_url or original_url.startswith(('mailto:', 'tel:')) or tracking_endpoint in original_url:
+            continue
+
+        encoded_dest = urllib.parse.quote(original_url, safe='')
+
+        tracking_url = f"{tracking_endpoint}?t={signed_token}&dest={encoded_dest}"
+        a_tag['href'] = tracking_url
+
+    return str(soup)
+# -----------------------------------
+
+
 @shared_task
 def send_email_step(campaign_lead_id, step_id):
     """
-    Dispatches an email through the connected Gmail account (or falls back to mock logging).
+    Dispatch an email through the selected connected account or fall back to mock logging.
     """
-    
+
     try:
-        clead = CampaignLead.objects.select_related('lead', 'campaign').get(id=campaign_lead_id)
+        clead = CampaignLead.objects.select_related('lead', 'campaign__connected_account').get(id=campaign_lead_id)
         step = SequenceStep.objects.get(id=step_id)
 
         if clead.lead.global_unsubscribe:
@@ -459,22 +583,38 @@ def send_email_step(campaign_lead_id, step_id):
 
         subject, body = personalize_email(step.template_subject, step.template_body, clead.lead)
 
+
+        body = rewrite_email_links(body, campaign_lead_id, step_id)
+        # -------------------------------------------
+
         account = clead.campaign.connected_account
         if account:
             try:
-                message_id = send_gmail(
-                    account,
-                    clead.lead.email,
-                    subject,
-                    body,
-                    unsubscribe_url=build_unsubscribe_url(clead.lead),
-                )
+                if account.provider == 'GOOGLE':
+                    message_id = send_gmail(
+                        account,
+                        clead.lead.email,
+                        subject,
+                        body,
+                        unsubscribe_url=build_unsubscribe_url(clead.lead),
+                    )
+                    logger.info(f"Gmail SENT to {clead.lead.email} | msg_id={message_id}")
+                elif account.provider == 'CUSTOM':
+                    message_id = send_smtp_email(
+                        account,
+                        clead.lead.email,
+                        subject,
+                        body,
+                        unsubscribe_url=build_unsubscribe_url(clead.lead),
+                    )
+                    logger.info(f"SMTP SENT to {clead.lead.email} | msg_id={message_id}")
+                else:
+                    raise RuntimeError(f"Unsupported email provider: {account.provider}")
                 clead.last_sent_message_id = message_id
                 clead.save(update_fields=['last_sent_message_id'])
                 clead.lead.recalculate_score()
-                logger.info(f"Gmail SENT to {clead.lead.email} | msg_id={message_id}")
-            except Exception as gmail_err:
-                logger.error(f"Gmail API send failed for {clead.lead.email}: {gmail_err}")
+            except Exception as send_err:
+                logger.error(f"Email send failed for {clead.lead.email}: {send_err}")
                 # Restore next_execution_time so the lead can be retried later.
                 clead.next_execution_time = timezone.now() + timedelta(minutes=15)
                 clead.save(update_fields=['next_execution_time'])
@@ -528,10 +668,10 @@ def process_active_leads_once(now=None):
             if not clead.current_step:
                 if clead.status not in {'ENROLLED', 'ACTIVE'}:
                     break
-                
+
                 steps = _get_campaign_steps(clead.campaign)
                 first_step = steps[0] if steps else None
-                
+
                 if not first_step:
                     break
                 clead.current_step = first_step
@@ -655,3 +795,73 @@ def poll_gmail_for_replies():
                 _maybe_mark_campaign_completed(clead.campaign)
 
     return f"Detected {total_replies} new replies."
+
+
+@shared_task
+def check_imap_bounces():
+    """
+    Poll connected inboxes for unread bounce notifications and mark matching campaign leads as BOUNCED.
+    """
+    if not getattr(django_settings, 'ENABLE_AUTO_BOUNCE_DETECTION', True):
+        return "Bounce polling disabled"
+
+    accounts = (
+        ConnectedEmailAccount._default_manager.filter(
+            campaigns__enrolled_leads__last_sent_message_id__isnull=False,
+            campaigns__enrolled_leads__status__in=['ACTIVE', 'ENROLLED', 'FINISHED'],
+        )
+        .distinct()
+    )
+
+    total_bounced = 0
+    scanned_messages = 0
+    for account in accounts:
+        try:
+            if account.provider == 'GOOGLE':
+                candidates = find_gmail_bounce_candidates(account)
+            elif account.provider == 'CUSTOM':
+                candidates = find_imap_bounce_candidates(account)
+            else:
+                logger.info(
+                    f"Skipping bounce polling for {account.email_address}: provider {account.provider} is not supported yet."
+                )
+                continue
+        except Exception as exc:
+            logger.error(f"Failed to poll bounces for {account.email_address}: {exc}")
+            continue
+
+        for candidate in candidates:
+            scanned_messages += 1
+            message_id = candidate.get('message_id')
+            failed_recipients = candidate.get('failed_recipients') or []
+
+            processed = False
+            try:
+                if not failed_recipients:
+                    logger.warning(
+                        f"Bounce email {message_id} for {account.email_address} did not expose a failed recipient."
+                    )
+                else:
+                    total_bounced += _mark_matching_account_leads_bounced(
+                        account,
+                        failed_recipients,
+                        now=timezone.now(),
+                    )
+                processed = True
+            except Exception as exc:
+                logger.error(
+                    f"Failed processing bounce email {message_id} for {account.email_address}: {exc}"
+                )
+
+            if processed:
+                try:
+                    if account.provider == 'GOOGLE':
+                        mark_gmail_message_as_read(account, message_id)
+                    elif account.provider == 'CUSTOM':
+                        mark_imap_message_as_read(account, message_id)
+                except Exception as exc:
+                    logger.error(
+                        f"Failed to mark bounce email {message_id} as read for {account.email_address}: {exc}"
+                    )
+
+    return f"Processed {scanned_messages} bounce emails and marked {total_bounced} campaign leads as BOUNCED."
