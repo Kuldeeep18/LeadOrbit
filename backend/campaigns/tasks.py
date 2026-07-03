@@ -1,4 +1,6 @@
 import logging
+import json
+import random
 import urllib.parse
 from datetime import timedelta
 
@@ -40,6 +42,26 @@ def _get_campaign_steps(campaign):
             campaign=campaign
         ).order_by("step_order")
     )
+
+
+def _select_email_variant(step):
+    variants = list(step.variants.all())
+    if not variants:
+        return None
+
+    total_weight = sum(max(variant.weight, 0) for variant in variants)
+    if total_weight <= 0:
+        return variants[0]
+
+    threshold = random.uniform(0, total_weight)
+    running_weight = 0
+    for variant in variants:
+        running_weight += max(variant.weight, 0)
+        if threshold <= running_weight:
+            return variant
+
+    return variants[-1]
+
 
 def _get_campaign_raw_steps(campaign):
     settings = campaign.settings if isinstance(campaign.settings, dict) else {}
@@ -325,7 +347,7 @@ def _execute_condition_reply_step(clead, step, now=None):
         if yes_branch_step_order and yes_branch_step_order > step.step_order:
             steps = _get_campaign_steps(clead.campaign)
             yes_step = next((s for s in steps if s.step_order == yes_branch_step_order), None)
-            
+
             if yes_step:
                 _activate_step(clead, yes_step, now=now)
                 logger.info(
@@ -368,7 +390,7 @@ def _execute_condition_reply_step(clead, step, now=None):
     if no_branch_step_order and no_branch_step_order > step.step_order:
         steps = _get_campaign_steps(clead.campaign)
         no_step = next((s for s in steps if s.step_order == no_branch_step_order), None)
-        
+
         if no_step:
             _activate_step(clead, no_step, now=now)
             logger.info(
@@ -500,7 +522,7 @@ def _execute_call_step(clead, step, now=None):
         sid = initiate_call(phone, call_script or None)
         logger.info(f"Call initiated to {clead.lead.email} ({phone}) | sid={sid}")
     except RuntimeError:
-        
+
         logger.info(f"CALL step (manual) for {clead.lead.email} ({phone}): {call_script or 'No script'}")
     except Exception as err:
         logger.error(f"Call failed for {clead.lead.email}: {err}")
@@ -519,24 +541,27 @@ def rewrite_email_links(html_body, campaign_lead_id, step_id):
 
     soup = BeautifulSoup(html_body, 'html.parser')
     signer = Signer()
-    
-    token_payload = f"{campaign_lead_id}:{step_id}"
-    signed_token = signer.sign(token_payload)
-    
+
     base_url = getattr(django_settings, 'BACKEND_BASE_URL', 'http://127.0.0.1:8000').rstrip('/')
     tracking_endpoint = f"{base_url}/api/v1/clicks/track/"
-    
+
     for a_tag in soup.find_all('a', href=True):
         original_url = a_tag.get('href', '')
-        
+
         if not original_url or original_url.startswith(('mailto:', 'tel:')) or tracking_endpoint in original_url:
             continue
-            
-        encoded_dest = urllib.parse.quote(original_url, safe='')
-        
-        tracking_url = f"{tracking_endpoint}?t={signed_token}&dest={encoded_dest}"
+
+        token_payload = json.dumps({
+            'campaign_lead_id': str(campaign_lead_id),
+            'step_id': str(step_id),
+            'dest': original_url,
+        }, separators=(',', ':'))
+        signed_token = signer.sign(token_payload)
+        encoded_token = urllib.parse.quote(signed_token, safe='')
+
+        tracking_url = f"{tracking_endpoint}?t={encoded_token}"
         a_tag['href'] = tracking_url
-        
+
     return str(soup)
 # -----------------------------------
 
@@ -546,7 +571,7 @@ def send_email_step(campaign_lead_id, step_id):
     """
     Dispatch an email through the selected connected account or fall back to mock logging.
     """
-    
+
     try:
         clead = CampaignLead.objects.select_related('lead', 'campaign__connected_account').get(id=campaign_lead_id)
         step = SequenceStep.objects.get(id=step_id)
@@ -581,9 +606,12 @@ def send_email_step(campaign_lead_id, step_id):
             )
             return
 
-        subject, body = personalize_email(step.template_subject, step.template_body, clead.lead)
+        selected_variant = _select_email_variant(step)
+        template_subject = selected_variant.subject if selected_variant else step.template_subject
+        template_body = selected_variant.body if selected_variant else step.template_body
+        subject, body = personalize_email(template_subject, template_body, clead.lead)
 
-       
+
         body = rewrite_email_links(body, campaign_lead_id, step_id)
         # -------------------------------------------
 
@@ -611,7 +639,8 @@ def send_email_step(campaign_lead_id, step_id):
                 else:
                     raise RuntimeError(f"Unsupported email provider: {account.provider}")
                 clead.last_sent_message_id = message_id
-                clead.save(update_fields=['last_sent_message_id'])
+                clead.last_email_variant = selected_variant
+                clead.save(update_fields=['last_sent_message_id', 'last_email_variant'])
             except Exception as send_err:
                 logger.error(f"Email send failed for {clead.lead.email}: {send_err}")
                 # Restore next_execution_time so the lead can be retried later.
@@ -667,10 +696,10 @@ def process_active_leads_once(now=None):
             if not clead.current_step:
                 if clead.status not in {'ENROLLED', 'ACTIVE'}:
                     break
-                
+
                 steps = _get_campaign_steps(clead.campaign)
                 first_step = steps[0] if steps else None
-                
+
                 if not first_step:
                     break
                 clead.current_step = first_step
