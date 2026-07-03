@@ -684,6 +684,61 @@ class CampaignWorkflowTests(APITestCase):
         self.assertIsNone(campaign_lead.last_sent_message_id)
         self.assertGreater(campaign_lead.next_execution_time, timezone.now())
 
+    def test_send_email_step_does_not_retry_when_score_recalculation_fails(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Score failure after send',
+            status='ACTIVE',
+        )
+        account = ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=self.user,
+            email_address='sender-score@acme.test',
+            provider='GOOGLE',
+            access_token='token',
+            refresh_token='refresh',
+        )
+        campaign.connected_account = account
+        campaign.save(update_fields=['connected_account'])
+
+        email_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Hello',
+            template_body='Hi there',
+        )
+        second_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=2,
+            channel_type='WAIT',
+            delay_minutes=10,
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='score-send@acme.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=email_step,
+            status='ACTIVE',
+            next_execution_time=timezone.now() - timedelta(minutes=1),
+        )
+
+        with patch('campaigns.tasks.send_gmail', return_value='score-msg'), \
+                patch('leads.models.Lead.recalculate_score', side_effect=Exception('score disabled')):
+            send_email_step(campaign_lead.id, email_step.id)
+
+        campaign_lead.refresh_from_db()
+        self.assertEqual(campaign_lead.last_sent_message_id, 'score-msg')
+        self.assertEqual(campaign_lead.current_step_id, second_step.id)
+        self.assertLess(campaign_lead.next_execution_time, timezone.now() + timedelta(minutes=14))
+
     def test_condition_reply_step_stops_sequence_when_reply_detected(self):
         campaign = Campaign.objects.create(
             organization=self.organization,
@@ -810,6 +865,70 @@ class CampaignWorkflowTests(APITestCase):
         self.assertEqual(campaign_lead.current_step_id, yes_step.id)
         self.assertNotEqual(campaign_lead.current_step_id, no_step.id)
         self.assertGreaterEqual(campaign_lead.next_execution_time, timezone.now())
+
+    @override_settings(ENABLE_AUTO_REPLY_DETECTION=True)
+    def test_reply_poll_routes_yes_branch_when_score_recalculation_fails(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Reply poll score failure',
+            status='ACTIVE',
+            settings={
+                'steps': [
+                    {'type': 'CONDITION_REPLY', 'condition_time': '1 day'},
+                    {'type': 'EMAIL', 'subject': 'No path', 'body': 'no', 'condition_branch': 'no', 'condition_parent_index': 0},
+                    {'type': 'EMAIL', 'subject': 'Yes path', 'body': 'yes', 'condition_branch': 'yes', 'condition_parent_index': 0},
+                ]
+            },
+        )
+        account = ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=self.user,
+            email_address='sender-reply-score@acme.test',
+            provider='GOOGLE',
+            access_token='token',
+            refresh_token='refresh',
+        )
+        campaign.connected_account = account
+        campaign.save(update_fields=['connected_account'])
+
+        condition_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='CONDITION_REPLY',
+            delay_minutes=0,
+        )
+        yes_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=3,
+            channel_type='EMAIL',
+            delay_minutes=1,
+            template_subject='Yes path',
+            template_body='yes',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='reply-score@acme.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=condition_step,
+            status='ACTIVE',
+            next_execution_time=timezone.now() - timedelta(minutes=1),
+            last_sent_message_id='reply-score-mid',
+        )
+
+        with patch('campaigns.tasks.check_for_replies', return_value={'reply-score-mid': 'thanks'}), \
+                patch('leads.models.Lead.recalculate_score', side_effect=Exception('score disabled')):
+            result = poll_gmail_for_replies()
+
+        campaign_lead.refresh_from_db()
+        self.assertEqual(result, "Detected 1 new replies.")
+        self.assertIsNotNone(campaign_lead.last_replied_at)
+        self.assertEqual(campaign_lead.current_step_id, yes_step.id)
 
     def test_condition_reply_routes_to_no_branch_and_skips_yes_branch(self):
         campaign = Campaign.objects.create(
@@ -1694,6 +1813,71 @@ class CampaignWorkflowTests(APITestCase):
         self.client.force_authenticate(user=None)
         response = self.client.get('/api/v1/analytics/dashboard/')
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_lead_score_recalculates_from_campaign_engagement(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Score test',
+            status='ACTIVE',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='score@acme.test',
+        )
+        CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='REPLIED',
+            last_sent_message_id='msg-1',
+            last_opened_at=timezone.now(),
+            last_clicked_at=timezone.now(),
+            last_replied_at=timezone.now(),
+        )
+
+        score = lead.recalculate_score()
+
+        self.assertEqual(score, 41)
+        lead.refresh_from_db()
+        self.assertEqual(lead.score, 41)
+
+    def test_webhook_updates_lead_score_after_all_matching_engagement_events(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Webhook score test',
+            status='ACTIVE',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='webhook-score@acme.test',
+        )
+        CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='ACTIVE',
+            last_sent_message_id='webhook-msg-1',
+        )
+        CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='ACTIVE',
+            last_sent_message_id='webhook-msg-2',
+        )
+
+        response = self.client.post(
+            '/api/v1/webhooks/email/',
+            {
+                'event': 'open',
+                'email': lead.email,
+            },
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        lead.refresh_from_db()
+        self.assertEqual(lead.score, 12)
 
     def test_unsubscribe_get_shows_confirmation_without_updating_lead(self):
         lead = Lead.objects.create(

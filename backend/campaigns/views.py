@@ -11,7 +11,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from leads.models import Lead
+from leads.models import Lead, update_lead_score
 from users.permissions import IsOrgManager
 
 from .models import Campaign, CampaignLead, SequenceStep, EmailTemplate
@@ -53,7 +53,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
     def enroll(self, request, pk=None):
         campaign = self.get_object()
         lead_ids = request.data.get('lead_ids', [])
-        
+
         enrolled_count = 0
         for lead_id in lead_ids:
             try:
@@ -66,10 +66,10 @@ class CampaignViewSet(viewsets.ModelViewSet):
                 enrolled_count += 1
             except Lead.DoesNotExist:
                 continue
-        
+
         # Refresh campaign to get updated cached counters from signals
         campaign.refresh_from_db()
-        
+
         return Response(
             {
                 "message": f"Successfully enrolled {enrolled_count} leads.",
@@ -406,13 +406,13 @@ class WebhookView(APIView):
             'bounce_code': str(bounce_code).strip() or None,
             'bounce_reason': str(bounce_reason).strip() or None,
         }
-    
+
     def post(self, request, *args, **kwargs):
         event_type = (request.data.get('event') or '').strip().lower()
         lead_email = request.data.get('email')
         message_id = request.data.get('message_id') or request.data.get('messageId')
         bounce_details = self._extract_bounce_details(request.data)
-        
+
         # Simple MVP tracking
         if event_type and lead_email:
             try:
@@ -438,6 +438,7 @@ class WebhookView(APIView):
                     _mark_campaign_lead_bounced,
                 )
 
+                leads_to_score = {}
                 for cl in cleads:
                     if event_type == 'bounce':
                         _mark_campaign_lead_bounced(
@@ -469,6 +470,11 @@ class WebhookView(APIView):
                         cl.save(update_fields=['last_clicked_at'])
                         if cl.current_step and cl.current_step.channel_type == 'CONDITION_CLICK':
                             _execute_condition_click_step(cl, cl.current_step, now=now)
+
+                    leads_to_score[cl.lead_id] = cl.lead
+
+                for lead in leads_to_score.values():
+                    update_lead_score(lead)
             except Exception as e:
                 logger.exception(
                     'Webhook processing error for event=%s email=%s: %s',
@@ -476,12 +482,12 @@ class WebhookView(APIView):
                     lead_email,
                     e,
                 )
-                
+
                 return Response(
                     {"error": "Webhook processing failed"},
                     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 )
-                            
+
         return Response({"status": "received"}, status=status.HTTP_200_OK)
 
 class DashboardAnalyticsView(APIView):
@@ -522,7 +528,7 @@ class DashboardAnalyticsView(APIView):
             clicked=Sum('clicked_count'),
             bounced=Sum('bounced_count'),
         )
-        
+
         emails_sent = campaign_agg['emails_sent'] or 0
         opened = campaign_agg['opened'] or 0
         replied = campaign_agg['replied'] or 0
@@ -598,7 +604,7 @@ class DashboardAnalyticsView(APIView):
             .select_related('lead', 'campaign')
             .order_by('-updated_at')[:10]
         ):
-        
+
             action = cl.status.lower()
             lead_name = cl.lead.email if cl.lead else 'Unknown'
             recent.append({
@@ -703,7 +709,7 @@ class AIGenerateView(APIView):
             "Your Name"
         )
         return f"SUBJECT: {subject}\nBODY: {body}"
-    
+
 from django.http import HttpResponse
 from django.middleware.csrf import get_token
 from leads.models import Lead
