@@ -47,6 +47,13 @@ def _get_campaign_raw_steps(campaign):
     return raw_steps if isinstance(raw_steps, list) else []
 
 
+def _recalculate_lead_score_safely(lead):
+    try:
+        lead.recalculate_score()
+    except Exception as score_err:
+        logger.error(f"Failed to recalculate score for {lead.email}: {score_err}")
+
+
 def _coerce_int(value):
     try:
         if value is None or value == '':
@@ -612,13 +619,13 @@ def send_email_step(campaign_lead_id, step_id):
                     raise RuntimeError(f"Unsupported email provider: {account.provider}")
                 clead.last_sent_message_id = message_id
                 clead.save(update_fields=['last_sent_message_id'])
-                clead.lead.recalculate_score()
             except Exception as send_err:
                 logger.error(f"Email send failed for {clead.lead.email}: {send_err}")
                 # Restore next_execution_time so the lead can be retried later.
                 clead.next_execution_time = timezone.now() + timedelta(minutes=15)
                 clead.save(update_fields=['next_execution_time'])
                 return
+            _recalculate_lead_score_safely(clead.lead)
         else:
             logger.info(f"Mock SENDING EMAIL to {clead.lead.email} | Subject: {subject}")
 
@@ -757,7 +764,7 @@ def poll_gmail_for_replies():
                 if uses_reply_yes_branch:
                     clead.last_replied_at = timezone.now()
                     clead.save(update_fields=['last_replied_at'])
-                    clead.lead.recalculate_score()
+                    _recalculate_lead_score_safely(clead.lead)
                     total_replies += 1
                     logger.info(
                         f"Reply detected for {clead.lead.email} in campaign {clead.campaign.name}; "
@@ -789,7 +796,7 @@ def poll_gmail_for_replies():
 
                 clead.status = 'REPLIED'
                 clead.save(update_fields=['status'])
-                clead.lead.recalculate_score()
+                _recalculate_lead_score_safely(clead.lead)
                 total_replies += 1
                 logger.info(f"Reply detected for {clead.lead.email} in campaign {clead.campaign.name}")
                 _maybe_mark_campaign_completed(clead.campaign)
