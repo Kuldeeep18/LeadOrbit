@@ -237,6 +237,38 @@ class CampaignWorkflowTests(APITestCase):
         self.assertEqual(subject, 'Hello Casey from SaaS')
         self.assertEqual(body, 'Can we talk at 10:30 AM?')
 
+    def test_personalize_email_supports_default_filter_fallback(self):
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='fallback-default@acme.test',
+            first_name='',
+        )
+
+        subject, body = personalize_email(
+            "Hi {{ first_name | default: 'there' }}",
+            "Hello {{ firstName | default: \"friend\" }}",
+            lead,
+        )
+
+        self.assertEqual(subject, 'Hi there')
+        self.assertEqual(body, 'Hello friend')
+
+    def test_personalize_email_supports_or_operator_fallback(self):
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='fallback-or@acme.test',
+            first_name='',
+        )
+
+        subject, body = personalize_email(
+            'Hi {{ first_name || "there" }}',
+            'Hello {{ firstName || "friend" }}',
+            lead,
+        )
+
+        self.assertEqual(subject, 'Hi there')
+        self.assertEqual(body, 'Hello friend')
+
     def test_process_active_leads_advances_all_non_email_step_types(self):
         campaign = Campaign.objects.create(
             organization=self.organization,

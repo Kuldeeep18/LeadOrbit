@@ -6,7 +6,17 @@ import requests
 from django.conf import settings
 
 logger = logging.getLogger(__name__)
-MERGE_TAG_PATTERN = re.compile(r'{{\s*([a-zA-Z0-9_]+)\s*}}')
+MERGE_TAG_PATTERN = re.compile(
+    r"""\{\{\s*
+    ([a-zA-Z0-9_]+)
+    (?:
+        \s*\|\s*default:\s*['\"]([^'\"]+)['\"]
+        |
+        \s*\|\|\s*['\"]([^'\"]+)['\"]
+    )?
+    \s*\}\}""",
+    re.VERBOSE,
+)
 
 
 def _get_gemini_api_key():
@@ -203,12 +213,22 @@ def _apply_merge_tags(text, lead):
 
     def replace_match(match):
         token = match.group(1)
+        default_value = match.group(2) or match.group(3) or ""
+
         if token in standard_replacements:
-            return standard_replacements[token]
-        normalized_token = re.sub(r'[^a-z0-9]+', '_', token.strip().lower()).strip('_')
+            value = standard_replacements[token]
+            return value if value else default_value
+
+        normalized_token = re.sub(
+            r'[^a-z0-9]+',
+            '_',
+            token.strip().lower(),
+        ).strip('_')
         if normalized_token in custom_replacements:
-            return custom_replacements[normalized_token]
-        return match.group(0)
+            value = custom_replacements[normalized_token]
+            return value if value else default_value
+
+        return default_value if default_value else match.group(0)
 
     return MERGE_TAG_PATTERN.sub(replace_match, base)
 
