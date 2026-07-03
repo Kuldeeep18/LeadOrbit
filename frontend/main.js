@@ -457,6 +457,53 @@ async function initAppShell() {
             overlay.classList.remove('active');
         });
     }
+
+    // Prevent multiple clicks on export buttons and handle authenticated downloads.
+    document.addEventListener('click', async (event) => {
+        const btn = event.target.closest('.btn-export, [data-export-url]');
+        if (!btn) return;
+
+        // If already disabled, ignore further clicks
+        if (btn.disabled) {
+            event.preventDefault();
+            return;
+        }
+
+        event.preventDefault();
+        const originalLabel = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span> Exporting';
+
+        try {
+            const url = btn.dataset.exportUrl || btn.getAttribute('href');
+            if (!url) throw new Error('Export URL missing');
+
+            const res = await fetchWithAuth(url, { method: 'GET' });
+            if (!res.ok) throw new Error('Export failed');
+
+            const blob = await res.blob();
+            // Try to extract filename from Content-Disposition
+            let filename = 'export.csv';
+            const disp = res.headers.get('content-disposition') || '';
+            const match = disp.match(/filename\*=UTF-8''([^;\n\r]+)/i) || disp.match(/filename=\"?([^\";]+)\"?/i);
+            if (match && match[1]) {
+                filename = decodeURIComponent(match[1].replace(/\"/g, ''));
+            }
+
+            const link = document.createElement('a');
+            link.href = URL.createObjectURL(blob);
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            setTimeout(() => URL.revokeObjectURL(link.href), 5000);
+        } catch (err) {
+            alert(err.message || 'Could not download export');
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = originalLabel;
+        }
+    });
 }
 
 if (document.readyState === 'loading') {
