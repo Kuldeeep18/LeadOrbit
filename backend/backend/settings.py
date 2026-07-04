@@ -5,6 +5,7 @@ from pathlib import Path
 import os
 import re
 import sys
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -49,9 +50,28 @@ def _normalize_google_redirect_uri(raw_uri: str, backend_base_url: str) -> str:
     # Canonicalize callback path so Google/login/token-exchange always match.
     return f'{scheme}://{host}/api/v1/auth/google/callback'
 
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-fallback-key-change-me')
+
+def resolve_secret_key(raw_value: str | None, debug: bool, testing: bool) -> str:
+    value = (raw_value or '').strip()
+    placeholder_values = {'change-me', 'changeme', 'secret', ''}
+
+    if value and value.lower() not in placeholder_values:
+        return value
+
+    if debug or testing:
+        from django.core.management.utils import get_random_secret_key
+
+        return get_random_secret_key()
+
+    raise ImproperlyConfigured(
+        'SECRET_KEY must be set to a non-placeholder value. Generate one using '
+        'django.core.management.utils.get_random_secret_key().'
+    )
+
+
 DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes')
 TESTING = 'test' in sys.argv
+SECRET_KEY = resolve_secret_key(os.getenv('SECRET_KEY', ''), debug=DEBUG, testing=TESTING)
 MAILBOX_CREDENTIALS_ENCRYPTION_KEY = os.getenv(
     'MAILBOX_CREDENTIALS_ENCRYPTION_KEY',
     'fallback-insecure-key-for-local-dev-and-testing' if (DEBUG or TESTING) else '',

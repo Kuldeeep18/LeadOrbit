@@ -104,7 +104,7 @@ The backend reads environment variables from `backend/.env`.
 
 ```env
 DEBUG=True
-SECRET_KEY=change-me
+SECRET_KEY=
 BACKEND_BASE_URL=http://127.0.0.1:8000
 FRONTEND_BASE_URL=http://127.0.0.1:8080
 
@@ -127,6 +127,18 @@ GOOGLE_REDIRECT_URI=http://127.0.0.1:8000/api/v1/auth/google/callback
 TWILIO_ACCOUNT_SID=
 TWILIO_AUTH_TOKEN=
 TWILIO_PHONE_NUMBER=
+```
+
+If you leave `SECRET_KEY` empty, the project will generate a random value at startup for local development. For production, set a non-placeholder key using:
+
+```sh
+python -c "from django.core.management.utils import get_random_secret_key; print(get_random_secret_key())"
+```
+
+You can also bootstrap a starter `.env` file with:
+
+```sh
+bash scripts/generate_env.sh
 ```
 
 ### 3. Run migrations
@@ -330,7 +342,7 @@ The backend reads environment variables from `backend/.env`.
 
 ```env
 DEBUG=True
-SECRET_KEY=change-me
+SECRET_KEY=
 BACKEND_BASE_URL=http://127.0.0.1:8000
 FRONTEND_BASE_URL=http://127.0.0.1:8080
 
