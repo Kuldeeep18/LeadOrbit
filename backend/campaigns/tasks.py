@@ -2,6 +2,8 @@ import logging
 import urllib.parse
 from datetime import timedelta
 
+from .models import CampaignLead, ConnectedEmailAccount, SequenceStep
+from .utils import log_step_event
 from bs4 import BeautifulSoup
 from celery import shared_task
 from django.conf import settings as django_settings
@@ -612,6 +614,7 @@ def send_email_step(campaign_lead_id, step_id):
                     raise RuntimeError(f"Unsupported email provider: {account.provider}")
                 clead.last_sent_message_id = message_id
                 clead.save(update_fields=['last_sent_message_id'])
+                log_step_event(clead, step.step_order, step.channel_type, 'SENT')
             except Exception as send_err:
                 logger.error(f"Email send failed for {clead.lead.email}: {send_err}")
                 # Restore next_execution_time so the lead can be retried later.

@@ -236,3 +236,26 @@ class CampaignLeadSerializer(serializers.ModelSerializer):
     class Meta:
         model = CampaignLead
         fields = '__all__'
+
+class StepStatsSerializer(serializers.Serializer):
+    step_order = serializers.IntegerField()
+    channel_type = serializers.CharField()
+    sent = serializers.IntegerField()
+    opened = serializers.IntegerField()
+    clicked = serializers.IntegerField()
+    replied = serializers.IntegerField()
+    open_rate = serializers.SerializerMethodField()
+    click_rate = serializers.SerializerMethodField()
+    reply_rate = serializers.SerializerMethodField()
+
+    def _pct(self, part, whole):
+        return round((part / whole * 100), 2) if whole else 0
+
+    def get_open_rate(self, obj):
+        return self._pct(obj['opened'], obj['sent'])
+
+    def get_click_rate(self, obj):
+        return self._pct(obj['clicked'], obj['sent'])
+
+    def get_reply_rate(self, obj):
+        return self._pct(obj['replied'], obj['sent'])

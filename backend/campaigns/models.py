@@ -147,3 +147,31 @@ class CampaignLead(TenantModel):
 
     def __str__(self):
         return f"{self.lead.email} in {self.campaign.name}"
+
+class SequenceStepEvent(TenantModel):
+    """
+    Append-only log of per-step performance events.
+
+    Not FK'd to SequenceStep because campaign edits delete/recreate step
+    rows (see CampaignSerializer._sync_sequence_steps). step_order is the
+    stable identity of a step's position across edits.
+    """
+    EVENT_CHOICES = (
+        ('SENT', 'Sent'),
+        ('OPENED', 'Opened'),
+        ('CLICKED', 'Clicked'),
+        ('REPLIED', 'Replied'),
+    )
+    campaign = models.ForeignKey(Campaign, on_delete=models.CASCADE, related_name='step_events')
+    campaign_lead = models.ForeignKey(CampaignLead, on_delete=models.CASCADE, related_name='step_events')
+    step_order = models.IntegerField()
+    channel_type = models.CharField(max_length=20)
+    event_type = models.CharField(max_length=10, choices=EVENT_CHOICES)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=['campaign', 'step_order', 'event_type']),
+        ]
+
+    def __str__(self):
+        return f"{self.event_type} @ step {self.step_order} ({self.campaign_lead_id})"
