@@ -515,15 +515,31 @@ body {
     background-color: var(--panel);
     border-color: var(--line);
     color: var(--ink-900);
+    cursor: default;
 }
 
 .modal-header,
 .modal-footer {
     border-color: var(--line);
+    cursor: default;
 }
 
 .modal-title {
     color: var(--ink-900);
+    cursor: default;
+}
+
+.modal .btn,
+.modal .btn-close,
+.modal a,
+.modal button {
+    cursor: pointer;
+}
+
+.modal-body,
+.modal-dialog,
+.modal-backdrop {
+    cursor: default;
 }
 
 .panel-muted-box {
