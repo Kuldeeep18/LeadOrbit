@@ -23,6 +23,65 @@
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&family=Sora:wght@500;600;700&display=swap" rel="stylesheet">
     <link href="./theme.css" rel="stylesheet">
+
+    <style>
+        /* ── Campaign progress bar ── */
+        .campaign-progress-wrap {
+            margin: 0.65rem 0 0.75rem;
+        }
+
+        .campaign-progress-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: baseline;
+            margin-bottom: 0.3rem;
+        }
+
+        .campaign-progress-label {
+            font-size: 0.72rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            color: var(--ink-500);
+        }
+
+        .campaign-progress-pct {
+            font-size: 0.82rem;
+            font-weight: 800;
+            color: var(--ink-900);
+        }
+
+        .campaign-progress-bar-track {
+            height: 6px;
+            border-radius: 999px;
+            background: var(--panel-muted);
+            overflow: hidden;
+        }
+
+        .campaign-progress-bar-fill {
+            height: 100%;
+            border-radius: 999px;
+            transition: width 0.5s ease;
+        }
+
+        /* Color tiers */
+        .campaign-progress-bar-fill.tier-low    { background: linear-gradient(90deg, #f97316, #fb923c); }
+        .campaign-progress-bar-fill.tier-mid    { background: linear-gradient(90deg, #eab308, #facc15); }
+        .campaign-progress-bar-fill.tier-good   { background: linear-gradient(90deg, #0ea5a2, #2dd4bf); }
+        .campaign-progress-bar-fill.tier-done   { background: linear-gradient(90deg, #22c55e, #4ade80); }
+
+        .campaign-progress-meta {
+            display: flex;
+            justify-content: space-between;
+            margin-top: 0.35rem;
+            font-size: 0.7rem;
+            color: var(--ink-500);
+        }
+
+        .campaign-progress-meta span strong {
+            color: var(--ink-700);
+        }
+    </style>
 </head>
 
 <body>
@@ -295,6 +354,54 @@
             return `<span class="status-pill ${safeStatus}">${label}</span>`;
         }
 
+        /**
+         * Build a progress bar section for a campaign card.
+         *
+         * Progress = leads sent ÷ leads enrolled (i.e. outreach reach rate).
+         * COMPLETED campaigns are always shown at 100 %.
+         * DRAFT campaigns with 0 leads show 0 %.
+         */
+        function buildProgressBar(campaign, status) {
+            const enrolled = Number(campaign.enrolled_count) || 0;
+            const sent     = Number(campaign.sent_count)     || 0;
+            const opened   = Number(campaign.open_count)     || 0;
+            const replied  = Number(campaign.reply_count)    || 0;
+
+            let pct;
+            if (status === 'COMPLETED') {
+                pct = 100;
+            } else if (enrolled === 0) {
+                pct = 0;
+            } else {
+                pct = Math.min(100, Math.round((sent / enrolled) * 100));
+            }
+
+            // Color tier
+            let tier;
+            if (pct >= 100)     tier = 'tier-done';
+            else if (pct >= 60) tier = 'tier-good';
+            else if (pct >= 30) tier = 'tier-mid';
+            else                tier = 'tier-low';
+
+            const openRate  = sent  > 0 ? Math.round((opened  / sent)     * 100) : 0;
+            const replyRate = sent  > 0 ? Math.round((replied / sent)     * 100) : 0;
+
+            return `
+                <div class="campaign-progress-wrap" aria-label="Campaign progress: ${pct}% reached">
+                    <div class="campaign-progress-header">
+                        <span class="campaign-progress-label">Progress</span>
+                        <span class="campaign-progress-pct">${pct}%</span>
+                    </div>
+                    <div class="campaign-progress-bar-track" role="progressbar" aria-valuenow="${pct}" aria-valuemin="0" aria-valuemax="100">
+                        <div class="campaign-progress-bar-fill ${tier}" style="width:${pct}%;"></div>
+                    </div>
+                    <div class="campaign-progress-meta">
+                        <span><strong>${sent}</strong> sent of <strong>${enrolled}</strong> enrolled</span>
+                        <span>Open <strong>${openRate}%</strong> · Reply <strong>${replyRate}%</strong></span>
+                    </div>
+                </div>`;
+        }
+
         function renderCampaignGrid() {
             const visibleCampaigns = getFilteredCampaigns();
             const grid = document.getElementById('campaigns-grid');
@@ -363,6 +470,8 @@
                                         <div class="metric-value">${status === 'ACTIVE' ? 'Live' : 'Idle'}</div>
                                     </div>
                                 </div>
+
+                                ${buildProgressBar(campaign, status)}
 
                                 <div class="step-preview">${previewHtml}</div>
 
