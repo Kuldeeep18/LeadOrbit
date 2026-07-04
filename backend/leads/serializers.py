@@ -70,6 +70,8 @@ class LeadImportJobSerializer(serializers.ModelSerializer):
             'filename',
             'total_rows',
             'imported_count',
+            'created_count',
+            'updated_count',
             'failed_count',
             'error_log',
             'created_at',
