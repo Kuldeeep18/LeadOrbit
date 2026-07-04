@@ -45,6 +45,8 @@ class LeadImportJob(TenantModel):
     filename = models.CharField(max_length=255)
     total_rows = models.IntegerField(default=0)
     imported_count = models.IntegerField(default=0)
+    created_count = models.IntegerField(default=0, help_text="New leads created")
+    updated_count = models.IntegerField(default=0, help_text="Existing leads updated")
     failed_count = models.IntegerField(default=0)
     error_log = models.JSONField(default=list, blank=True)
 
