@@ -1121,6 +1121,16 @@
                 </div>
                 <button class="btn btn-sm btn-outline-secondary" id="close-template-library" title="Close templates"><i class="bi bi-x-lg"></i></button>
             </div>
+            <div class="mb-3 d-flex gap-2">
+                <input type="text" id="template-search" class="form-control" placeholder="Search templates...">
+                <select id="template-category" class="form-select w-auto">
+                    <option value="">All Categories</option>
+                    <option value="Cold Outreach">Cold Outreach</option>
+                    <option value="Follow-up">Follow-up</option>
+                    <option value="Onboarding">Onboarding</option>
+                    <option value="General">General</option>
+                </select>
+            </div>
             <div id="template-library-content"></div>
         </div>
     </div>
@@ -1339,9 +1349,30 @@
                 return;
             }
 
+            const searchQuery = (document.getElementById('template-search')?.value || '').toLowerCase().trim();
+            const categoryQuery = (document.getElementById('template-category')?.value || '').toLowerCase().trim();
+
+            const filteredTemplates = emailTemplates.filter(template => {
+                const matchesCategory = !categoryQuery || (template.category || '').toLowerCase() === categoryQuery;
+                const matchesSearch = !searchQuery || 
+                    (template.name || '').toLowerCase().includes(searchQuery) ||
+                    (template.subject || '').toLowerCase().includes(searchQuery) ||
+                    (template.body || '').toLowerCase().includes(searchQuery);
+                return matchesCategory && matchesSearch;
+            });
+
+            if (filteredTemplates.length === 0) {
+                library.innerHTML = `
+                    <div class="p-4 text-center text-muted">
+                        <p class="mb-0">No matching templates found.</p>
+                    </div>
+                `;
+                return;
+            }
+
             library.innerHTML = `
                 <div class="template-list">
-                    ${emailTemplates.map(template => `
+                    ${filteredTemplates.map(template => `
                         <div class="template-item">
                             <div class="template-item-name">${escapeHtml(template.name)}</div>
                             <div class="template-item-meta">
@@ -2582,6 +2613,8 @@ ${rows || `
                 closeTemplateLibrary();
             }
         });
+        document.getElementById('template-search').addEventListener('input', renderTemplateLibrary);
+        document.getElementById('template-category').addEventListener('change', renderTemplateLibrary);
 
         // Picker tabs
         document.querySelectorAll('.picker-tabs .ptab').forEach(tab => {

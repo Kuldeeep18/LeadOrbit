@@ -354,7 +354,15 @@ class EmailTemplateViewSet(viewsets.ModelViewSet):
     queryset = EmailTemplate.objects.all()
 
     def get_queryset(self):
-        return EmailTemplate.objects.filter(organization=self.request.user.organization)
+        qs = EmailTemplate.objects.filter(organization=self.request.user.organization)
+        category = self.request.query_params.get('category')
+        search = self.request.query_params.get('search')
+        if category:
+            qs = qs.filter(category__iexact=category)
+        if search:
+            from django.db.models import Q
+            qs = qs.filter(Q(name__icontains=search) | Q(subject__icontains=search) | Q(body__icontains=search))
+        return qs
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization)
