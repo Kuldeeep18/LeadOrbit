@@ -87,6 +87,7 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'tenants.middleware.TenantMiddleware',  # custom tenant isolation
+    'tenants.middleware.CustomDomainMiddleware',  # custom branded tracking domain routing
     'tenants.security.RateLimitMiddleware',  # API rate limiting
     'tenants.security.SecurityHeadersMiddleware',  # security headers
     'django.contrib.messages.middleware.MessageMiddleware',
@@ -216,6 +217,14 @@ FRONTEND_BASE_URL = os.getenv(
     'FRONTEND_BASE_URL',
     'http://localhost:8080' if DEBUG else '',
 ).rstrip('/')
+CUSTOM_TRACKING_DOMAIN_VALIDATION = os.getenv(
+    'CUSTOM_TRACKING_DOMAIN_VALIDATION',
+    'false' if DEBUG else 'true',
+).lower() in ('true', '1', 'yes')
+CUSTOM_TRACKING_DOMAIN_SKIP_DNS_CHECK = os.getenv(
+    'CUSTOM_TRACKING_DOMAIN_SKIP_DNS_CHECK',
+    'true' if DEBUG else 'false',
+).lower() in ('true', '1', 'yes')
 GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', '')
 GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET', '')
 GOOGLE_REDIRECT_URI = _normalize_google_redirect_uri(

@@ -5,7 +5,8 @@ from urllib.parse import parse_qs, urlparse
 from django.core import signing
 from django.core.exceptions import ImproperlyConfigured
 from django.db import connection
-from django.test import override_settings
+from django.http import HttpResponseBadRequest
+from django.test import RequestFactory, override_settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -24,6 +25,7 @@ from campaigns.tasks import (
 )
 from campaigns.utils import generate_unsubscribe_token
 from leads.models import BlockedDomain, Lead
+from tenants.middleware import TenantMiddleware
 from tenants.models import Organization
 from users.models import User
 
@@ -39,6 +41,43 @@ class CampaignWorkflowTests(APITestCase):
             role='ADMIN',
         )
         self.client.force_authenticate(self.user)
+
+    def test_custom_domain_middleware_routes_tracking_requests_to_click_endpoint(self):
+        organization = Organization.objects.create(name='BrandCo', custom_tracking_domain='track.brandco.test')
+        self.user.organization = organization
+        self.user.save(update_fields=['organization'])
+
+        request = RequestFactory().get('/track/click', HTTP_HOST='track.brandco.test')
+        request.user = self.user
+        request.session = {}
+
+        middleware = TenantMiddleware(lambda request: None)
+        response = middleware.process_request(request)
+        self.assertIsNone(response)
+
+        from tenants.middleware import get_current_tenant
+        self.assertEqual(get_current_tenant(), organization)
+
+    @override_settings(CUSTOM_TRACKING_DOMAIN_VALIDATION=True, CUSTOM_TRACKING_DOMAIN_SKIP_DNS_CHECK=False)
+    def test_custom_domain_middleware_rejects_invalid_tracking_domain(self):
+        organization = Organization.objects.create(name='BrandCo 2', custom_tracking_domain='track.brandco.test')
+        self.user.organization = organization
+        self.user.save(update_fields=['organization'])
+
+        request = RequestFactory().get('/track/click', HTTP_HOST='track.brandco.test')
+        request.user = self.user
+        request.session = {}
+
+        from tenants.middleware import get_current_tenant
+        from tenants.middleware import CustomDomainMiddleware
+
+        _thread_locals = __import__('tenants.middleware', fromlist=['_thread_locals'])._thread_locals
+        _thread_locals.tenant = organization
+
+        middleware = CustomDomainMiddleware(lambda request: None)
+        response = middleware.process_request(request)
+
+        self.assertIsInstance(response, HttpResponseBadRequest)
 
     def test_create_campaign_syncs_sequence_steps_from_builder_payload(self):
         account = ConnectedEmailAccount.objects.create(
