@@ -114,6 +114,16 @@ Ensure all tests pass successfully.
 
 ---
 
+## Privacy and Data Handling
+
+Please do not commit real personal data, customer lists, credentials, or API keys to this repository.
+
+Use only synthetic or clearly labeled placeholder values in examples, test fixtures, and sample files. CSV fixtures should live under tests/fixtures and contain synthetic values only.
+
+If you need sample contact data for demos or tests, use placeholder addresses such as test-user-1@example.com and generic names instead of real individuals' information.
+
+---
+
 ## Code Style Guidelines
 
 ### Python
