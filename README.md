@@ -228,7 +228,8 @@ Current repo state: `27` backend tests pass. The suite covers auth/profile updat
 - The settings page shows a Gemini API key field, but it is not persisted from the UI. AI credentials are read from `backend/.env`.
 - The danger-zone buttons in `settings.html` are presentational only right now.
 - [`frontend/src`](frontend/src) and [`backend/config`](backend/config) look like leftover scaffold code and are not part of the main runtime path.
-- Some endpoints are still MVP-grade and should be hardened before a production multi-tenant deployment. In particular, analytics currently uses unscoped aggregate queries, and a few utility endpoints are intentionally permissive.
+- All analytics queries (`GET /api/v1/analytics/dashboard/`) are scoped to the authenticated user's organization via `.filter(organization=request.user.organization)`. Cross-tenant data isolation is enforced and covered by `test_dashboard_analytics_isolates_data_by_tenant` in `campaigns/tests.py`.
+- Some endpoints are still MVP-grade and should be hardened before a production multi-tenant deployment. A few utility endpoints are intentionally permissive.
 - The root markdown docs describe product intent and planning. The codebase is the source of truth for current behavior.
 
 ## Integration Notes
@@ -454,7 +455,8 @@ Current repo state: `27` backend tests pass. The suite covers auth/profile updat
 - The settings page shows a Gemini API key field, but it is not persisted from the UI. AI credentials are read from `backend/.env`.
 - The danger-zone buttons in `settings.html` are presentational only right now.
 - [`frontend/src`](frontend/src) and [`backend/config`](backend/config) look like leftover scaffold code and are not part of the main runtime path.
-- Some endpoints are still MVP-grade and should be hardened before a production multi-tenant deployment. In particular, analytics currently uses unscoped aggregate queries, and a few utility endpoints are intentionally permissive.
+- All analytics queries (`GET /api/v1/analytics/dashboard/`) are scoped to the authenticated user's organization via `.filter(organization=request.user.organization)`. Cross-tenant data isolation is enforced and covered by `test_dashboard_analytics_isolates_data_by_tenant` in `campaigns/tests.py`.
+- Some endpoints are still MVP-grade and should be hardened before a production multi-tenant deployment. A few utility endpoints are intentionally permissive.
 - The root markdown docs describe product intent and planning. The codebase is the source of truth for current behavior.
 
 ## Integration Notes

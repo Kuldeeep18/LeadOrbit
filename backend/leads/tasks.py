@@ -86,6 +86,9 @@ def import_leads_from_csv(file_contents, organization_id, job_id=None):
 
     leads_created = 0
     leads_updated = 0
+    successful_count = 0
+    duplicate_count = 0
+    invalid_count = 0
     failed_count = 0
     error_log = []
     total_rows = 0
@@ -95,6 +98,7 @@ def import_leads_from_csv(file_contents, organization_id, job_id=None):
         normalized_row = _normalize_row(row)
         email = _get_field(normalized_row, 'email', 'work_email', 'email_address')
         if not email:
+            invalid_count += 1
             failed_count += 1
             error_log.append({
                 'row': row_number,
@@ -107,6 +111,7 @@ def import_leads_from_csv(file_contents, organization_id, job_id=None):
         try:
             validate_email(email)
         except ValidationError:
+            invalid_count += 1
             failed_count += 1
             error_log.append({
                 'row': row_number,
@@ -161,16 +166,21 @@ def import_leads_from_csv(file_contents, organization_id, job_id=None):
 
         if created:
             leads_created += 1
+            successful_count += 1
         else:
             leads_updated += 1
+            duplicate_count += 1
 
     if job:
         job.total_rows = total_rows
         job.imported_count = leads_created + leads_updated
+        job.successful_count = successful_count
+        job.duplicate_count = duplicate_count
+        job.invalid_count = invalid_count
         job.failed_count = failed_count
         job.error_log = error_log
         job.save()
 
-    summary = f"Processed {leads_created} new, {leads_updated} updated, {failed_count} failed for organization {org.name}"
+    summary = f"Processed {leads_created} new, {leads_updated} updated, {successful_count} successful, {duplicate_count} duplicates, {invalid_count} invalid, {failed_count} failed for organization {org.name}"
     logger.info(summary)
     return summary

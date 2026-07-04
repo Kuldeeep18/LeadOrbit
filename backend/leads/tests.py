@@ -89,6 +89,30 @@ class LeadImportTests(APITestCase):
         self.assertEqual(job.error_log[0]['error'], 'Invalid email format')
         self.assertEqual(job.error_log[1]['error'], 'Missing email address')
 
+    def test_import_tracks_successful_duplicate_and_invalid_counts(self):
+        job = LeadImportJob.objects.create(
+            organization=self.organization,
+            filename='summary-import.csv',
+        )
+        Lead.objects.create(organization=self.organization, email='existing@example.com', first_name='Old')
+        csv_data = (
+            "email,first_name\n"
+            "new@example.com,New\n"
+            "existing@example.com,Existing\n"
+            "invalid-email,Invalid\n"
+            ",Missing\n"
+        )
+
+        import_leads_from_csv(csv_data, str(self.organization.id), str(job.id))
+
+        job.refresh_from_db()
+        self.assertEqual(job.total_rows, 4)
+        self.assertEqual(job.successful_count, 1)
+        self.assertEqual(job.duplicate_count, 1)
+        self.assertEqual(job.invalid_count, 1)
+        self.assertEqual(job.failed_count, 1)
+        self.assertEqual(job.imported_count, 2)
+
 
 class LeadIsolationAPITests(APITestCase):
     def setUp(self):

@@ -22,7 +22,7 @@ from .mailbox_service import (
     mark_imap_message_as_read,
     send_smtp_email,
 )
-from .notifications import notify_email_bounced
+from .notifications import notify_email_bounced, notify_campaign_auto_paused
 from .sms_service import initiate_call, send_sms
 from .models import CampaignLead, ConnectedEmailAccount, SequenceStep
 from leads.models import BlockedDomain, normalize_domain
@@ -129,6 +129,57 @@ def _maybe_mark_campaign_completed(campaign):
     logger.info(f"Campaign marked COMPLETED: {campaign.id}")
 
 
+# Bounce-rate threshold constants (configurable via settings)
+_BOUNCE_RATE_MIN_SENT = 50    # minimum emails sent before the check activates
+_BOUNCE_RATE_THRESHOLD = 0.10  # 10 % bounce rate triggers auto-pause
+
+
+def _check_and_auto_pause_campaign(campaign):
+    """
+    Auto-pause a campaign if the bounce rate exceeds the safety threshold
+    once at least _BOUNCE_RATE_MIN_SENT emails have been dispatched.
+
+    Uses the cached sent_count / bounced_count on Campaign (maintained by
+    signals) so no extra aggregate query is required.
+
+    The check is idempotent: campaigns already PAUSED, COMPLETED, or DRAFT
+    are left untouched.
+    """
+    if campaign.status != 'ACTIVE':
+        return
+
+    # Refresh counters from DB to avoid stale in-memory values
+    campaign.refresh_from_db(fields=['sent_count', 'bounced_count', 'status'])
+
+    if campaign.status != 'ACTIVE':
+        return
+
+    sent = campaign.sent_count
+    bounced = campaign.bounced_count
+
+    if sent < _BOUNCE_RATE_MIN_SENT:
+        return
+
+    bounce_rate = bounced / sent
+    if bounce_rate <= _BOUNCE_RATE_THRESHOLD:
+        return
+
+    campaign.status = 'PAUSED'
+    campaign.save(update_fields=['status'])
+
+    bounce_rate_pct = bounce_rate * 100
+    logger.warning(
+        "Campaign '%s' (%s) auto-paused: bounce rate %.1f%% (%d/%d) exceeds %.0f%% threshold.",
+        campaign.name,
+        campaign.id,
+        bounce_rate_pct,
+        bounced,
+        sent,
+        _BOUNCE_RATE_THRESHOLD * 100,
+    )
+    notify_campaign_auto_paused(campaign.organization_id, campaign.name, bounce_rate_pct)
+
+
 def _mark_campaign_lead_bounced(
     clead,
     now=None,
@@ -165,6 +216,7 @@ def _mark_campaign_lead_bounced(
     if not was_bounced:
         notify_email_bounced(clead.organization_id, clead.lead.email)
     _maybe_mark_campaign_completed(clead.campaign)
+    _check_and_auto_pause_campaign(clead.campaign)
     logger.info(
         "Bounce detected for %s in campaign %s at %s (type=%s, code=%s)",
         clead.lead.email,
