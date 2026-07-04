@@ -25,7 +25,7 @@ class LeadSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'email', 'first_name', 'last_name', 'company', 'phone',
             'linkedin_url', 'custom_data', 'custom_variables',
-            'global_unsubscribe', 'score', 'tags', 'tag_ids', 'created_at',
+            'global_unsubscribe', 'score', 'tags', 'tag_ids', 'created_at', 'updated_at',
         ]
         read_only_fields = ['organization', 'score']
 
@@ -70,6 +70,8 @@ class LeadImportJobSerializer(serializers.ModelSerializer):
             'filename',
             'total_rows',
             'imported_count',
+            'created_count',
+            'updated_count',
             'failed_count',
             'error_log',
             'created_at',
