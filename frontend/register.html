@@ -176,10 +176,10 @@
                 form.addEventListener('submit', async (e) => {
                     e.preventDefault();
 
-                    const first_name = document.getElementById('firstName').value;
-                    const last_name = document.getElementById('lastName').value;
-                    const email = document.getElementById('emailAddress').value;
-                    const password = document.getElementById('password').value;
+                    const first_name = document.getElementById('firstName').value.trim();
+                    const last_name = document.getElementById('lastName').value.trim();
+                    const email = document.getElementById('emailAddress').value.trim();
+                    const password = document.getElementById('password').value.trim();
 
                     const organization_name = first_name + "'s Organization";
 
