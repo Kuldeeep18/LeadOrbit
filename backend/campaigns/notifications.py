@@ -86,3 +86,11 @@ def notify_reply_received(organization_id, lead_email):
         'message': f'Reply received from {lead_email}',
         'email': lead_email
     })
+
+def notify_account_disconnected(organization_id, email_address, paused_campaigns=None):
+    send_notification(organization_id, 'account_disconnected', {
+        'message': f'Sender account {email_address} lost authentication. '
+                   f'{len(paused_campaigns or [])} campaign(s) paused — please reconnect.',
+        'email': email_address,
+        'paused_campaigns': paused_campaigns or [],
+    })
