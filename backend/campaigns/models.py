@@ -17,6 +17,11 @@ class ConnectedEmailAccount(TenantModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email_address = models.EmailField()
     provider = models.CharField(max_length=20, choices=PROVIDER_CHOICES, default='GOOGLE')
+    STATUS_CHOICES = (
+        ('CONNECTED', 'Connected'),
+        ('DISCONNECTED', 'Disconnected'),
+    )
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='CONNECTED')
     connected_by = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.SET_NULL,

@@ -22,12 +22,31 @@ from .mailbox_service import (
     mark_imap_message_as_read,
     send_smtp_email,
 )
-from .notifications import notify_email_bounced
+from smtplib import SMTPAuthenticationError
+from google.auth.exceptions import RefreshError
+from .notifications import notify_email_bounced, notify_account_disconnected
 from .sms_service import initiate_call, send_sms
-from .models import CampaignLead, ConnectedEmailAccount, SequenceStep
+from .models import Campaign, CampaignLead, ConnectedEmailAccount, SequenceStep
 from leads.models import BlockedDomain, normalize_domain
 
 logger = logging.getLogger(__name__)
+
+def _handle_account_auth_failure(account):
+    """Disconnect the account and pause its active campaigns to stop retry-spam."""
+    if account.status == 'DISCONNECTED':
+        return  # already handled by a concurrent task, avoid duplicate pause/notify
+
+    account.status = 'DISCONNECTED'
+    account.save(update_fields=['status'])
+
+    affected = list(Campaign.objects.filter(connected_account=account, status='ACTIVE'))
+    Campaign.objects.filter(connected_account=account, status='ACTIVE').update(status='PAUSED')
+
+    notify_account_disconnected(
+        account.organization_id,
+        account.email_address,
+        [c.name for c in affected],
+    )
 
 def _get_campaign_steps(campaign):
     """
@@ -612,9 +631,12 @@ def send_email_step(campaign_lead_id, step_id):
                     raise RuntimeError(f"Unsupported email provider: {account.provider}")
                 clead.last_sent_message_id = message_id
                 clead.save(update_fields=['last_sent_message_id'])
+            except (RefreshError, SMTPAuthenticationError) as auth_err:
+                logger.error(f"Auth failure sending to {clead.lead.email}: {auth_err}")
+                _handle_account_auth_failure(account)
+                return
             except Exception as send_err:
                 logger.error(f"Email send failed for {clead.lead.email}: {send_err}")
-                # Restore next_execution_time so the lead can be retried later.
                 clead.next_execution_time = timezone.now() + timedelta(minutes=15)
                 clead.save(update_fields=['next_execution_time'])
                 return
