@@ -80,7 +80,7 @@ class Campaign(TenantModel):
             models.Index(fields=['organization', 'status'], name='campaign_org_status_idx'),
         ]
          
-def __str__(self):
+    def __str__(self):
         return self.name
 
 class SequenceStep(TenantModel):
