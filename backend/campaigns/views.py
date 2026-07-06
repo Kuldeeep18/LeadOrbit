@@ -1,6 +1,4 @@
 import logging
-
-
 import urllib.parse
 from django.core.signing import Signer, BadSignature
 from django.http import HttpResponseRedirect, HttpResponseBadRequest
@@ -740,7 +738,11 @@ def unsubscribe_view(request, lead_id, token):
         )
 
     try:
-        lead = Lead.objects.get(id=lead_id)
+        # Fetch lead and prefetch its organization relation
+        lead = Lead.objects.select_related('organization').get(id=lead_id)
+        # Verify organization exists
+        if not lead.organization_id:
+            return HttpResponse("Lead has no valid organization context.", status=400)
     except Lead.DoesNotExist:
         return HttpResponse(
             "Lead not found",
@@ -773,7 +775,7 @@ def unsubscribe_view(request, lead_id, token):
 
     return HttpResponse(html, content_type='text/html')
 
-# --- New ClickTrackingView (Issue #259) ---
+
 class ClickTrackingView(APIView):
     """
     Unauthenticated endpoint to track email link clicks and redirect to the destination.
@@ -797,7 +799,21 @@ class ClickTrackingView(APIView):
 
         # Analytics ko update karna
         try:
-            lead = CampaignLead.objects.get(id=campaign_lead_id)
+            # Prefetch relations to verify organization consistency
+            lead = CampaignLead.objects.select_related('organization', 'campaign', 'lead').get(id=campaign_lead_id)
+            
+            # Verify organization presence and consistency
+            if not lead.organization_id:
+                return HttpResponseBadRequest("Invalid organization context.")
+            
+            # Verify campaign organization matches
+            if lead.campaign and lead.campaign.organization_id != lead.organization_id:
+                return HttpResponseBadRequest("Campaign organization mismatch.")
+            
+            # Verify lead organization matches
+            if lead.lead and lead.lead.organization_id != lead.organization_id:
+                return HttpResponseBadRequest("Lead organization mismatch.")
+            
             lead.last_clicked_at = timezone.now()
             lead.save(update_fields=['last_clicked_at'])
 
@@ -812,4 +828,5 @@ class ClickTrackingView(APIView):
         # Original Destination par redirect karna
         decoded_dest = urllib.parse.unquote(dest_url)
         return HttpResponseRedirect(decoded_dest)
-# ------------------------------------------
+
+        
