@@ -27,6 +27,7 @@ class CampaignSerializer(serializers.ModelSerializer):
     steps = serializers.SerializerMethodField()
     enrolled_count = serializers.IntegerField(source='leads_count', read_only=True)
     enrolled_lead_ids = serializers.SerializerMethodField()
+    status_breakdown = serializers.SerializerMethodField()
     connected_account = serializers.SerializerMethodField()
     connected_account_id = serializers.UUIDField(write_only=True, required=False, allow_null=True)
 
@@ -40,6 +41,7 @@ class CampaignSerializer(serializers.ModelSerializer):
             'steps',
             'enrolled_count',
             'enrolled_lead_ids',
+            'status_breakdown',
             'sent_count',
             'open_count',
             'reply_count',
@@ -55,6 +57,13 @@ class CampaignSerializer(serializers.ModelSerializer):
 
     def get_enrolled_lead_ids(self, obj):
         return [str(lead_id) for lead_id in obj.enrolled_leads.values_list('lead_id', flat=True)]
+
+    def get_status_breakdown(self, obj):
+        counts = {status: 0 for status, _ in CampaignLead.STATUS_CHOICES}
+        for lead_status in obj.enrolled_leads.values_list('status', flat=True):
+            if lead_status in counts:
+                counts[lead_status] += 1
+        return counts
 
     def get_connected_account(self, obj):
         if not obj.connected_account:
