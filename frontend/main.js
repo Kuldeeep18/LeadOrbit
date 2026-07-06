@@ -369,7 +369,8 @@ async function initAppShell() {
     initThemeToggle();
     initPasswordVisibilityToggle();
     injectSessionTimeoutModal();
-
+    initScrollToTopButton();
+    
     document.addEventListener('click', (event) => {
     if (event.target.id === 'sessionLogoutBtn') {
         clearSessionTimers();
@@ -605,4 +606,33 @@ if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', initKeyboardShortcuts);
 } else {
     initKeyboardShortcuts();
+}
+
+// ==========================================
+// SCROLL TO TOP BUTTON
+// ==========================================
+
+function initScrollToTopButton() {
+    const button = document.getElementById('scrollTopBtn');
+
+    if (!button) return;
+
+    const toggleButton = () => {
+        if (window.scrollY > 300) {
+            button.classList.add('show');
+        } else {
+            button.classList.remove('show');
+        }
+    };
+
+    window.addEventListener('scroll', toggleButton);
+
+    button.addEventListener('click', () => {
+        window.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
+    });
+
+    toggleButton();
 }
