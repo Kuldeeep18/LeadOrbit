@@ -74,8 +74,13 @@ class Campaign(TenantModel):
     reply_count = models.IntegerField(default=0, help_text="Leads that replied")
     clicked_count = models.IntegerField(default=0, help_text="Leads that clicked links")
     bounced_count = models.IntegerField(default=0, help_text="Bounced leads")
-
-    def __str__(self):
+  
+    class Meta:
+        indexes = [
+            models.Index(fields=['organization', 'status'], name='campaign_org_status_idx'),
+        ]
+         
+def __str__(self):
         return self.name
 
 class SequenceStep(TenantModel):
