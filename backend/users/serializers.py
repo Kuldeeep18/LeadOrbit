@@ -5,7 +5,7 @@ from tenants.models import Organization
 class OrganizationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Organization
-        fields = '__all__'
+        exclude = ['gemini_api_key']  # Don't expose sensitive API key
 
 class UserSerializer(serializers.ModelSerializer):
     organization = OrganizationSerializer(read_only=True)
@@ -34,3 +34,5 @@ class RegisterSerializer(serializers.Serializer):
             role='ADMIN',  # First user in org is admin
         )
         return user
+
+        
