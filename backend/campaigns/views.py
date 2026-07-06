@@ -16,6 +16,7 @@ from users.permissions import IsOrgManager
 
 from .models import Campaign, CampaignLead, SequenceStep, EmailTemplate
 from .serializers import CampaignSerializer, SequenceStepSerializer, EmailTemplateSerializer
+from backend.throttles import CampaignLaunchThrottle
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,11 @@ class CampaignViewSet(viewsets.ModelViewSet):
         if self.action in self.manager_actions:
             permissions.append(IsOrgManager())
         return permissions
+
+    def get_throttles(self):
+        if self.action == 'launch':
+            return [CampaignLaunchThrottle()]
+        return super().get_throttles()
 
     def get_queryset(self):
         return (
