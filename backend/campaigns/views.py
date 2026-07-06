@@ -16,7 +16,7 @@ from users.permissions import IsOrgManager
 
 from .models import Campaign, CampaignLead, SequenceStep, EmailTemplate
 from .serializers import CampaignSerializer, SequenceStepSerializer, EmailTemplateSerializer
-from backend.throttles import CampaignLaunchThrottle
+from backend.throttles import CampaignLaunchThrottle, AIDraftThrottle
 
 logger = logging.getLogger(__name__)
 
@@ -642,6 +642,7 @@ class AIGenerateView(APIView):
     Generate email content using the configured LLM provider for the campaign builder.
     """
     permission_classes = [IsAuthenticated]
+    throttle_classes = [AIDraftThrottle]
 
     def post(self, request, *args, **kwargs):
         prompt = (request.data.get('prompt') or '').strip()
