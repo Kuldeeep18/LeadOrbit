@@ -539,22 +539,26 @@ def rewrite_email_links(html_body, campaign_lead_id, step_id):
         
     return str(soup)
 # -----------------------------------
-
-
-@shared_task
-def send_email_step(campaign_lead_id, step_id):
+@shared_task(
+    bind=True,
+    max_retries=3,
+    default_retry_delay=60,      # First retry after 1 min
+    acks_late=True,
+    reject_on_worker_lost=True,
+)
+def send_email_step(self, campaign_lead_id, step_id):
     """
-    Dispatch an email through the selected connected account or fall back to mock logging.
+    Dispatch an email with proper retry logic and failure handling.
     """
-    
     try:
-        clead = CampaignLead.objects.select_related('lead', 'campaign__connected_account').get(id=campaign_lead_id)
+        clead = CampaignLead.objects.select_related(
+            'lead', 'campaign__connected_account'
+        ).get(id=campaign_lead_id)
+        
         step = SequenceStep.objects.get(id=step_id)
 
         if clead.lead.global_unsubscribe:
-            logger.info(
-                f"Skipping email send for unsubscribed lead {clead.lead.email}."
-            )
+            logger.info(f"Skipping email send for unsubscribed lead {clead.lead.email}.")
             clead.status = 'FINISHED'
             clead.current_step = None
             clead.next_execution_time = None
@@ -568,63 +572,65 @@ def send_email_step(campaign_lead_id, step_id):
         if _skip_blocked_domain_lead(clead):
             return
 
-        # Atomic guard: claim this send by nullifying next_execution_time.
-        # Only one concurrent caller can win; prevents duplicate sends.
+        # Prevent duplicate sends
         claimed = CampaignLead.objects.filter(
             id=campaign_lead_id,
             current_step_id=step_id,
             next_execution_time__isnull=False,
         ).update(next_execution_time=None)
+
         if not claimed:
-            logger.info(
-                f"Skipping duplicate send for {clead.lead.email} on step {step.step_order}"
-            )
+            logger.info(f"Skipping duplicate send for {clead.lead.email}")
             return
 
         subject, body = personalize_email(step.template_subject, step.template_body, clead.lead)
-
-       
         body = rewrite_email_links(body, campaign_lead_id, step_id)
-        # -------------------------------------------
 
         account = clead.campaign.connected_account
+
         if account:
             try:
                 if account.provider == 'GOOGLE':
                     message_id = send_gmail(
-                        account,
-                        clead.lead.email,
-                        subject,
-                        body,
-                        unsubscribe_url=build_unsubscribe_url(clead.lead),
+                        account, clead.lead.email, subject, body,
+                        unsubscribe_url=build_unsubscribe_url(clead.lead)
                     )
-                    logger.info(f"Gmail SENT to {clead.lead.email} | msg_id={message_id}")
                 elif account.provider == 'CUSTOM':
                     message_id = send_smtp_email(
-                        account,
-                        clead.lead.email,
-                        subject,
-                        body,
-                        unsubscribe_url=build_unsubscribe_url(clead.lead),
+                        account, clead.lead.email, subject, body,
+                        unsubscribe_url=build_unsubscribe_url(clead.lead)
                     )
-                    logger.info(f"SMTP SENT to {clead.lead.email} | msg_id={message_id}")
                 else:
-                    raise RuntimeError(f"Unsupported email provider: {account.provider}")
+                    raise RuntimeError(f"Unsupported provider: {account.provider}")
+
+                logger.info(f"Email SENT to {clead.lead.email} | msg_id={message_id}")
                 clead.last_sent_message_id = message_id
                 clead.save(update_fields=['last_sent_message_id'])
+
             except Exception as send_err:
                 logger.error(f"Email send failed for {clead.lead.email}: {send_err}")
-                # Restore next_execution_time so the lead can be retried later.
-                clead.next_execution_time = timezone.now() + timedelta(minutes=15)
-                clead.save(update_fields=['next_execution_time'])
-                return
+                
+                if self.request.retries < self.max_retries:
+                    raise self.retry(
+                        exc=send_err, 
+                        countdown=60 * (2 ** self.request.retries)
+                    )
+                else:
+                    logger.warning(f"Email permanently failed after {self.max_retries} retries for {clead.lead.email}")
+                    clead.status = 'BOUNCED'
+                    clead.save(update_fields=['status'])
+                    return
+
         else:
-            logger.info(f"Mock SENDING EMAIL to {clead.lead.email} | Subject: {subject}")
+            logger.info(f"Mock SENDING EMAIL to {clead.lead.email}")
 
         _advance_to_next_step(clead, step)
 
     except Exception as e:
-        logger.error(f"Failed to send email step: {e}")
+        logger.error(f"Critical error in send_email_step: {e}", exc_info=True)
+        if self.request.retries < self.max_retries:
+            raise self.retry(exc=e)
+        raise
 
 
 @shared_task
