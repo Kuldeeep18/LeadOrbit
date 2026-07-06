@@ -106,6 +106,14 @@
             background: #22c55e;
         }
 
+
+        .status-dot {
+            width: 0.7rem;
+            height: 0.7rem;
+            border-radius: 999px;
+            display: inline-block;
+            flex-shrink: 0;
+        }
         .status-toggle::after {
             content: '';
             width: 18px;
@@ -1246,6 +1254,7 @@
         let aiComposerStep = null;
         let aiConversation = [];
         let aiLatestDraft = null;
+        let campaignStatusBreakdown = null;
 
         // Steps are stored as an array of objects
         let steps = [
@@ -1642,6 +1651,77 @@ ${rows || `
             `;
         }
 
+        function getCampaignStatusBreakdown() {
+            const statusMeta = [
+                { key: 'ENROLLED', label: 'Enrolled', className: 'bg-primary' },
+                { key: 'ACTIVE', label: 'Active', className: 'bg-success' },
+                { key: 'PAUSED', label: 'Paused', className: 'bg-warning' },
+                { key: 'REPLIED', label: 'Replied', className: 'bg-info' },
+                { key: 'BOUNCED', label: 'Bounced', className: 'bg-danger' },
+                { key: 'SKIPPED', label: 'Skipped', className: 'bg-dark' },
+                { key: 'FINISHED', label: 'Finished', className: 'bg-secondary' },
+            ];
+
+            if (campaignStatusBreakdown && typeof campaignStatusBreakdown === 'object') {
+                return statusMeta
+                    .map(item => ({ ...item, value: Number(campaignStatusBreakdown[item.key]) || 0 }))
+                    .filter(item => item.value > 0);
+            }
+
+            const totalLeads = selectedLeadIds.size || availableLeads.length || 0;
+            return totalLeads > 0
+                ? [{ key: 'ENROLLED', label: 'Enrolled', value: totalLeads, className: 'bg-primary' }]
+                : [];
+        }
+        function renderCampaignStatusBreakdown() {
+            const segments = getCampaignStatusBreakdown();
+            const totalLeads = segments.reduce((sum, segment) => sum + segment.value, 0);
+
+            if (!totalLeads) {
+                return `
+                    <div class="mt-4 p-3 rounded-3 panel-muted-box">
+                        <div class="d-flex align-items-center gap-2 mb-1">
+                            <i class="bi bi-bar-chart-line text-primary"></i>
+                            <h6 class="mb-0 fw-bold">Lead status breakdown</h6>
+                        </div>
+                        <p class="text-muted small mb-0">Select leads to preview enrolled, active, replied, bounced, paused, and finished proportions.</p>
+                    </div>
+                `;
+            }
+
+            const progressSegments = segments.map(segment => {
+                const width = Math.max(6, Math.round((segment.value / totalLeads) * 100));
+                return `<div class="progress-bar ${segment.className}" role="progressbar" style="width: ${width}%" aria-valuenow="${segment.value}" aria-valuemin="0" aria-valuemax="${totalLeads}">${segment.value}</div>`;
+            }).join('');
+
+            const legend = segments.map(segment => {
+                const percent = Math.round((segment.value / totalLeads) * 100);
+                return `
+                    <div class="d-flex align-items-center justify-content-between gap-3 small">
+                        <span class="d-inline-flex align-items-center gap-2"><span class="status-dot ${segment.className}"></span>${segment.label}</span>
+                        <span class="fw-semibold">${segment.value} (${percent}%)</span>
+                    </div>
+                `;
+            }).join('');
+
+            return `
+                <div class="mt-4 p-3 rounded-3 panel-muted-box">
+                    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+                        <div>
+                            <h6 class="mb-1 fw-bold">Lead status breakdown</h6>
+                            <div class="text-muted small">Visual progression for ${totalLeads} enrolled lead${totalLeads === 1 ? '' : 's'}.</div>
+                        </div>
+                        <span class="badge text-bg-light border">${segments.length} states</span>
+                    </div>
+                    <div class="progress mb-3" style="height: 26px; border-radius: 999px; overflow: hidden;">
+                        ${progressSegments}
+                    </div>
+                    <div class="d-grid gap-2">
+                        ${legend}
+                    </div>
+                </div>
+            `;
+        }
         function renderLaunchTab() {
             const canvas = document.getElementById('canvas');
             const statusText = document.getElementById('status-toggle').classList.contains('on') ? 'ACTIVE' : 'DRAFT';
@@ -1669,6 +1749,7 @@ ${rows || `
                             </div>
                         </div>
                     </div>
+                    ${renderCampaignStatusBreakdown()}
                     <div class="alert alert-info mt-4 mb-0">
                         Current status toggle: <b>${statusText}</b>. Launch will activate the campaign and trigger processing.
                     </div>
@@ -1725,6 +1806,7 @@ ${rows || `
 
             const data = await res.json();
             campaignId = data.id;
+            if (data.status_breakdown) campaignStatusBreakdown = data.status_breakdown;
             return data;
         }
 
@@ -1739,7 +1821,9 @@ ${rows || `
                 const err = await res.json().catch(() => ({}));
                 throw new Error(err.error || err.detail || 'Failed to enroll selected leads.');
             }
-            return res.json();
+            const data = await res.json();
+            if (data.status_breakdown) campaignStatusBreakdown = data.status_breakdown;
+            return data;
         }
 
         async function launchCampaign() {
@@ -2673,6 +2757,7 @@ ${rows || `
                     if (res.ok) {
                         const data = await res.json();
                         campaignId = data.id;
+                        campaignStatusBreakdown = data.status_breakdown || null;
                         document.getElementById('campaign-name').value = data.name;
                         if (data.status === 'ACTIVE') {
                             document.getElementById('status-toggle').classList.add('on');
