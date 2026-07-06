@@ -92,6 +92,33 @@
                 </ol>
             </nav>
 
+            <div id="bounce-warning-banner"
+                class="alert alert-warning d-none"
+                role="alert">
+
+                <div class="d-flex align-items-start">
+                    <i class="bi bi-exclamation-triangle-fill me-2"></i>
+
+                    <div>
+                        <strong>High Bounce Rate Detected</strong>
+
+                        <p class="mb-2">
+                            Your bounce rate over the last 7 days is
+                            <strong><span id="bounce-rate-value"></span>%</strong>.
+                        </p>
+
+                        <p class="mb-2">
+                            To protect your sender reputation:
+                        </p>
+
+                        <ul class="mb-0">
+                            <li>Remove invalid or bounced email addresses.</li>
+                            <li>Verify imported lead lists.</li>
+                            <li>Avoid purchased or outdated contact lists.</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
 
             <section class="content-wrap">
                 <div class="kpi-grid mb-4">
@@ -218,6 +245,19 @@
                 const res = await fetchWithAuth('/analytics/dashboard/');
                 if (res.ok) {
                     const data = await res.json();
+                    const warningBanner = document.getElementById('bounce-warning-banner');
+                    const bounceRateValue = document.getElementById('bounce-rate-value');
+
+                    if (data.bounce_warning) {
+                        warningBanner.classList.remove('d-none');
+                        bounceRateValue.textContent = data.bounce_rate;
+
+                        if (data.bounce_rate > 10) {
+                            warningBanner.classList.remove('alert-warning');
+                            warningBanner.classList.add('alert-danger');
+                        }
+                    }
+
                     document.getElementById('total-leads-count').textContent = Number(data.total_leads || 0).toLocaleString();
                     document.getElementById('active-campaigns-count').textContent = Number(data.active_campaigns || 0).toLocaleString();
                     document.getElementById('emails-sent-count').textContent = Number(data.emails_sent || 0).toLocaleString();
