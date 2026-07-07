@@ -10,7 +10,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from campaigns.models import Campaign, CampaignLead, ConnectedEmailAccount, SequenceStep
+from campaigns.models import Campaign, CampaignLead, ConnectedEmailAccount, EmailTemplate, SequenceStep
 from campaigns.fields import decrypt_mailbox_credential, encrypt_mailbox_credential
 from campaigns.ai import personalize_email
 from campaigns.tasks import (
@@ -1962,9 +1962,19 @@ class GoogleOAuthStateTests(APITestCase):
         self.assertIn('google_auth=error', response['Location'])
         self.assertIn('reason=no_user', response['Location'])
 
-    def test_email_template_filtering_and_search(self):
-        from campaigns.models import EmailTemplate
 
+class EmailTemplateViewSetTests(APITestCase):
+    def setUp(self):
+        self.organization = Organization.objects.create(name='Template Org')
+        self.user = User.objects.create_user(
+            email='template-owner@acme.test',
+            password='StrongPass123!',
+            organization=self.organization,
+            role='ADMIN',
+        )
+        self.client.force_authenticate(self.user)
+
+    def test_email_template_filtering_and_search(self):
         # Create some templates
         EmailTemplate.objects.create(
             organization=self.organization,
