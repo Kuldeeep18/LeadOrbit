@@ -1,12 +1,80 @@
 import json
 import logging
 import re
-
 import requests
 from django.conf import settings
+from django.utils.html import escape
 
 logger = logging.getLogger(__name__)
 MERGE_TAG_PATTERN = re.compile(r'{{\s*([a-zA-Z0-9_]+)\s*}}')
+
+
+def _sanitize_subject(text):
+    """
+    Sanitize subject line - preserve plain text, only escape HTML entities.
+    """
+    if not text:
+        return ""
+    # Simple escape for subjects - don't use bleach on plain text
+    return escape(str(text))
+
+
+def _sanitize_content(text):
+    """
+    Sanitize HTML content using bleach with CSS sanitization.
+    """
+    if not text:
+        return ""
+    
+    import bleach
+    from bleach.css_sanitizer import CSSSanitizer
+    
+    allowed_tags = [
+        'a', 'b', 'i', 'strong', 'em', 'p', 'br', 'ul', 'ol', 'li', 'span', 'div'
+    ]
+    allowed_attrs = {
+        'a': ['href', 'target', 'title', 'rel'],
+        '*': ['style']
+    }
+    
+    # CSS sanitizer for style attributes
+    css_sanitizer = CSSSanitizer(
+        allowed_css_properties=[
+            'color', 'font-size', 'font-weight', 'font-family',
+            'text-align', 'background-color', 'padding', 'margin',
+            'border', 'border-radius', 'width', 'height',
+            'display', 'float', 'clear'
+        ]
+    )
+    
+    return bleach.clean(
+        str(text),
+        tags=allowed_tags,
+        attributes=allowed_attrs,
+        strip=True,
+        css_sanitizer=css_sanitizer
+    )
+
+
+def _add_rel_to_links(html_content):
+    """Add rel='noopener noreferrer' to all anchor tags with target='_blank'."""
+    if not html_content:
+        return html_content
+    
+    pattern = r'<a\s+([^>]*?)target=["\']_blank["\']([^>]*?)>'
+    replacement = r'<a \1target="_blank" rel="noopener noreferrer"\2>'
+    return re.sub(pattern, replacement, html_content)
+
+
+def _convert_to_html(text):
+    """Convert plain text with newlines to HTML."""
+    if not text:
+        return ""
+    html = text.replace('\n', '<br>')
+    paragraphs = html.split('<br><br>')
+    if len(paragraphs) > 1:
+        html = ''.join(f'<p>{p}</p>' for p in paragraphs)
+    return html
 
 
 def _get_gemini_api_key():
@@ -61,9 +129,9 @@ def _fallback_email_copy(prompt, current_subject='', current_body=''):
         f'Focus used: {topic}.'
     )
     return {
-        'assistant_message': assistant_message,
-        'subject': subject,
-        'body': body,
+        'assistant_message': _sanitize_subject(assistant_message),
+        'subject': _sanitize_subject(subject),
+        'body': _sanitize_content(body),
         'provider': 'fallback',
         'model': 'template',
         'fallback': True,
@@ -85,9 +153,9 @@ def _coerce_email_result(payload, prompt='', current_subject='', current_body=''
         return _fallback_email_copy(prompt, subject, current_body)
 
     return {
-        'assistant_message': assistant_message,
-        'subject': subject,
-        'body': body,
+        'assistant_message': _sanitize_subject(assistant_message),
+        'subject': _sanitize_subject(subject),
+        'body': _sanitize_content(body),
     }
 
 
@@ -154,7 +222,7 @@ def generate_email_chat_completion(prompt, current_subject='', current_body='', 
                     'temperature': 0.7,
                 },
                 timeout=60,
-            )
+              )
             response.raise_for_status()
             payload = response.json()
             raw_content = (
@@ -220,8 +288,10 @@ def personalize_email(template_subject, template_body, lead):
     api_key = _get_gemini_api_key()
     merged_subject = _apply_merge_tags(template_subject, lead)
     merged_body = _apply_merge_tags(template_body, lead)
+    
     if not api_key or not template_body:
-        return merged_subject, merged_body
+        html_body = _convert_to_html(merged_body)
+        return _sanitize_subject(merged_subject), html_body
         
     prompt = f"""
 You are an expert sales representative. Personalize the following email template for a lead.
@@ -237,37 +307,35 @@ Requirements:
 - Keep the core message intact.
 - Make it sound natural and tailored to the lead's company.
 - Return ONLY a JSON object with 'subject' and 'body' keys.
+- The body should be in plain text with line breaks.
 """
 
     try:
         import google.generativeai as genai
-        # 1. Check if organization has personal tracking tokens and personalization toggled on
         active_key = None
         if hasattr(lead, 'organization') and lead.organization:
-            # If the user explicitly disabled personalization, trigger an early exit exception to drop back to standard templates
             if not getattr(lead.organization, 'enable_ai_personalization', True):
                 raise Exception("AI Personalization is explicitly disabled for this organization workspace.")
-            
             active_key = getattr(lead.organization, 'gemini_api_key', None)
 
-        # 2. Fall back to the default system environment variable token if no tenant-level key exists
         final_api_key = active_key if active_key else api_key
-
         genai.configure(api_key=final_api_key)
         
-        # 3. Upgrade the deprecated engine version string to the current 2.0 version
         model = genai.GenerativeModel('gemini-2.0-flash')
         response = model.generate_content(prompt)
-        # Parse basic JSON from response...
-        # For MVP we will just do simple replacement if JSON parsing fails
         text = response.text.strip()
         if text.startswith("```json"):
             text = text[7:-3]
         
         result = json.loads(text)
         subject = _apply_merge_tags(result.get("subject", merged_subject), lead)
-        body = _apply_merge_tags(result.get("body", merged_body), lead)
-        return subject, body
+        body_text = _apply_merge_tags(result.get("body", merged_body), lead)
+        
+        html_body = _convert_to_html(body_text)
+        return _sanitize_subject(subject), html_body
     except Exception as e:
         logger.error(f"Gemini Personalization Error: {e}")
-        return merged_subject, merged_body
+        html_body = _convert_to_html(merged_body)
+        return _sanitize_subject(merged_subject), html_body
+
+        
