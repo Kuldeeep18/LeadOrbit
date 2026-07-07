@@ -9,13 +9,33 @@ from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
 
 
 class LoginRateThrottle(AnonRateThrottle):
-    """Throttles login attempts by client IP (user isn't authenticated yet)."""
+    """
+    Throttles login attempts by client IP, always — even if a stale or
+    unrelated Bearer token is attached to the request. Login should stay
+    IP-limited regardless of auth state, since the whole point is to
+    protect the endpoint itself against brute-force attempts.
+    """
     scope = 'login'
+
+    def get_cache_key(self, request, view):
+        return self.cache_format % {
+            'scope': self.scope,
+            'ident': self.get_ident(request),
+        }
 
 
 class SignupRateThrottle(AnonRateThrottle):
-    """Throttles account/organization signups by client IP."""
+    """
+    Throttles account/organization signups by client IP, always — same
+    reasoning as LoginRateThrottle above.
+    """
     scope = 'signup'
+
+    def get_cache_key(self, request, view):
+        return self.cache_format % {
+            'scope': self.scope,
+            'ident': self.get_ident(request),
+        }
 
 
 class CampaignLaunchThrottle(UserRateThrottle):
