@@ -1317,7 +1317,15 @@
 
         async function loadEmailTemplates() {
             try {
-                const res = await fetchWithAuth('/email-templates/');
+                const searchQuery = (document.getElementById('template-search')?.value || '').toLowerCase().trim();
+                const categoryQuery = (document.getElementById('template-category')?.value || '').toLowerCase().trim();
+
+                const params = new URLSearchParams();
+                if (searchQuery) params.append('search', searchQuery);
+                if (categoryQuery) params.append('category', categoryQuery);
+
+                const url = params.toString() ? `/email-templates/?${params.toString()}` : '/email-templates/';
+                const res = await fetchWithAuth(url);
                 if (!res.ok) {
                     throw new Error('Unable to load templates');
                 }
@@ -1342,29 +1350,8 @@
             if (emailTemplates.length === 0) {
                 library.innerHTML = `
                     <div class="p-4 text-center text-muted">
-                        <p class="mb-2">No saved templates yet.</p>
-                        <p>Create one from the current email step using <strong>Save as Template</strong>.</p>
-                    </div>
-                `;
-                return;
-            }
-
-            const searchQuery = (document.getElementById('template-search')?.value || '').toLowerCase().trim();
-            const categoryQuery = (document.getElementById('template-category')?.value || '').toLowerCase().trim();
-
-            const filteredTemplates = emailTemplates.filter(template => {
-                const matchesCategory = !categoryQuery || (template.category || '').toLowerCase() === categoryQuery;
-                const matchesSearch = !searchQuery || 
-                    (template.name || '').toLowerCase().includes(searchQuery) ||
-                    (template.subject || '').toLowerCase().includes(searchQuery) ||
-                    (template.body || '').toLowerCase().includes(searchQuery);
-                return matchesCategory && matchesSearch;
-            });
-
-            if (filteredTemplates.length === 0) {
-                library.innerHTML = `
-                    <div class="p-4 text-center text-muted">
-                        <p class="mb-0">No matching templates found.</p>
+                        <p class="mb-2">No templates found.</p>
+                        <p>Try adjusting your search, or create one from the current email step using <strong>Save as Template</strong>.</p>
                     </div>
                 `;
                 return;
@@ -1372,7 +1359,7 @@
 
             library.innerHTML = `
                 <div class="template-list">
-                    ${filteredTemplates.map(template => `
+                    ${emailTemplates.map(template => `
                         <div class="template-item">
                             <div class="template-item-name">${escapeHtml(template.name)}</div>
                             <div class="template-item-meta">
@@ -1399,9 +1386,7 @@
         }
 
         async function openTemplateLibrary() {
-            if (!emailTemplatesLoaded) {
-                await loadEmailTemplates();
-            }
+            await loadEmailTemplates();
             renderTemplateLibrary();
             document.getElementById('template-library-modal').classList.remove('hidden');
         }
@@ -2613,8 +2598,18 @@ ${rows || `
                 closeTemplateLibrary();
             }
         });
-        document.getElementById('template-search').addEventListener('input', renderTemplateLibrary);
-        document.getElementById('template-category').addEventListener('change', renderTemplateLibrary);
+        let templateSearchTimeout = null;
+        document.getElementById('template-search').addEventListener('input', () => {
+            clearTimeout(templateSearchTimeout);
+            templateSearchTimeout = setTimeout(async () => {
+                await loadEmailTemplates();
+                renderTemplateLibrary();
+            }, 300);
+        });
+        document.getElementById('template-category').addEventListener('change', async () => {
+            await loadEmailTemplates();
+            renderTemplateLibrary();
+        });
 
         // Picker tabs
         document.querySelectorAll('.picker-tabs .ptab').forEach(tab => {

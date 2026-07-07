@@ -1961,3 +1961,57 @@ class GoogleOAuthStateTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_302_FOUND)
         self.assertIn('google_auth=error', response['Location'])
         self.assertIn('reason=no_user', response['Location'])
+
+    def test_email_template_filtering_and_search(self):
+        from campaigns.models import EmailTemplate
+
+        # Create some templates
+        EmailTemplate.objects.create(
+            organization=self.organization,
+            name="Welcome Email",
+            subject="Welcome to our service",
+            body="Hello {{firstName}}, we are glad to have you.",
+            category="onboarding",
+        )
+        EmailTemplate.objects.create(
+            organization=self.organization,
+            name="Follow Up",
+            subject="Checking in",
+            body="Did you see my last email?",
+            category="followup",
+        )
+        EmailTemplate.objects.create(
+            organization=self.organization,
+            name="Special Offer",
+            subject="Discount inside",
+            body="Get 20% off today!",
+            category="sales",
+        )
+
+        # 1. Fetch all templates
+        response = self.client.get('/api/v1/email-templates/')
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 3)
+
+        # 2. Filter by category
+        response = self.client.get('/api/v1/email-templates/', {'category': 'onboarding'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['name'], "Welcome Email")
+
+        # 3. Search by name/subject/body
+        response = self.client.get('/api/v1/email-templates/', {'search': 'discount'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['name'], "Special Offer")
+
+        # 4. Search and category together
+        response = self.client.get('/api/v1/email-templates/', {'category': 'sales', 'search': 'Discount'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 1)
+        self.assertEqual(response.data[0]['name'], "Special Offer")
+
+        # 5. Search with no results
+        response = self.client.get('/api/v1/email-templates/', {'search': 'nonexistent'})
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(response.data), 0)
