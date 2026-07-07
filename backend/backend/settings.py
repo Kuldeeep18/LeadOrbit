@@ -49,18 +49,47 @@ def _normalize_google_redirect_uri(raw_uri: str, backend_base_url: str) -> str:
     # Canonicalize callback path so Google/login/token-exchange always match.
     return f'{scheme}://{host}/api/v1/auth/google/callback'
 
-SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-fallback-key-change-me')
-DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes')
+# ─── CRITICAL SECURITY FIX: SECRET_KEY must be set in environment ───
+SECRET_KEY = os.getenv('SECRET_KEY')
+if not SECRET_KEY:
+    raise ValueError("SECRET_KEY environment variable is not set. Please set it in your .env file or environment.")
+
+# ─── CRITICAL SECURITY FIX: DEBUG defaults to False (fail-safe) ───
+DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 'yes')
 TESTING = 'test' in sys.argv
-MAILBOX_CREDENTIALS_ENCRYPTION_KEY = os.getenv(
-    'MAILBOX_CREDENTIALS_ENCRYPTION_KEY',
-    'fallback-insecure-key-for-local-dev-and-testing' if (DEBUG or TESTING) else '',
-)
-ALLOWED_HOSTS = ['*']
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
+
+# ─── CRITICAL SECURITY FIX: Encryption key must be set in production ───
+MAILBOX_CREDENTIALS_ENCRYPTION_KEY = os.getenv('MAILBOX_CREDENTIALS_ENCRYPTION_KEY')
+if not MAILBOX_CREDENTIALS_ENCRYPTION_KEY and not DEBUG and not TESTING:
+    raise ValueError(
+        "MAILBOX_CREDENTIALS_ENCRYPTION_KEY environment variable is not set. "
+        "Please set it in your .env file or environment."
+    )
+# Allow fallback only for development/testing
+if not MAILBOX_CREDENTIALS_ENCRYPTION_KEY:
+    MAILBOX_CREDENTIALS_ENCRYPTION_KEY = 'fallback-insecure-key-for-local-dev-and-testing'
+
+# ─── FIX: ALLOWED_HOSTS from environment, not wildcard ───
+ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',') if h.strip()]
+
+# ─── CRITICAL SECURITY FIX: CORS Configuration ──────────────────────────
+# Use explicit whitelist instead of allowing all origins
+CORS_ALLOW_ALL_ORIGINS = False
+
+# Define explicit allowed origins
+CORS_ALLOWED_ORIGINS = os.getenv(
+    'CORS_ALLOWED_ORIGINS',
+    'http://localhost:3000,http://127.0.0.1:3000'
+).split(',')
+
+# Remove empty strings and strip whitespace
+CORS_ALLOWED_ORIGINS = [origin.strip() for origin in CORS_ALLOWED_ORIGINS if origin.strip()]
+
+# For production, you can add:
+# CORS_ALLOWED_ORIGINS = [
+#     "https://leadorbit.com",
+#     "https://www.leadorbit.com",
+# ]
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -71,17 +100,20 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',  # ADDED - Fix #606
     'corsheaders',
     'django_celery_beat',
     'tenants',
     'users',
     'leads',
     'campaigns',
+    'csp',  # ADDED - Fix #624
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
+    'csp.middleware.CSPMiddleware',  # ADDED - Fix #624
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -122,11 +154,24 @@ DATABASES = {
 
 AUTH_USER_MODEL = 'users.User'
 
+# ─── CRITICAL SECURITY FIX: Password Policy ──────────────────────────
+# Increased minimum length from default 8 to 12 (Fix #622)
 AUTH_PASSWORD_VALIDATORS = [
-    {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
+    {
+        'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'OPTIONS': {
+            'min_length': 12,  # ✅ Increased from default 8
+        }
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator',
+    },
+    {
+        'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator',
+    },
 ]
 
 LANGUAGE_CODE = 'en-us'
@@ -172,17 +217,69 @@ CELERY_BEAT_SCHEDULE = {
     },
 }
 
-# SimpleJWT Configuration
+# ─── CRITICAL SECURITY FIX: SimpleJWT Configuration ────────────────────
+# Explicitly set algorithm and signing key (Fix #618)
 from datetime import timedelta
+
 SIMPLE_JWT = {
     'ACCESS_TOKEN_LIFETIME': timedelta(hours=2),
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
+    
+    # ─── CRITICAL SECURITY FIX: Explicit JWT algorithm ──────────────
+    # Explicitly set algorithm to HS256 (or RS256 for production)
+    'ALGORITHM': 'HS256',  # Fix #618
+    
+    # ─── FIX: Fallback to SECRET_KEY if JWT_SIGNING_KEY not set ───
+    'SIGNING_KEY': os.getenv('JWT_SIGNING_KEY') or SECRET_KEY,
+    
     'USER_ID_FIELD': 'id',
     'USER_ID_CLAIM': 'user_id',
+    
+    # Additional security settings
+    'AUTH_TOKEN_CLASSES': ('rest_framework_simplejwt.tokens.AccessToken',),
+    'TOKEN_TYPE_CLAIM': 'token_type',
+    'JTI_CLAIM': 'jti',
+    'SLIDING_TOKEN_REFRESH_EXP_CLAIM': 'refresh_exp',
+    'SLIDING_TOKEN_LIFETIME': timedelta(minutes=5),
+    'SLIDING_TOKEN_REFRESH_LIFETIME': timedelta(days=1),
 }
 
-# Allow all origins in development
-CORS_ALLOW_ALL_ORIGINS = True
+# ─── Session & CSRF Cookie Security ──────────────────────────────
+# Ensure cookies are only sent over HTTPS in production
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+
+# Prevent client-side JavaScript access to session cookie
+SESSION_COOKIE_HTTPONLY = True
+
+# Restrict cookie to same-origin requests
+SESSION_COOKIE_SAMESITE = 'Lax'
+
+# CSRF cookie settings
+CSRF_COOKIE_HTTPONLY = False  # Required for JavaScript to read token
+CSRF_COOKIE_SAMESITE = 'Lax'
+
+# Optional: Set cookie age
+SESSION_COOKIE_AGE = 86400  # 24 hours
+
+# ─── CRITICAL SECURITY FIX: Content Security Policy (CSP) ──────────────
+# Added to prevent XSS attacks (Fix #624)
+CSP_DEFAULT_SRC = ("'self'",)
+CSP_SCRIPT_SRC = ("'self'",)
+CSP_STYLE_SRC = ("'self'",)
+CSP_IMG_SRC = ("'self'", "data:",)
+CSP_FONT_SRC = ("'self'",)
+CSP_CONNECT_SRC = ("'self'",)
+CSP_OBJECT_SRC = ("'none'",)
+CSP_BASE_URI = ("'none'",)
+CSP_FRAME_ANCESTORS = ("'none'",)
+CSP_FORM_ACTION = ("'self'",)
+CSP_REPORT_URI = "/csp-report/"
+
+# For development with inline styles/scripts
+if DEBUG:
+    CSP_SCRIPT_SRC = ("'self'", "'unsafe-inline'", "'unsafe-eval'")
+    CSP_STYLE_SRC = ("'self'", "'unsafe-inline'")
 
 # Gemini API Key
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', _read_local_env_value('GEMINI_API_KEY', ''))
@@ -236,3 +333,21 @@ GOOGLE_SCOPES = [
 TWILIO_ACCOUNT_SID = os.getenv('TWILIO_ACCOUNT_SID', _read_local_env_value('TWILIO_ACCOUNT_SID', ''))
 TWILIO_AUTH_TOKEN = os.getenv('TWILIO_AUTH_TOKEN', _read_local_env_value('TWILIO_AUTH_TOKEN', ''))
 TWILIO_PHONE_NUMBER = os.getenv('TWILIO_PHONE_NUMBER', _read_local_env_value('TWILIO_PHONE_NUMBER', ''))
+
+# ─── FIX: Cache Configuration (for rate limiting) ────────
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': os.getenv('REDIS_URL', 'redis://localhost:6379/1'),
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            # ─── FIX: Use CONNECTION_POOL_KWARGS instead of deprecated options ───
+            'CONNECTION_POOL_KWARGS': {
+                'max_connections': 50,
+                'timeout': 20,
+            },
+            'PICKLE_VERSION': -1,
+        },
+    }
+}
+
