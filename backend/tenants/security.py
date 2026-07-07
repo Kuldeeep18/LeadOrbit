@@ -1,51 +1,70 @@
-"""
-Security middleware for rate limiting and request hardening.
-"""
 import time
-import logging
+import json
+from django.core.cache import cache
 from django.http import JsonResponse
 from django.utils.deprecation import MiddlewareMixin
 
-logger = logging.getLogger(__name__)
 
 class RateLimitMiddleware(MiddlewareMixin):
     """
-    Simple in-memory rate limiter for API endpoints.
-    Limits each IP to a max number of requests per window.
+    Rate limiting middleware for API endpoints.
     """
-    # { ip_address: [timestamp1, timestamp2, ...] }
     _requests = {}
     MAX_REQUESTS = 100  # per window
     WINDOW_SECONDS = 60
+    
+    # ─── Login-specific rate limiting ──────────────────────────────
+    LOGIN_IP_MAX = 10  # Max login attempts per IP
+    LOGIN_EMAIL_MAX = 5  # Max failed attempts before lockout
+    LOCKOUT_SECONDS = 900  # 15 minutes
 
     def process_request(self, request):
         if not request.path.startswith('/api/'):
             return None
-
-        ip = self._get_client_ip(request)
+        
+        ip = request.META.get('REMOTE_ADDR')
+        
+        # ─── Login-specific rate limiting ──────────────────────────────
+        if request.path == '/api/v1/token/' and request.method == 'POST':
+            # Get email from request body
+            try:
+                body = json.loads(request.body)
+                email = body.get('email')
+            except:
+                email = None
+            
+            # IP-based rate limiting for login
+            ip_key = f"login_attempts_ip_{ip}"
+            ip_attempts = cache.get(ip_key, 0)
+            if ip_attempts >= self.LOGIN_IP_MAX:
+                return JsonResponse(
+                    {'error': 'Too many login attempts from this IP. Try again later.'},
+                    status=429
+                )
+            
+            # Email-based lockout
+            if email:
+                lock_key = f"account_locked_{email}"
+                if cache.get(lock_key):
+                    return JsonResponse(
+                        {'error': 'Account temporarily locked. Reset your password or try again later.'},
+                        status=403
+                    )
+        
+        # ─── Global rate limiting for all API endpoints ────────────────
         now = time.time()
-
-        # Clean old entries
-        if ip in self._requests:
-            self._requests[ip] = [t for t in self._requests[ip] if now - t < self.WINDOW_SECONDS]
-        else:
-            self._requests[ip] = []
-
-        if len(self._requests[ip]) >= self.MAX_REQUESTS:
-            logger.warning(f"Rate limit exceeded for IP: {ip}")
+        request_history = self._requests.setdefault(ip, [])
+        request_history = [t for t in request_history if now - t < self.WINDOW_SECONDS]
+        
+        if len(request_history) >= self.MAX_REQUESTS:
             return JsonResponse(
-                {'error': 'Too many requests. Please slow down.'},
+                {'error': f'Rate limit exceeded. Maximum {self.MAX_REQUESTS} requests per {self.WINDOW_SECONDS} seconds.'},
                 status=429
             )
-
-        self._requests[ip].append(now)
+        
+        request_history.append(now)
+        self._requests[ip] = request_history
         return None
-
-    def _get_client_ip(self, request):
-        x_forwarded = request.META.get('HTTP_X_FORWARDED_FOR')
-        if x_forwarded:
-            return x_forwarded.split(',')[0].strip()
-        return request.META.get('REMOTE_ADDR', '0.0.0.0')
 
 
 class SecurityHeadersMiddleware(MiddlewareMixin):
@@ -59,3 +78,5 @@ class SecurityHeadersMiddleware(MiddlewareMixin):
         response['Referrer-Policy'] = 'strict-origin-when-cross-origin'
         response['Permissions-Policy'] = 'camera=(), microphone=(), geolocation=()'
         return response
+
+        
