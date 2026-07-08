@@ -364,7 +364,9 @@
                                     <th>Company</th>
                                     <th>Tags</th>
                                     <th>Score</th>
-                                    <th>Status</th>
+                                    <th id="sort-status-btn" style="cursor: pointer;" class="user-select-none text-primary" title="Sort by Status">
+    Status <i class="bi bi-arrow-down-up ms-1" style="font-size: 0.8rem;"></i>
+</th>
                                 </tr>
                             </thead>
                             <tbody id="leads-table-body">
@@ -879,6 +881,34 @@
                 } finally {
                     btn.disabled = false;
                     btn.innerHTML = '<i class="bi bi-cloud-upload me-1" aria-hidden="true"></i> Upload and Process';
+                }
+            });
+            
+            // ─── Status Sorting Toggle ─────────────────────────────────────────
+            let statusSortDir = null; 
+
+            document.getElementById('sort-status-btn').addEventListener('click', async () => {
+                const icon = document.querySelector('#sort-status-btn i');
+                
+                if (statusSortDir === 'status') {
+                    statusSortDir = '-status';
+                    icon.className = 'bi bi-arrow-up ms-1';
+                } else {
+                    statusSortDir = 'status';
+                    icon.className = 'bi bi-arrow-down ms-1';
+                }
+
+                const params = { ...activeFilters, ordering: statusSortDir };
+                
+                const tbody = document.getElementById('leads-table-body');
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4"><div class="spinner-border spinner-border-sm text-primary"></div></td></tr>';
+
+                try {
+                    const leads = await fetchLeadsWithFilters(params);
+                    allLeads = leads; 
+                    renderLeadRows(leads);
+                } catch (e) {
+                    console.error('Error sorting leads by status:', e);
                 }
             });
         });

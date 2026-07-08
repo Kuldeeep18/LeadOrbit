@@ -1,5 +1,5 @@
-from django.db.models import Q
-from rest_framework import viewsets, parsers, status
+from django.db.models import Q, F # added F here 
+from rest_framework import viewsets, parsers, status, filters # added filters here 
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -15,6 +15,11 @@ class LeadImportJobPagination(PageNumberPagination):
 class LeadViewSet(viewsets.ModelViewSet):
     serializer_class = LeadSerializer
     queryset = Lead.objects.all()
+
+    # Add ordering filter backend and specify ordering fields
+    filter_backends = [filters.OrderingFilter]
+    ordering_fields = ['status', 'first_name', 'last_name', 'email', 'company', 'created_at']
+    
     manager_actions = frozenset({
         'create',
         'update',
@@ -77,6 +82,9 @@ class LeadViewSet(viewsets.ModelViewSet):
                 | Q(email__icontains=search)
                 | Q(company__icontains=search)
             )
+
+        # Annotate the queryset with the status from the related campaignlead
+        qs = qs.annotate(status=F('campaignlead__status'))
 
         return qs.distinct()
 
