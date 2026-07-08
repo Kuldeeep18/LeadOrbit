@@ -88,6 +88,20 @@ class LeadImportTests(APITestCase):
         self.assertTrue(Lead.objects.filter(organization=self.organization, email='valid@example.com').exists())
         self.assertEqual(job.error_log[0]['error'], 'Invalid email format')
         self.assertEqual(job.error_log[1]['error'], 'Missing email address')
+        
+    def test_import_trims_whitespace_from_csv_headers(self):
+        # Everything here must have the same indentation
+        csv_data = (
+            " Email , First Name , Last Name , Company Name \n"
+            "alice@example.com,Alice,Smith,Acme\n"
+        )
+        
+        import_leads_from_csv(csv_data, str(self.organization.id))
+        
+        lead = Lead.objects.get(organization=self.organization, email='alice@example.com')
+        self.assertEqual(lead.first_name, 'Alice')
+        self.assertEqual(lead.last_name, 'Smith')
+        self.assertEqual(lead.company, 'Acme')   
 
 
 class LeadIsolationAPITests(APITestCase):
@@ -461,3 +475,5 @@ class LeadFilterTests(APITestCase):
         resp = self._get()
         emails = {l['email'] for l in resp.data}
         self.assertNotIn('spy@example.com', emails)
+
+    
