@@ -10,7 +10,13 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from campaigns.models import Campaign, CampaignLead, ConnectedEmailAccount, SequenceStep
+from campaigns.models import (
+    Campaign,
+    CampaignLead,
+    ConnectedEmailAccount,
+    SequenceStep,
+    UnsubscribeFeedback,
+)
 from campaigns.fields import decrypt_mailbox_credential, encrypt_mailbox_credential
 from campaigns.ai import personalize_email
 from campaigns.tasks import (
@@ -1707,6 +1713,10 @@ class CampaignWorkflowTests(APITestCase):
         self.assertIn('Confirm unsubscribe', response.content.decode('utf-8'))
         self.assertIn('method="post"', response.content.decode('utf-8'))
 
+        self.assertIn('Too frequent emails', response.content.decode('utf-8'))
+        self.assertIn('No longer relevant', response.content.decode('utf-8'))
+        self.assertIn('Never signed up', response.content.decode('utf-8'))
+
         lead.refresh_from_db()
         self.assertFalse(lead.global_unsubscribe)
 
@@ -1717,12 +1727,27 @@ class CampaignWorkflowTests(APITestCase):
         )
         token = generate_unsubscribe_token(lead.id)
 
-        response = self.client.post(f'/api/v1/unsubscribe/{lead.id}/{token}/')
+        response = self.client.post(
+            f'/api/v1/unsubscribe/{lead.id}/{token}/',
+            {
+                "reasons": [
+                    "Too frequent emails",
+                    "No longer relevant",
+                ]
+            },
+        )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         self.assertIn('You have been unsubscribed', response.content.decode('utf-8'))
 
         lead.refresh_from_db()
         self.assertTrue(lead.global_unsubscribe)
+
+        feedback = UnsubscribeFeedback.objects.get(lead=lead)
+
+        self.assertEqual(
+            feedback.reasons,
+            ["Too frequent emails", "No longer relevant"],
+        )
 
     def test_unsubscribe_view_rejects_invalid_token(self):
         lead = Lead.objects.create(
