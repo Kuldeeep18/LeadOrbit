@@ -772,14 +772,23 @@ def unsubscribe_view(request, lead_id, token):
     lead.global_unsubscribe = True
     lead.save(update_fields=["global_unsubscribe"])
 
-    reasons = request.POST.getlist("reasons")
+    ALLOWED_REASONS = {
+    "Too frequent emails",
+    "No longer relevant",
+    "Never signed up",
+}
 
-    if reasons:
-        UnsubscribeFeedback.objects.create(
-            lead=lead,
-            organization=lead.organization,
-            reasons=reasons,
-        )
+reasons = request.POST.getlist("reasons")
+valid_reasons = [reason for reason in reasons if reason in ALLOWED_REASONS]
+
+if valid_reasons:
+    UnsubscribeFeedback.objects.update_or_create(
+        lead=lead,
+        defaults={
+            "organization": lead.organization,
+            "reasons": valid_reasons,
+        },
+    )
 
     html = _unsubscribe_page(
         'Unsubscribed',
