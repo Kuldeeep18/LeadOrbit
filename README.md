@@ -1,92 +1,134 @@
-# LeadOrbit
-![Python](https://img.shields.io/badge/Python-3.11-blue)
-![Django](https://img.shields.io/badge/Django-5.0-green)
-![License](https://img.shields.io/badge/License-MIT-yellow.svg)
-![LastCommit](https://img.shields.io/github/last-commit/Kuldeeep18/LeadOrbit)
-![Stars](https://img.shields.io/github/stars/Kuldeeep18/LeadOrbit)
-Current branding note: the active app is branded as `LeadOrbit`; older planning documents in the repo may still mention the original `Lime` name.
+<div align="center">
 
-LeadOrbit is a multi-tenant outbound outreach MVP built with Django REST Framework and a static HTML/JavaScript frontend. The implemented code supports organization signup, JWT auth, CSV lead import, campaign building, lead enrollment, Gmail sender connection, AI-assisted email drafting, webhook-based engagement tracking, and analytics pages.
+# 🛰️ LeadOrbit
 
-This README is based on the current codebase, not the older planning documents in the repo root.
+**A multi-tenant outbound outreach platform** — CSV lead import, AI-assisted campaign building, Gmail/SMS/call sequencing, and engagement analytics.
+
+![Python](https://img.shields.io/badge/Python-3.11.9-3776AB?style=flat-square&logo=python&logoColor=white)
+![Django](https://img.shields.io/badge/Django-5-092E20?style=flat-square&logo=django&logoColor=white)
+![DRF](https://img.shields.io/badge/DRF-REST%20API-A30000?style=flat-square)
+![Celery](https://img.shields.io/badge/Celery-Async%20Tasks-37814A?style=flat-square&logo=celery&logoColor=white)
+![License](https://img.shields.io/badge/License-See%20Repo-lightgrey?style=flat-square)
+![Tests](https://img.shields.io/badge/Backend%20Tests-27%20passing-brightgreen?style=flat-square)
+
+> 📛 **Branding note:** the live app is **LeadOrbit**. Older planning docs in the repo root may still say *Lime* — ignore those, the code is the source of truth.
+
+</div>
+
+---
 
 ## 📑 Table of Contents
-- [LeadOrbit](#leadorbit)
-- [What Works Today](#what-works-today)
-- [Stack](#stack)
-- [Repo Layout](#repo-layout)
-- [Local Setup](#local-setup)
-- [Background Jobs](#background-jobs)
-- [Frontend Behavior](#frontend-behavior)
-- [API Surface](#api-surface)
-- [Testing](#testing)
-- [Current Caveats](#current-caveats)
-- [Integration Notes](#integration-notes)
-- [Contributors](#contributors)
 
-## Code of Conduct
+- [✨ What Works Today](#-what-works-today)
+- [🧱 Stack](#-stack)
+- [🗂️ Repo Layout](#️-repo-layout)
+- [🔍 "I Want to Change X" — Quick Lookup](#-i-want-to-change-x--quick-lookup)
+- [⚡ Local Setup](#-local-setup)
+- [⏱️ Background Jobs](#️-background-jobs)
+- [🖥️ Frontend Behavior](#️-frontend-behavior)
+- [🔌 API Surface](#-api-surface)
+- [✅ Testing](#-testing)
+- [🛠️ Making Changes — Workflow](#️-making-changes--workflow)
+- [⚠️ Current Caveats](#️-current-caveats)
+- [🔗 Integration Notes](#-integration-notes)
+- [🤝 Contributors](#-contributors)
 
-This project adheres to the Contributor Covenant [Code of Conduct](CODE_OF_CONDUCT.md). By participating, you agree to abide by its terms.
+---
 
-## Contributing
+## ✨ What Works Today
 
-... existing contributing content ...
+| Area | Status |
+|---|---|
+| JWT auth + organization creation on signup | ✅ |
+| Tenant-scoped users, leads, campaigns, connected accounts | ✅ |
+| CSV lead import (flexible column aliases, background task) | ✅ |
+| Campaign builder (sequence editing, lead/sender selection, launch) | ✅ |
+| Email sending via Gmail API | ✅ (needs connected Google account) |
+| SMS / call execution via Twilio | ✅ (needs Twilio credentials) |
+| Open / reply / click / bounce tracking via webhook | ✅ |
+| AI draft generation (OpenRouter) with deterministic fallback | ✅ |
+| Send-time personalization (Gemini merge tags) | ✅ (optional) |
+| Dashboard & analytics pages | ✅ |
+| Celery tasks: CSV import, campaign processing, reply polling | ✅ |
 
-## What Works Today
+### Step-type execution status
 
-- JWT auth with organization creation during signup
-- Tenant-scoped users, leads, campaigns, and connected sender accounts
-- CSV lead import with flexible column aliases and background task support
-- Campaign builder with sequence editing, lead selection, sender selection, and launch flow
-- Email sending through Gmail API when a Google account is connected
-- SMS and call execution through Twilio when credentials are configured
-- Open/reply/click/bounce tracking through the webhook endpoint
-- AI draft generation through OpenRouter, with fallback draft generation when no API key is set
-- Per-lead merge tag replacement, with Gemini-based send-time personalization when configured
-- Dashboard and analytics pages backed by API data
-- Celery tasks for CSV import, campaign processing, and reply polling
-
-Execution status by step type:
-
-- Fully implemented: `EMAIL`, `SMS`, `CALL`, `WAIT`, `CONDITION_OPEN`, `CONDITION_REPLY`, `CONDITION_CLICK`
-- Builder-visible but currently placeholder/auto-advance steps: `WHATSAPP`, `LINKEDIN`, `MANUAL`
-
-## Stack
-
-- Backend: Django 5, Django REST Framework, Simple JWT, Celery, `django-cors-headers`
-- Frontend: static HTML pages, ES modules, Bootstrap 5, Chart.js
-- Database: SQLite by default at `backend/db.sqlite3`
-- Integrations: Google OAuth/Gmail API, OpenRouter, Gemini, Twilio
-- Python target: `3.11.9` via [`runtime.txt`](runtime.txt)
-
-## Repo Layout
-
-```text
-backend/
-  manage.py
-  backend/              # active Django project package used by manage.py
-  campaigns/            # campaign models, serializers, tasks, Gmail/Twilio/AI integrations
-  leads/                # lead models, CSV import task, lead/tag API
-  tenants/              # organizations, tenant middleware, security middleware
-  users/                # custom user model, registration, profile/JWT auth
-  config/               # older scaffold package; not the active settings module
-
-frontend/
-  *.html                # active static product screens
-  api.js                # API base URL + auth token helpers
-  main.js               # shared auth bootstrapping/logout handling
-  theme.css             # shared dashboard styling
-  src/                  # leftover Vite starter files; not used by the live UI
-
-outreach_frontend/      # currently empty
-*.md                    # product and architecture docs from earlier phases
+```
+✅ Fully implemented   EMAIL · SMS · CALL · WAIT · CONDITION_OPEN · CONDITION_REPLY · CONDITION_CLICK
+🚧 Placeholder only     WHATSAPP · LINKEDIN · MANUAL   (visible in builder, auto-advance, no real send)
 ```
 
-## Local Setup
+> 💡 **Good first issue:** wiring up real execution for `WHATSAPP`, `LINKEDIN`, or `MANUAL` steps.
 
-### 1. Create a virtual environment and install dependencies
+---
 
-```sh
+## 🧱 Stack
+
+<table>
+<tr><td><b>Backend</b></td><td>Django 5 · Django REST Framework · Simple JWT · Celery · django-cors-headers</td></tr>
+<tr><td><b>Frontend</b></td><td>Static HTML pages · ES modules · Bootstrap 5 · Chart.js (no build step)</td></tr>
+<tr><td><b>Database</b></td><td>SQLite (<code>backend/db.sqlite3</code>) by default</td></tr>
+<tr><td><b>Integrations</b></td><td>Google OAuth / Gmail API · OpenRouter · Gemini · Twilio</td></tr>
+<tr><td><b>Python</b></td><td><code>3.11.9</code> (see <code>runtime.txt</code>)</td></tr>
+</table>
+
+---
+
+## 🗂️ Repo Layout
+
+```
+backend/
+├── manage.py
+├── backend/          # ✅ active Django project (settings, urls, celery app)
+├── campaigns/         # campaign models, serializers, tasks, Gmail/Twilio/AI integrations
+├── leads/              # lead models, CSV import task, lead/tag API
+├── tenants/            # organizations, tenant-scoping + security middleware
+├── users/              # custom user model, registration, profile, JWT auth
+└── config/            # ⚠️ leftover scaffold — not wired into manage.py
+
+frontend/
+├── *.html              # ✅ active screens (login, dashboard, leads, campaigns, builder, analytics, settings)
+├── api.js              # API base URL + auth token helpers
+├── main.js             # shared auth bootstrap / logout
+├── theme.css           # shared dashboard styling
+└── src/                # ⚠️ leftover Vite starter — not used by the live UI
+
+outreach_frontend/       # currently empty — ignore
+*.md                     # product/architecture planning docs (may be stale — code wins)
+```
+
+---
+
+## 🔍 "I Want to Change X" — Quick Lookup
+
+<details>
+<summary><b>Click to expand the full map from feature → file</b></summary>
+
+| I want to... | Go to |
+|---|---|
+| Change auth / JWT / signup logic | `backend/users/` |
+| Change org / multi-tenant scoping | `backend/tenants/` (check middleware for tenant-leak bugs) |
+| Change CSV import behavior or column aliases | `backend/leads/` (models + Celery task) |
+| Add/modify a campaign step type | `backend/campaigns/` — models, serializers, step-execution tasks |
+| Change Gmail sending logic | `backend/campaigns/` (Gmail integration) + Google OAuth config in `backend/backend/settings` |
+| Change SMS/call sending | `backend/campaigns/` (Twilio integration) |
+| Change AI draft generation / fallback | `backend/campaigns/` (OpenRouter/Gemini integration + fallback path) |
+| Change webhook tracking (open/click/reply/bounce) | `backend/campaigns/` webhook view + `backend/backend/urls.py` |
+| Change any UI screen | matching file in `frontend/*.html` — edit and reload, no build step |
+| Change how the frontend finds the API | `frontend/api.js` |
+| Change dashboard/analytics charts | `frontend/analytics.html` + `/api/v1/analytics/dashboard/` view |
+| Change scheduled/background jobs | Celery tasks in `campaigns/` / `leads/`, Celery app config in `backend/backend/` |
+
+</details>
+
+---
+
+## ⚡ Local Setup
+
+<details open>
+<summary><b>1. Virtual environment & dependencies</b></summary>
+
+```bash
 python -m venv .venv
 
 # Windows
@@ -97,10 +139,10 @@ source .venv/bin/activate
 
 pip install -r requirements.txt
 ```
+</details>
 
-### 2. Create `backend/.env`
-
-The backend reads environment variables from `backend/.env`.
+<details>
+<summary><b>2. Create <code>backend/.env</code></b></summary>
 
 ```env
 DEBUG=True
@@ -129,343 +171,176 @@ TWILIO_AUTH_TOKEN=
 TWILIO_PHONE_NUMBER=
 ```
 
-### 3. Run migrations
+> 🔓 You don't need real Google/OpenRouter/Twilio keys to develop most features — AI falls back to a deterministic draft, SMS/calls just won't send, and Gmail sending is the only thing that hard-requires OAuth.
+</details>
 
-```sh
+<details>
+<summary><b>3. Migrate & run the backend</b></summary>
+
+```bash
 python backend/manage.py migrate
-```
 
-### 4. Start the backend
-
-```sh
 cd backend
 python manage.py runserver 8000
 ```
+</details>
 
-### 5. Serve the frontend
+<details>
+<summary><b>4. Serve the frontend</b></summary>
 
-In a second terminal:
-
-```sh
+```bash
 cd frontend
 python -m http.server 8080
 ```
 
-Open `http://127.0.0.1:8080/login.html`.
+Then open **`http://127.0.0.1:8080/login.html`** 🎉
+</details>
 
-## Background Jobs
+---
 
-In local development, campaign processing and CSV import work without Redis because `CELERY_TASK_ALWAYS_EAGER=true` by default when `DEBUG=True`.
+## ⏱️ Background Jobs
 
-If you want true async/background execution:
+By default (`CELERY_TASK_ALWAYS_EAGER=true` when `DEBUG=True`), CSV import and campaign processing run **synchronously** — no Redis required for everyday dev work.
 
-1. Start Redis.
-2. Set `CELERY_TASK_ALWAYS_EAGER=false` in `backend/.env`.
-3. Run the Celery worker and beat scheduler:
+To test real async execution:
 
-```sh
+```bash
+# 1. Start Redis
+# 2. Set CELERY_TASK_ALWAYS_EAGER=false in backend/.env
 cd backend
 celery -A backend worker -l info
 celery -A backend beat -l info
 ```
 
-Reply polling only runs when `ENABLE_AUTO_REPLY_DETECTION=true`.
+> Reply polling only runs when `ENABLE_AUTO_REPLY_DETECTION=true`.
 
-## Frontend Behavior
+---
 
-- The active frontend is the static `frontend/*.html` app. There is no active Node build step for the current UI.
-- [`frontend/api.js`](frontend/api.js) defaults to `http://127.0.0.1:8000/api/v1` on localhost and the deployed Render API elsewhere.
-- You can override the API base URL in the browser:
+## 🖥️ Frontend Behavior
 
-```js
-localStorage.setItem('api_base_url', 'http://127.0.0.1:8000/api/v1');
+- The active frontend is the static `frontend/*.html` app — **no build step.**
+- `frontend/api.js` defaults to `http://127.0.0.1:8000/api/v1` on localhost, and the deployed Render API elsewhere.
+- Override the API base URL from the browser console:
+  ```js
+  localStorage.setItem('api_base_url', 'http://127.0.0.1:8000/api/v1');
+  ```
+
+**Main screens:** `login.html` · `register.html` · `dashboard.html` · `leads.html` · `campaigns.html` · `campaign-builder.html` · `analytics.html` · `settings.html`
+
+---
+
+## 🔌 API Surface
+
+<details>
+<summary><b>Click to expand endpoint list</b></summary>
+
+```
+POST   /api/v1/auth/register/
+GET/PATCH /api/v1/auth/me/
+POST   /api/v1/token/
+POST   /api/v1/token/refresh/
+GET/POST /api/v1/leads/
+POST   /api/v1/leads/import_csv/
+GET/POST/PATCH/DELETE /api/v1/campaigns/
+POST   /api/v1/campaigns/{id}/enroll/
+POST   /api/v1/campaigns/{id}/launch/
+POST   /api/v1/campaigns/ai-generate/
+GET    /api/v1/analytics/dashboard/
+POST   /api/v1/webhooks/email/
+GET    /api/v1/connected-accounts/
+GET    /api/v1/auth/google/login
+GET    /api/v1/auth/google/callback
 ```
 
-Main screens:
+> ✍️ Added a new endpoint? Update `api-contracts.md` in the same PR.
+</details>
 
-- `login.html`
-- `register.html`
-- `dashboard.html`
-- `leads.html`
-- `campaigns.html`
-- `campaign-builder.html`
-- `analytics.html`
-- `settings.html`
+---
 
-## API Surface
+## ✅ Testing
 
-Core endpoints exposed by the current backend:
-
-- `POST /api/v1/auth/register/`
-- `GET/PATCH /api/v1/auth/me/`
-- `POST /api/v1/token/`
-- `POST /api/v1/token/refresh/`
-- `GET/POST /api/v1/leads/`
-- `POST /api/v1/leads/import_csv/`
-- `GET/POST/PATCH/DELETE /api/v1/campaigns/`
-- `POST /api/v1/campaigns/{id}/enroll/`
-- `POST /api/v1/campaigns/{id}/launch/`
-- `POST /api/v1/campaigns/ai-generate/`
-- `GET /api/v1/analytics/dashboard/`
-- `POST /api/v1/webhooks/email/`
-- `GET /api/v1/connected-accounts/`
-- `GET /api/v1/auth/google/login`
-- `GET /api/v1/auth/google/callback`
-
-## Testing
-
-Run the backend test suite from `backend/`:
-
-```sh
+```bash
+cd backend
 python manage.py test
 ```
 
-Current repo state: `27` backend tests pass. The suite covers auth/profile updates, lead import, tenant isolation, campaign creation, campaign launch, non-email flow handling, conditional branching, connected-account ownership rules, reply polling, and AI fallback behavior.
+**Current baseline: 27 passing tests**, covering:
 
-## Current Caveats
+- Auth / profile updates
+- Lead import
+- Tenant isolation
+- Campaign creation & launch
+- Non-email flow handling
+- Conditional branching
+- Connected-account ownership rules
+- Reply polling
+- AI fallback behavior
 
-- Some older root planning documents still mention the original `Lime` name, but the active README, backend, and frontend runtime paths use `LeadOrbit`.
-- The settings page shows a Gemini API key field, but it is not persisted from the UI. AI credentials are read from `backend/.env`.
-- The danger-zone buttons in `settings.html` are presentational only right now.
-- [`frontend/src`](frontend/src) and [`backend/config`](backend/config) look like leftover scaffold code and are not part of the main runtime path.
-- Some endpoints are still MVP-grade and should be hardened before a production multi-tenant deployment. In particular, analytics currently uses unscoped aggregate queries, and a few utility endpoints are intentionally permissive.
-- The root markdown docs describe product intent and planning. The codebase is the source of truth for current behavior.
+Add tests for new behavior in the relevant app's `tests` module before opening a PR.
 
-## Integration Notes
+---
 
-- Gmail sending requires valid Google OAuth client credentials and a connected account from the Settings page.
-- SMS and call steps require Twilio credentials and leads with phone numbers.
-- If no AI credentials are configured, the campaign builder AI composer still returns a deterministic fallback draft instead of failing hard.
+## 🛠️ Making Changes — Workflow
 
-# LeadOrbit
+```
+1. Branch from main
+   └─ e.g. feature/linkedin-step-execution, fix/analytics-tenant-scoping
 
-Current branding note: the active app is branded as `LeadOrbit`; older planning documents in the repo may still mention the original `Lime` name.
+2. Backend changes
+   └─ Edit models → makemigrations → commit migration → update serializers/views
+   └─ Verify Celery tasks still work with CELERY_TASK_ALWAYS_EAGER=true
 
-LeadOrbit is a multi-tenant outbound outreach MVP built with Django REST Framework and a static HTML/JavaScript frontend. The implemented code supports organization signup, JWT auth, CSV lead import, campaign building, lead enrollment, Gmail sender connection, AI-assisted email drafting, webhook-based engagement tracking, and analytics pages.
+3. Frontend changes
+   └─ Edit the .html file directly, refresh browser (no build step)
 
-This README is based on the current codebase, not the older planning documents in the repo root.
+4. Run tests
+   └─ python manage.py test
 
-## 📑 Table of Contents
-- [LeadOrbit](#leadorbit)
-- [What Works Today](#what-works-today)
-- [Stack](#stack)
-- [Repo Layout](#repo-layout)
-- [Local Setup](#local-setup)
-- [Background Jobs](#background-jobs)
-- [Frontend Behavior](#frontend-behavior)
-- [API Surface](#api-surface)
-- [Testing](#testing)
-- [Current Caveats](#current-caveats)
-- [Integration Notes](#integration-notes)
+5. Update docs
+   └─ api-contracts.md / database-schema.md / this README, if user-facing
 
-## What Works Today
-
-- JWT auth with organization creation during signup
-- Tenant-scoped users, leads, campaigns, and connected sender accounts
-- CSV lead import with flexible column aliases and background task support
-- Campaign builder with sequence editing, lead selection, sender selection, and launch flow
-- Email sending through Gmail API when a Google account is connected
-- SMS and call execution through Twilio when credentials are configured
-- Open/reply/click/bounce tracking through the webhook endpoint
-- AI draft generation through OpenRouter, with fallback draft generation when no API key is set
-- Per-lead merge tag replacement, with Gemini-based send-time personalization when configured
-- Dashboard and analytics pages backed by API data
-- Celery tasks for CSV import, campaign processing, and reply polling
-
-Execution status by step type:
-
-- Fully implemented: `EMAIL`, `SMS`, `CALL`, `WAIT`, `CONDITION_OPEN`, `CONDITION_REPLY`, `CONDITION_CLICK`
-- Builder-visible but currently placeholder/auto-advance steps: `WHATSAPP`, `LINKEDIN`, `MANUAL`
-
-## Stack
-
-- Backend: Django 5, Django REST Framework, Simple JWT, Celery, `django-cors-headers`
-- Frontend: static HTML pages, ES modules, Bootstrap 5, Chart.js
-- Database: SQLite by default at `backend/db.sqlite3`
-- Integrations: Google OAuth/Gmail API, OpenRouter, Gemini, Twilio
-- Python target: `3.11.9` via [`runtime.txt`](runtime.txt)
-
-## Repo Layout
-
-```text
-backend/
-  manage.py
-  backend/              # active Django project package used by manage.py
-  campaigns/            # campaign models, serializers, tasks, Gmail/Twilio/AI integrations
-  leads/                # lead models, CSV import task, lead/tag API
-  tenants/              # organizations, tenant middleware, security middleware
-  users/                # custom user model, registration, profile/JWT auth
-  config/               # older scaffold package; not the active settings module
-
-frontend/
-  *.html                # active static product screens
-  api.js                # API base URL + auth token helpers
-  main.js               # shared auth bootstrapping/logout handling
-  theme.css             # shared dashboard styling
-  src/                  # leftover Vite starter files; not used by the live UI
-
-outreach_frontend/      # currently empty
-*.md                    # product and architecture docs from earlier phases
+6. Open a PR against main
+   └─ Clear description + linked issue
 ```
 
-## Local Setup
+---
 
-### 1. Create a virtual environment and install dependencies
+## ⚠️ Current Caveats
 
-```sh
-python -m venv .venv
+> These are known gaps, not surprises — good context before you dive into a related area.
 
-# Windows
-.venv\Scripts\activate
+- 🏷️ Some **root planning docs** still say *Lime* — active code/README use LeadOrbit.
+- 🔑 The **Gemini API key field** in `settings.html` is **not persisted** — AI creds are read only from `backend/.env`.
+- 🚫 The **danger-zone buttons** in `settings.html` are presentational only — nothing destructive is wired up.
+- 🧹 `frontend/src/` and `backend/config/` are **leftover scaffolding** — not part of the live runtime.
+- 🔓 **Analytics queries are currently unscoped** across tenants — a real gap worth fixing before production use.
+- 🔓 A few utility endpoints are **intentionally permissive** for MVP speed — harden before wider deployment.
+- 🚧 `WHATSAPP` / `LINKEDIN` / `MANUAL` steps are visible in the builder but **auto-advance without executing** anything real.
 
-# macOS/Linux
-source .venv/bin/activate
+---
 
-pip install -r requirements.txt
-```
+## 🔗 Integration Notes
 
-### 2. Create `backend/.env`
+| Integration | Requirement |
+|---|---|
+| **Gmail sending** | Valid Google OAuth client credentials + a connected account via Settings |
+| **SMS / calls** | Twilio credentials + leads with phone numbers |
+| **AI drafting** | Works with *no keys* — falls back to a deterministic draft instead of failing |
 
-The backend reads environment variables from `backend/.env`.
+---
 
-```env
-DEBUG=True
-SECRET_KEY=change-me
-BACKEND_BASE_URL=http://127.0.0.1:8000
-FRONTEND_BASE_URL=http://127.0.0.1:8080
+## 🤝 Contributors
 
-CELERY_TASK_ALWAYS_EAGER=true
-CELERY_BROKER_URL=redis://localhost:6379/0
-ENABLE_AUTO_REPLY_DETECTION=false
-LAUNCH_IMMEDIATE_PASSES=1
-
-OPENROUTER_API_KEY=
-OPENROUTER_MODEL=mistralai/mistral-nemo
-OPENROUTER_APP_URL=http://127.0.0.1:8080
-OPENROUTER_APP_NAME=LeadOrbit Campaign Builder
-
-GEMINI_API_KEY=
-
-GOOGLE_CLIENT_ID=
-GOOGLE_CLIENT_SECRET=
-GOOGLE_REDIRECT_URI=http://127.0.0.1:8000/api/v1/auth/google/callback
-
-TWILIO_ACCOUNT_SID=
-TWILIO_AUTH_TOKEN=
-TWILIO_PHONE_NUMBER=
-```
-
-### 3. Run migrations
-
-```sh
-python backend/manage.py migrate
-```
-
-### 4. Start the backend
-
-```sh
-cd backend
-python manage.py runserver 8000
-```
-
-### 5. Serve the frontend
-
-In a second terminal:
-
-```sh
-cd frontend
-python -m http.server 8080
-```
-
-Open `http://127.0.0.1:8080/login.html`.
-
-## Background Jobs
-
-In local development, campaign processing and CSV import work without Redis because `CELERY_TASK_ALWAYS_EAGER=true` by default when `DEBUG=True`.
-
-If you want true async/background execution:
-
-1. Start Redis.
-2. Set `CELERY_TASK_ALWAYS_EAGER=false` in `backend/.env`.
-3. Run the Celery worker and beat scheduler:
-
-```sh
-cd backend
-celery -A backend worker -l info
-celery -A backend beat -l info
-```
-
-Reply polling only runs when `ENABLE_AUTO_REPLY_DETECTION=true`.
-
-## Frontend Behavior
-
-- The active frontend is the static `frontend/*.html` app. There is no active Node build step for the current UI.
-- [`frontend/api.js`](frontend/api.js) defaults to `http://127.0.0.1:8000/api/v1` on localhost and the deployed Render API elsewhere.
-- You can override the API base URL in the browser:
-
-```js
-localStorage.setItem('api_base_url', 'http://127.0.0.1:8000/api/v1');
-```
-
-Main screens:
-
-- `login.html`
-- `register.html`
-- `dashboard.html`
-- `leads.html`
-- `campaigns.html`
-- `campaign-builder.html`
-- `analytics.html`
-- `settings.html`
-
-## API Surface
-
-Core endpoints exposed by the current backend:
-
-- `POST /api/v1/auth/register/`
-- `GET/PATCH /api/v1/auth/me/`
-- `POST /api/v1/token/`
-- `POST /api/v1/token/refresh/`
-- `GET/POST /api/v1/leads/`
-- `POST /api/v1/leads/import_csv/`
-- `GET/POST/PATCH/DELETE /api/v1/campaigns/`
-- `POST /api/v1/campaigns/{id}/enroll/`
-- `POST /api/v1/campaigns/{id}/launch/`
-- `POST /api/v1/campaigns/ai-generate/`
-- `GET /api/v1/analytics/dashboard/`
-- `POST /api/v1/webhooks/email/`
-- `GET /api/v1/connected-accounts/`
-- `GET /api/v1/auth/google/login`
-- `GET /api/v1/auth/google/callback`
-
-## Testing
-
-Run the backend test suite from `backend/`:
-
-```sh
-python manage.py test
-```
-
-Current repo state: `27` backend tests pass. The suite covers auth/profile updates, lead import, tenant isolation, campaign creation, campaign launch, non-email flow handling, conditional branching, connected-account ownership rules, reply polling, and AI fallback behavior.
-
-## Current Caveats
-
-- Some older root planning documents still mention the original `Lime` name, but the active README, backend, and frontend runtime paths use `LeadOrbit`.
-- The settings page shows a Gemini API key field, but it is not persisted from the UI. AI credentials are read from `backend/.env`.
-- The danger-zone buttons in `settings.html` are presentational only right now.
-- [`frontend/src`](frontend/src) and [`backend/config`](backend/config) look like leftover scaffold code and are not part of the main runtime path.
-- Some endpoints are still MVP-grade and should be hardened before a production multi-tenant deployment. In particular, analytics currently uses unscoped aggregate queries, and a few utility endpoints are intentionally permissive.
-- The root markdown docs describe product intent and planning. The codebase is the source of truth for current behavior.
-
-## Integration Notes
-
-- Gmail sending requires valid Google OAuth client credentials and a connected account from the Settings page.
-- SMS and call steps require Twilio credentials and leads with phone numbers.
-- If no AI credentials are configured, the campaign builder AI composer still returns a deterministic fallback draft instead of failing hard.
-
-
-## Contributors
-
-Thanks to all contributors for their valuable efforts and support in making LeadOrbit better! ❤️
+Thanks to everyone helping make LeadOrbit better! ❤️
 
 [![Contributors](https://contrib.rocks/image?repo=Kuldeeep18/LeadOrbit)](https://github.com/Kuldeeep18/LeadOrbit/graphs/contributors)
+
+<!-- Add contributor avatars/links here, e.g. via https://contrib.rocks -->
+
+---
+
+<div align="center">
+
+**Found something stale in this README?** Update it in the same PR as your code change — the docs should never drift further from reality than they already have. 🛰️
+
+</div>
