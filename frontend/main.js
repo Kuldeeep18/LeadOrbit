@@ -606,3 +606,15 @@ if (document.readyState === 'loading') {
 } else {
     initKeyboardShortcuts();
 }
+
+const scrollBtn = document.getElementById('btn-scroll-top');
+
+if (scrollBtn) {
+  window.addEventListener('scroll', () => {
+    scrollBtn.style.display = window.scrollY > 300 ? 'block' : 'none';
+  });
+
+  scrollBtn.addEventListener('click', () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  });
+}

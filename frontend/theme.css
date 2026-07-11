@@ -1304,3 +1304,18 @@ body.auth-page {
 .password-toggle-btn i {
   pointer-events: none;
 }
+
+
+.btn-scroll-top {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  display: none;
+  z-index: 99;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+}
