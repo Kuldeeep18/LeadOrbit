@@ -12,6 +12,11 @@ class TagSerializer(serializers.ModelSerializer):
 
 class LeadSerializer(serializers.ModelSerializer):
     tags = serializers.SerializerMethodField()
+    # Sourced from the `last_contacted_at` annotation added by LeadViewSet.get_queryset.
+    # A SerializerMethodField (not a plain DateTimeField) because a bare Lead instance
+    # returned from create/update won't have this annotation and would raise
+    # AttributeError — this degrades gracefully to None instead, same pattern as `tags`.
+    last_contacted_at = serializers.SerializerMethodField()
     # Write-only field: accept a list of Tag UUIDs to set on the lead.
     tag_ids = serializers.ListField(
         child=serializers.UUIDField(),
@@ -26,12 +31,16 @@ class LeadSerializer(serializers.ModelSerializer):
             'id', 'email', 'first_name', 'last_name', 'company', 'phone',
             'linkedin_url', 'custom_data', 'custom_variables',
             'global_unsubscribe', 'score', 'tags', 'tag_ids', 'created_at',
+            'last_contacted_at',
         ]
         read_only_fields = ['organization', 'score']
 
     def get_tags(self, obj):
         tags = Tag.objects.filter(tagged_leads__lead=obj)
         return TagSerializer(tags, many=True).data
+
+    def get_last_contacted_at(self, obj):
+        return getattr(obj, 'last_contacted_at', None)
 
     def _set_tags(self, lead, tag_ids):
         """Replace the lead's tags with the given list of Tag UUIDs."""
