@@ -520,9 +520,6 @@ def rewrite_email_links(html_body, campaign_lead_id, step_id):
     soup = BeautifulSoup(html_body, 'html.parser')
     signer = Signer()
 
-    token_payload = f"{campaign_lead_id}:{step_id}"
-    signed_token = signer.sign(token_payload)
-
     base_url = getattr(django_settings, 'BACKEND_BASE_URL', 'http://127.0.0.1:8000').rstrip('/')
     tracking_endpoint = f"{base_url}/api/v1/clicks/track/"
 
@@ -532,9 +529,18 @@ def rewrite_email_links(html_body, campaign_lead_id, step_id):
         if not original_url or original_url.startswith(('mailto:', 'tel:')) or tracking_endpoint in original_url:
             continue
 
-        encoded_dest = urllib.parse.quote(original_url, safe='')
+        scheme = urllib.parse.urlsplit(original_url).scheme.lower()
+        if scheme and scheme not in ('http', 'https'):
+            # Never generate a tracking redirect for a non-http(s) destination.
+            continue
 
-        tracking_url = f"{tracking_endpoint}?t={signed_token}&dest={encoded_dest}"
+        # Sign campaign_lead_id, step_id, AND the destination together so the
+        # destination can't be swapped out while reusing a previously-issued,
+        # otherwise-valid token (open-redirect prevention).
+        token_payload = f"{campaign_lead_id}:{step_id}:{original_url}"
+        signed_token = signer.sign(token_payload)
+
+        tracking_url = f"{tracking_endpoint}?t={urllib.parse.quote(signed_token, safe='')}"
         a_tag['href'] = tracking_url
 
     return str(soup)

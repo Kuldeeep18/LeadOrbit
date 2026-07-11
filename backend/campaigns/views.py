@@ -782,34 +782,41 @@ class ClickTrackingView(APIView):
 
     def get(self, request, *args, **kwargs):
         signed_token = request.GET.get('t')
-        dest_url = request.GET.get('dest')
 
-        if not signed_token or not dest_url:
+        if not signed_token:
             return HttpResponseBadRequest("Missing tracking parameters.")
 
         signer = Signer()
         try:
-            # Decode and verify the token signature
+            # The destination is signed together with campaign_lead_id/step_id
+            # (see tasks.rewrite_email_links), so a tampered or substituted
+            # destination will fail signature verification here rather than
+            # being redirected to.
             unsigned_payload = signer.unsign(signed_token)
-            campaign_lead_id, step_id = unsigned_payload.split(':')
+            campaign_lead_id, step_id, dest_url = unsigned_payload.split(':', 2)
         except (BadSignature, ValueError):
             return HttpResponseBadRequest("Invalid or tampered tracking token.")
 
-        # Analytics ko update karna
+        parsed_dest = urllib.parse.urlsplit(dest_url)
+        if parsed_dest.scheme.lower() not in ('http', 'https'):
+            return HttpResponseBadRequest("Invalid or tampered tracking token.")
+
+        # Update click analytics for the lead.
         try:
             lead = CampaignLead.objects.get(id=campaign_lead_id)
             lead.last_clicked_at = timezone.now()
             lead.save(update_fields=['last_clicked_at'])
 
-            # Optional: Agar conditionally aage badhana hai sequence ko
+            # If the lead is currently parked on a CONDITION_CLICK step,
+            # advance the sequence immediately.
             if lead.current_step and lead.current_step.channel_type == 'CONDITION_CLICK':
                 from .tasks import _execute_condition_click_step
                 _execute_condition_click_step(lead, lead.current_step, now=timezone.now())
 
         except CampaignLead.DoesNotExist:
-            pass # Failsafe: Continue to redirect even if the lead was deleted
+            pass  # Failsafe: still redirect even if the lead was deleted.
 
-        # Original Destination par redirect karna
-        decoded_dest = urllib.parse.unquote(dest_url)
-        return HttpResponseRedirect(decoded_dest)
+        # dest_url came from inside the verified signature, so it's safe to
+        # redirect to as-is (it was never re-encoded before signing).
+        return HttpResponseRedirect(dest_url)
 # ------------------------------------------
