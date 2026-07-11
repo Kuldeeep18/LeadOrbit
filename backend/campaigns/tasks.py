@@ -479,6 +479,9 @@ def _execute_sms_step(clead, step, now=None):
         clead.save(update_fields=['next_execution_time'])
         return
 
+    clead.last_sent_at = now
+    clead.save(update_fields=['last_sent_at'])
+
     _advance_to_next_step(clead, step, now=now)
 
 
@@ -499,9 +502,14 @@ def _execute_call_step(clead, step, now=None):
     try:
         sid = initiate_call(phone, call_script or None)
         logger.info(f"Call initiated to {clead.lead.email} ({phone}) | sid={sid}")
+        clead.last_sent_at = now
+        clead.save(update_fields=['last_sent_at'])
     except RuntimeError:
-        
+        # No Twilio credentials configured — this still counts as the lead
+        # being contacted, just via a manual task instead of an automated call.
         logger.info(f"CALL step (manual) for {clead.lead.email} ({phone}): {call_script or 'No script'}")
+        clead.last_sent_at = now
+        clead.save(update_fields=['last_sent_at'])
     except Exception as err:
         logger.error(f"Call failed for {clead.lead.email}: {err}")
 
@@ -611,7 +619,8 @@ def send_email_step(campaign_lead_id, step_id):
                 else:
                     raise RuntimeError(f"Unsupported email provider: {account.provider}")
                 clead.last_sent_message_id = message_id
-                clead.save(update_fields=['last_sent_message_id'])
+                clead.last_sent_at = timezone.now()
+                clead.save(update_fields=['last_sent_message_id', 'last_sent_at'])
             except Exception as send_err:
                 logger.error(f"Email send failed for {clead.lead.email}: {send_err}")
                 # Restore next_execution_time so the lead can be retried later.
