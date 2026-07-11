@@ -1961,3 +1961,119 @@ class GoogleOAuthStateTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_302_FOUND)
         self.assertIn('google_auth=error', response['Location'])
         self.assertIn('reason=no_user', response['Location'])
+
+class CampaignAutoPauseTests(APITestCase):
+    def setUp(self):
+        self.organization = Organization.objects.create(name='Acme Corp')
+        self.user = User.objects.create_user(
+            email='admin@acme.test',
+            password='password123',
+            organization=self.organization
+        )
+        self.campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Test Pause Campaign',
+            status='ACTIVE',
+            sent_count=0,
+            bounced_count=0
+        )
+        self.step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=self.campaign,
+            step_order=1,
+            channel_type='EMAIL'
+        )
+
+    def test_auto_pause_does_not_trigger_below_50_sent(self):
+        self.campaign.sent_count = 49
+        self.campaign.bounced_count = 10  # > 10%
+        self.campaign.save()
+
+        lead = Lead.objects.create(organization=self.organization, email='b1@acme.test')
+        clead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=self.campaign,
+            lead=lead,
+            current_step=self.step,
+            status='ACTIVE'
+        )
+        
+        with patch('campaigns.tasks.send_notification') as mock_notify:
+            from campaigns.tasks import _mark_campaign_lead_bounced
+            _mark_campaign_lead_bounced(clead)
+            
+        self.campaign.refresh_from_db()
+        self.assertEqual(self.campaign.status, 'ACTIVE')
+        mock_notify.assert_not_called()
+
+    def test_auto_pause_triggers_at_50_sent_with_high_bounce_rate(self):
+        self.campaign.sent_count = 50
+        self.campaign.bounced_count = 6
+        self.campaign.save()
+
+        lead = Lead.objects.create(organization=self.organization, email='b2@acme.test')
+        clead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=self.campaign,
+            lead=lead,
+            current_step=self.step,
+            status='ACTIVE'
+        )
+        
+        with patch('campaigns.tasks.send_notification') as mock_notify:
+            from campaigns.tasks import _mark_campaign_lead_bounced
+            _mark_campaign_lead_bounced(clead)
+            
+        self.campaign.refresh_from_db()
+        self.assertEqual(self.campaign.status, 'PAUSED')
+        mock_notify.assert_called_once_with(
+            self.organization.id,
+            'campaign_paused',
+            {
+                'message': 'Campaign Auto-Paused due to high bounce rates',
+                'campaign_id': str(self.campaign.id)
+            }
+        )
+
+    def test_already_paused_campaign_no_duplicate_notification(self):
+        self.campaign.status = 'PAUSED'
+        self.campaign.sent_count = 100
+        self.campaign.bounced_count = 20
+        self.campaign.save()
+
+        lead = Lead.objects.create(organization=self.organization, email='b3@acme.test')
+        clead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=self.campaign,
+            lead=lead,
+            current_step=self.step,
+            status='ACTIVE'
+        )
+        
+        with patch('campaigns.tasks.send_notification') as mock_notify:
+            from campaigns.tasks import _mark_campaign_lead_bounced
+            _mark_campaign_lead_bounced(clead)
+            
+        mock_notify.assert_not_called()
+
+    def test_pause_priority_over_completion(self):
+        self.campaign.sent_count = 100
+        self.campaign.bounced_count = 20
+        self.campaign.save()
+
+        lead = Lead.objects.create(organization=self.organization, email='b4@acme.test')
+        clead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=self.campaign,
+            lead=lead,
+            current_step=self.step,
+            status='ACTIVE'
+        )
+        
+        from campaigns.tasks import _check_campaign_health_for_bounces, _maybe_mark_campaign_completed
+        
+        _check_campaign_health_for_bounces(self.campaign.id)
+        _maybe_mark_campaign_completed(self.campaign)
+        
+        self.campaign.refresh_from_db()
+        self.assertEqual(self.campaign.status, 'PAUSED')

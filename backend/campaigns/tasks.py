@@ -6,6 +6,7 @@ from bs4 import BeautifulSoup
 from celery import shared_task
 from django.conf import settings as django_settings
 from django.core.signing import Signer
+from django.db import transaction
 from django.db.models import Q
 from django.utils import timezone
 
@@ -22,7 +23,7 @@ from .mailbox_service import (
     mark_imap_message_as_read,
     send_smtp_email,
 )
-from .notifications import notify_email_bounced
+from .notifications import notify_email_bounced, send_notification
 from .sms_service import initiate_call, send_sms
 from .models import CampaignLead, ConnectedEmailAccount, SequenceStep
 from leads.models import BlockedDomain, normalize_domain
@@ -113,7 +114,7 @@ def _activate_step(clead, step, now=None):
 
 
 def _maybe_mark_campaign_completed(campaign):
-    if campaign.status == 'COMPLETED':
+    if campaign.status in ('COMPLETED', 'PAUSED'):
         return
 
     if not campaign.enrolled_leads.exists():
@@ -124,9 +125,42 @@ def _maybe_mark_campaign_completed(campaign):
     if has_unfinished:
         return
 
-    campaign.status = 'COMPLETED'
-    campaign.save(update_fields=['status'])
-    logger.info(f"Campaign marked COMPLETED: {campaign.id}")
+    updated = type(campaign).objects.filter(
+        id=campaign.id
+    ).exclude(
+        status='PAUSED'
+    ).update(status='COMPLETED')
+    
+    if updated:
+        campaign.status = 'COMPLETED'
+        logger.info(f"Campaign marked COMPLETED: {campaign.id}")
+
+def _check_campaign_health_for_bounces(campaign_id):
+    from .models import Campaign
+    with transaction.atomic():
+        try:
+            campaign = Campaign.objects.select_for_update().get(id=campaign_id)
+        except Campaign.DoesNotExist:
+            return
+
+        if campaign.status == 'PAUSED':
+            return
+
+        if campaign.sent_count >= 50:
+            bounce_rate = campaign.bounced_count / campaign.sent_count
+            if bounce_rate > 0.10:
+                campaign.status = 'PAUSED'
+                campaign.save(update_fields=['status'])
+                logger.info(f"Campaign {campaign.id} auto-paused due to high bounce rate.")
+                send_notification(
+                    campaign.organization_id,
+                    'campaign_paused',
+                    {
+                        'message': 'Campaign Auto-Paused due to high bounce rates',
+                        'campaign_id': str(campaign.id)
+                    }
+                )
+
 
 
 def _mark_campaign_lead_bounced(
@@ -164,6 +198,7 @@ def _mark_campaign_lead_bounced(
 
     if not was_bounced:
         notify_email_bounced(clead.organization_id, clead.lead.email)
+        _check_campaign_health_for_bounces(clead.campaign_id)
     _maybe_mark_campaign_completed(clead.campaign)
     logger.info(
         "Bounce detected for %s in campaign %s at %s (type=%s, code=%s)",
