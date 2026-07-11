@@ -793,7 +793,7 @@ class ClickTrackingView(APIView):
             # destination will fail signature verification here rather than
             # being redirected to.
             unsigned_payload = signer.unsign(signed_token)
-            campaign_lead_id, step_id, dest_url = unsigned_payload.split(':', 2)
+            campaign_lead_id, _step_id, dest_url = unsigned_payload.split(':', 2)
         except (BadSignature, ValueError):
             return HttpResponseBadRequest("Invalid or tampered tracking token.")
 

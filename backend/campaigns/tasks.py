@@ -530,9 +530,8 @@ def rewrite_email_links(html_body, campaign_lead_id, step_id):
             continue
 
         scheme = urllib.parse.urlsplit(original_url).scheme.lower()
-        if scheme and scheme not in ('http', 'https'):
-            # Never generate a tracking redirect for a non-http(s) destination.
-            continue
+if scheme not in ('http', 'https'):
+    continue
 
         # Sign campaign_lead_id, step_id, AND the destination together so the
         # destination can't be swapped out while reusing a previously-issued,
