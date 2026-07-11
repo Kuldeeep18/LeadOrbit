@@ -1315,7 +1315,29 @@ body.auth-page {
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  border: none;
+  border: 1px solid rgba(59, 130, 246, 0.3);
   cursor: pointer;
   font-size: 18px;
+  background-color: rgba(59, 130, 246, 0.15);
+  color: #93c5fd;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+  transition: background-color 0.2s ease, transform 0.2s ease, opacity 0.3s ease;
+  opacity: 0.9;
+}
+
+.btn-scroll-top:hover {
+  background-color: rgba(59, 130, 246, 0.3);
+  border-color: rgba(59, 130, 246, 0.5);
+  transform: translateY(-3px);
+  opacity: 1;
+}
+
+.btn-scroll-top:active {
+  transform: translateY(0);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+
+.btn-scroll-top:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
 }
