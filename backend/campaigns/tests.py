@@ -2067,7 +2067,7 @@ class CampaignAutoPauseTests(APITestCase):
             campaign=self.campaign,
             lead=lead,
             current_step=self.step,
-            status='ACTIVE'
+            status='BOUNCED'
         )
         
         from campaigns.tasks import _check_campaign_health_for_bounces, _maybe_mark_campaign_completed

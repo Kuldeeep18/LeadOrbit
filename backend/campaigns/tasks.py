@@ -152,13 +152,15 @@ def _check_campaign_health_for_bounces(campaign_id):
                 campaign.status = 'PAUSED'
                 campaign.save(update_fields=['status'])
                 logger.info(f"Campaign {campaign.id} auto-paused due to high bounce rate.")
-                send_notification(
-                    campaign.organization_id,
-                    'campaign_paused',
-                    {
-                        'message': 'Campaign Auto-Paused due to high bounce rates',
-                        'campaign_id': str(campaign.id)
-                    }
+                transaction.on_commit(
+                    lambda: send_notification(
+                        campaign.organization_id,
+                        'campaign_paused',
+                        {
+                            'message': 'Campaign Auto-Paused due to high bounce rates',
+                            'campaign_id': str(campaign.id)
+                        }
+                    )
                 )
 
 
