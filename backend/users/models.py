@@ -33,6 +33,9 @@ class User(AbstractBaseUser, PermissionsMixin, TenantModel):
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default=ROLE_MEMBER)
     is_active = models.BooleanField(default=True)
     is_staff = models.BooleanField(default=False)
+    is_email_verified = models.BooleanField(default=False)
+    mfa_enabled = models.BooleanField(default=False)
+    mfa_secret = models.CharField(max_length=32, blank=True, null=True)
 
     objects = UserManager()
 

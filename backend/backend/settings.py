@@ -57,10 +57,14 @@ MAILBOX_CREDENTIALS_ENCRYPTION_KEY = os.getenv(
     'fallback-insecure-key-for-local-dev-and-testing' if (DEBUG or TESTING) else '',
 )
 ALLOWED_HOSTS = ['*']
-CORS_ALLOWED_ORIGINS = [
-    "http://localhost:3000",
-    "http://127.0.0.1:3000",
-]
+ADMIN_PATH = os.getenv('ADMIN_PATH', 'secure-admin-portal')
+
+# Cookie Security
+SESSION_COOKIE_SECURE = not DEBUG
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = 'Lax'
+CSRF_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SAMESITE = 'Lax'
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -71,6 +75,7 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'rest_framework',
     'rest_framework_simplejwt',
+    'rest_framework_simplejwt.token_blacklist',
     'corsheaders',
     'django_celery_beat',
     'tenants',
@@ -124,9 +129,13 @@ AUTH_USER_MODEL = 'users.User'
 
 AUTH_PASSWORD_VALIDATORS = [
     {'NAME': 'django.contrib.auth.password_validation.UserAttributeSimilarityValidator'},
-    {'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator'},
+    {
+        'NAME': 'django.contrib.auth.password_validation.MinimumLengthValidator',
+        'OPTIONS': {'min_length': 10},
+    },
     {'NAME': 'django.contrib.auth.password_validation.CommonPasswordValidator'},
     {'NAME': 'django.contrib.auth.password_validation.NumericPasswordValidator'},
+    {'NAME': 'users.validators.ComplexityPasswordValidator'},
 ]
 
 LANGUAGE_CODE = 'en-us'
@@ -142,7 +151,16 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
-    )
+    ),
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '100/day',
+        'user': '1000/day',
+        'login': '5/minute',
+    }
 }
 
 # Celery Configuration
@@ -179,10 +197,19 @@ SIMPLE_JWT = {
     'REFRESH_TOKEN_LIFETIME': timedelta(days=7),
     'USER_ID_FIELD': 'id',
     'USER_ID_CLAIM': 'user_id',
+    'SIGNING_KEY': os.getenv('JWT_SIGNING_KEY', SECRET_KEY),
 }
 
-# Allow all origins in development
-CORS_ALLOW_ALL_ORIGINS = True
+# Restrict CORS to trusted origins
+CORS_ALLOW_ALL_ORIGINS = False
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+    "http://localhost:8080",
+    "http://127.0.0.1:8080",
+]
+if os.getenv('FRONTEND_BASE_URL'):
+    CORS_ALLOWED_ORIGINS.append(os.getenv('FRONTEND_BASE_URL').rstrip('/'))
 
 # Gemini API Key
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', _read_local_env_value('GEMINI_API_KEY', ''))
