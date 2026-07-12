@@ -65,6 +65,22 @@
             border-right: none !important;
             color: rgba(255, 255, 255, 0.5) !important;
         }
+            .password-strength{
+    width:100%;
+}
+
+.password-strength-bar{
+    height:6px;
+    width:0%;
+    border-radius:999px;
+    background:#6c757d;
+    transition:all .3s ease;
+    margin-bottom:6px;
+}
+
+#strengthText{
+    font-size:0.85rem;
+}
     </style>
 </head>
 
@@ -148,6 +164,12 @@
             <i class="bi bi-eye" aria-hidden="true"></i>
         </button>
     </div>
+                                    <div class="password-strength mt-2">
+    <div class="password-strength-bar"></div>
+    <small id="strengthText" class="text-muted">
+        Password strength
+    </small>
+</div>
 </div>
 
                             <div class="d-grid mb-3">
@@ -171,6 +193,42 @@
         import { register } from './api.js';
 
         document.addEventListener('DOMContentLoaded', () => {
+                const passwordInput = document.getElementById('password');
+const strengthBar = document.querySelector('.password-strength-bar');
+const strengthText = document.getElementById('strengthText');
+
+passwordInput.addEventListener('input', () => {
+
+    const value = passwordInput.value;
+    let score = 0;
+
+    if (value.length >= 8) score++;
+    if (/[A-Z]/.test(value)) score++;
+    if (/[0-9]/.test(value)) score++;
+    if (/[^A-Za-z0-9]/.test(value)) score++;
+
+    if (value.length === 0) {
+        strengthBar.style.width = "0%";
+        strengthBar.style.background = "#6c757d";
+        strengthText.textContent = "Password strength";
+    }
+    else if (score <= 2) {
+        strengthBar.style.width = "33%";
+        strengthBar.style.background = "#dc3545";
+        strengthText.textContent = "Weak";
+    }
+    else if (score === 3) {
+        strengthBar.style.width = "66%";
+        strengthBar.style.background = "#ffc107";
+        strengthText.textContent = "Medium";
+    }
+    else {
+        strengthBar.style.width = "100%";
+        strengthBar.style.background = "#198754";
+        strengthText.textContent = "Strong";
+    }
+
+});
             const form = document.querySelector('form');
             if (form) {
                 form.addEventListener('submit', async (e) => {
