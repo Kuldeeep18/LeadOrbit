@@ -48,13 +48,13 @@ class AuthViewSet(viewsets.GenericViewSet):
                 request.user.organization.name = clean_name
                 request.user.organization.save(update_fields=['name'])
                 updates_made = True
-            if gemini_api_key is not None:
+            if 'gemini_api_key' in payload:
                 if not IsOrgAdmin().has_permission(request, self):
                     return Response(
                         {'detail': 'Only organization admins can update organization settings.'},
                         status=status.HTTP_403_FORBIDDEN,
                     )
-                request.user.organization.gemini_api_key = str(gemini_api_key).strip() or None
+                request.user.organization.gemini_api_key = str(gemini_api_key).strip() if gemini_api_key else None
                 request.user.organization.save(update_fields=['gemini_api_key'])
                 updates_made = True
 
