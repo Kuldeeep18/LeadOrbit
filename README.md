@@ -4,6 +4,9 @@
 ![License](https://img.shields.io/badge/License-MIT-yellow.svg)
 ![LastCommit](https://img.shields.io/github/last-commit/Kuldeeep18/LeadOrbit)
 ![Stars](https://img.shields.io/github/stars/Kuldeeep18/LeadOrbit)
+
+**Live Demo:** [https://leadorbit-1.onrender.com/login.html](https://leadorbit-1.onrender.com/login.html)
+
 Current branding note: the active app is branded as `LeadOrbit`; older planning documents in the repo may still mention the original `Lime` name.
 
 LeadOrbit is a multi-tenant outbound outreach MVP built with Django REST Framework and a static HTML/JavaScript frontend. The implemented code supports organization signup, JWT auth, CSV lead import, campaign building, lead enrollment, Gmail sender connection, AI-assisted email drafting, webhook-based engagement tracking, and analytics pages.
@@ -238,6 +241,8 @@ Current repo state: `27` backend tests pass. The suite covers auth/profile updat
 - If no AI credentials are configured, the campaign builder AI composer still returns a deterministic fallback draft instead of failing hard.
 
 # LeadOrbit
+
+**Live Demo:** [https://leadorbit-1.onrender.com/login.html](https://leadorbit-1.onrender.com/login.html)
 
 Current branding note: the active app is branded as `LeadOrbit`; older planning documents in the repo may still mention the original `Lime` name.
 
