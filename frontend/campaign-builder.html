@@ -2057,9 +2057,19 @@ ${rows || `
                     <input type="text" class="ep-input" id="ep-subject" placeholder="Subject" value="${step.subject || ''}">
                 </div>
                 <div class="mb-3">
+                <div class="d-flex gap-2 mb-2">
+                    <button class="btn btn-sm btn-primary" id="tab-edit">Edit Template</button>
+                    <button class="btn btn-sm btn-outline-secondary" id="tab-preview">Preview Email</button>
+                </div>
+                <div id="edit-view">
                     <div class="ep-label">Body</div>
                     <textarea class="ep-textarea" id="ep-body" placeholder="Write your email content...">${step.body || ''}</textarea>
                 </div>
+                <div id="preview-view" class="d-none">
+                    <div class="ep-label">Preview</div>
+                    <div id="email-preview-box" class="p-3 rounded-3 border" style="min-height:150px; white-space:pre-wrap; font-family: inherit;"></div>
+                </div>
+            </div>
                 <div class="mb-3">
                     <div class="ep-label">Merge Tags</div>
                     <div class="d-flex flex-wrap gap-2">
@@ -2087,7 +2097,34 @@ ${rows || `
             // Bind inputs
             document.getElementById('ep-subject').addEventListener('input', (e) => { step.subject = e.target.value; });
             document.getElementById('ep-body').addEventListener('input', (e) => { step.body = e.target.value; });
+            // Preview tab logic
+            const MOCK_DATA = {
+                '{{firstName}}': 'John',
+                '{{lastName}}': 'Cena',
+                '{{email}}': 'john.cena@example.com',
+                '{{company}}': 'WWE Corp',
+                '{{icebreaker}}': 'I loved your recent blog post!'
+            };
 
+            document.getElementById('tab-preview').addEventListener('click', () => {
+                document.getElementById('tab-preview').classList.replace('btn-outline-secondary', 'btn-primary');
+                document.getElementById('tab-edit').classList.replace('btn-primary', 'btn-outline-secondary');
+                document.getElementById('edit-view').classList.add('d-none');
+                document.getElementById('preview-view').classList.remove('d-none');
+                
+                let preview = document.getElementById('ep-body').value;
+                Object.entries(MOCK_DATA).forEach(([tag, value]) => {
+                    preview = preview.replaceAll(tag, value);
+                });
+                document.getElementById('email-preview-box').textContent = preview;
+            });
+
+            document.getElementById('tab-edit').addEventListener('click', () => {
+                document.getElementById('tab-edit').classList.replace('btn-outline-secondary', 'btn-primary');
+                document.getElementById('tab-preview').classList.replace('btn-primary', 'btn-outline-secondary');
+                document.getElementById('preview-view').classList.add('d-none');
+                document.getElementById('edit-view').classList.remove('d-none');
+            });
             let activeEditor = document.getElementById('ep-body');
 
             document.getElementById('ep-subject').addEventListener('focus', () => {
