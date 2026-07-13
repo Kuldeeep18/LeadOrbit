@@ -9,6 +9,14 @@ from .permissions import IsOrgAdmin
 from .serializers import UserSerializer, RegisterSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 
+def _check_org_admin(request, viewset):
+    if not IsOrgAdmin().has_permission(request, viewset):
+        return Response(
+            {'detail': 'Only organization admins can update organization settings.'},
+            status=status.HTTP_403_FORBIDDEN,
+        )
+    return None
+
 class AuthViewSet(viewsets.GenericViewSet):
     @action(detail=False, methods=['post'], permission_classes=[AllowAny])
     def register(self, request):
@@ -34,11 +42,9 @@ class AuthViewSet(viewsets.GenericViewSet):
             enable_ai_personalization = payload.get('enable_ai_personalization')
 
             if organization_name is not None:
-                if not IsOrgAdmin().has_permission(request, self):
-                    return Response(
-                        {'detail': 'Only organization admins can update organization settings.'},
-                        status=status.HTTP_403_FORBIDDEN,
-                    )
+                denied = _check_org_admin(request, self)
+                if denied:
+                    return denied
                 clean_name = str(organization_name).strip()
                 if not clean_name:
                     return Response(
@@ -48,22 +54,20 @@ class AuthViewSet(viewsets.GenericViewSet):
                 request.user.organization.name = clean_name
                 request.user.organization.save(update_fields=['name'])
                 updates_made = True
-            if gemini_api_key is not None:
-                if not IsOrgAdmin().has_permission(request, self):
-                    return Response(
-                        {'detail': 'Only organization admins can update organization settings.'},
-                        status=status.HTTP_403_FORBIDDEN,
-                    )
-                request.user.organization.gemini_api_key = str(gemini_api_key).strip() or None
+            if 'gemini_api_key' in payload:
+                denied = _check_org_admin(request, self)
+                if denied:
+                    return denied
+                request.user.organization.gemini_api_key = str(gemini_api_key).strip() if gemini_api_key else None
+                if not request.user.organization.gemini_api_key:
+                    request.user.organization.gemini_api_key = None
                 request.user.organization.save(update_fields=['gemini_api_key'])
                 updates_made = True
 
             if enable_ai_personalization is not None:
-                if not IsOrgAdmin().has_permission(request, self):
-                    return Response(
-                        {'detail': 'Only organization admins can update organization settings.'},
-                        status=status.HTTP_403_FORBIDDEN,
-                    )
+                denied = _check_org_admin(request, self)
+                if denied:
+                    return denied
                 request.user.organization.enable_ai_personalization = bool(enable_ai_personalization)
                 request.user.organization.save(update_fields=['enable_ai_personalization'])
                 updates_made = True
