@@ -43,7 +43,8 @@ class AuthViewSet(viewsets.GenericViewSet):
 
             if organization_name is not None:
                 denied = _check_org_admin(request, self)
-                if denied: return denied
+                if denied:
+                    return denied
                 clean_name = str(organization_name).strip()
                 if not clean_name:
                     return Response(
@@ -55,7 +56,8 @@ class AuthViewSet(viewsets.GenericViewSet):
                 updates_made = True
             if 'gemini_api_key' in payload:
                 denied = _check_org_admin(request, self)
-                if denied: return denied
+                if denied:
+                    return denied
                 request.user.organization.gemini_api_key = str(gemini_api_key).strip() if gemini_api_key else None
                 if not request.user.organization.gemini_api_key:
                     request.user.organization.gemini_api_key = None
@@ -64,7 +66,8 @@ class AuthViewSet(viewsets.GenericViewSet):
 
             if enable_ai_personalization is not None:
                 denied = _check_org_admin(request, self)
-                if denied: return denied
+                if denied:
+                    return denied
                 request.user.organization.enable_ai_personalization = bool(enable_ai_personalization)
                 request.user.organization.save(update_fields=['enable_ai_personalization'])
                 updates_made = True
