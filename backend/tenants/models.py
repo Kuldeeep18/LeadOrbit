@@ -9,6 +9,52 @@ class Organization(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     gemini_api_key = models.CharField(max_length=255, blank=True, null=True)
     enable_ai_personalization = models.BooleanField(default=True)
+    custom_tracking_domain = models.CharField(max_length=255, blank=True, null=True, unique=True)
+
+    def clean(self):
+        super().clean()
+        if self.custom_tracking_domain:
+            self.custom_tracking_domain = self.custom_tracking_domain.lower().strip()
+            
+            from django.conf import settings
+            from django.core.exceptions import ValidationError
+            import dns.resolver
+            from urllib.parse import urlparse
+
+            from tenants.utils import is_local_tracking_domain
+
+            if is_local_tracking_domain(self.custom_tracking_domain):
+                return
+
+            try:
+                base_url = getattr(settings, 'BACKEND_BASE_URL', 'https://leadorbit.onrender.com')
+                parsed = urlparse(base_url)
+                target_domain = parsed.hostname or 'leadorbit.onrender.com'
+
+                resolver = dns.resolver.Resolver()
+                resolver.timeout = 2.0
+                resolver.lifetime = 5.0
+                answers = resolver.resolve(self.custom_tracking_domain, 'CNAME')
+                
+                valid = False
+                for rdata in answers:
+                    target = rdata.target.to_text().rstrip('.').lower()
+                    if target == target_domain.lower():
+                        valid = True
+                        break
+                        
+                if not valid:
+                    raise ValidationError({'custom_tracking_domain': f'CNAME record must point to {target_domain}'})
+            except dns.resolver.NXDOMAIN as e:
+                raise ValidationError({'custom_tracking_domain': 'Domain does not exist.'}) from e
+            except dns.resolver.NoAnswer as e:
+                raise ValidationError({'custom_tracking_domain': 'No CNAME record found for this domain.'}) from e
+            except dns.resolver.Timeout as e:
+                raise ValidationError({'custom_tracking_domain': 'DNS query timed out.'}) from e
+            except ValidationError:
+                raise
+            except Exception as e:
+                raise ValidationError({'custom_tracking_domain': f'DNS validation failed: {e}'}) from e
 
     def __str__(self):
         return self.name

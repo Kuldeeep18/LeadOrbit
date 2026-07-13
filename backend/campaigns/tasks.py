@@ -509,7 +509,7 @@ def _execute_call_step(clead, step, now=None):
 
 
 
-def rewrite_email_links(html_body, campaign_lead_id, step_id):
+def rewrite_email_links(html_body, campaign_lead_id, step_id, organization=None):
     """
     Parses the email body, finds all anchor tags, and replaces the href
     with our tracking redirect URL.
@@ -523,7 +523,13 @@ def rewrite_email_links(html_body, campaign_lead_id, step_id):
     token_payload = f"{campaign_lead_id}:{step_id}"
     signed_token = signer.sign(token_payload)
     
-    base_url = getattr(django_settings, 'BACKEND_BASE_URL', 'http://127.0.0.1:8000').rstrip('/')
+    if organization and organization.custom_tracking_domain:
+        from tenants.utils import is_local_tracking_domain
+        scheme = 'http' if is_local_tracking_domain(organization.custom_tracking_domain) else 'https'
+        base_url = f"{scheme}://{organization.custom_tracking_domain}"
+    else:
+        base_url = getattr(django_settings, 'BACKEND_BASE_URL', 'http://127.0.0.1:8000').rstrip('/')
+        
     tracking_endpoint = f"{base_url}/api/v1/clicks/track/"
     
     for a_tag in soup.find_all('a', href=True):
@@ -584,7 +590,7 @@ def send_email_step(campaign_lead_id, step_id):
         subject, body = personalize_email(step.template_subject, step.template_body, clead.lead)
 
        
-        body = rewrite_email_links(body, campaign_lead_id, step_id)
+        body = rewrite_email_links(body, campaign_lead_id, step_id, organization=clead.organization)
         # -------------------------------------------
 
         account = clead.campaign.connected_account
@@ -596,7 +602,7 @@ def send_email_step(campaign_lead_id, step_id):
                         clead.lead.email,
                         subject,
                         body,
-                        unsubscribe_url=build_unsubscribe_url(clead.lead),
+                        unsubscribe_url=build_unsubscribe_url(clead.lead, organization=clead.organization),
                     )
                     logger.info(f"Gmail SENT to {clead.lead.email} | msg_id={message_id}")
                 elif account.provider == 'CUSTOM':
@@ -605,7 +611,7 @@ def send_email_step(campaign_lead_id, step_id):
                         clead.lead.email,
                         subject,
                         body,
-                        unsubscribe_url=build_unsubscribe_url(clead.lead),
+                        unsubscribe_url=build_unsubscribe_url(clead.lead, organization=clead.organization),
                     )
                     logger.info(f"SMTP SENT to {clead.lead.email} | msg_id={message_id}")
                 else:

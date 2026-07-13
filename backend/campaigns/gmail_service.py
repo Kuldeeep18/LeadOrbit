@@ -161,14 +161,21 @@ def _extract_failed_recipients(message, account_email=None):
     return fallback_emails if len(fallback_emails) == 1 else []
 
 
-def build_unsubscribe_url(lead):
+def build_unsubscribe_url(lead, organization=None):
     """
-    Build a signed unsubscribe URL for a lead using the backend base URL.
+    Build a signed unsubscribe URL for a lead using the backend base URL or custom tracking domain.
     """
     from .utils import generate_unsubscribe_token
+    from django.conf import settings
 
     token = generate_unsubscribe_token(lead.id)
-    return f"{settings.BACKEND_BASE_URL}/api/v1/unsubscribe/{lead.id}/{token}/"
+    if organization and organization.custom_tracking_domain:
+        from tenants.utils import is_local_tracking_domain
+        scheme = 'http' if is_local_tracking_domain(organization.custom_tracking_domain) else 'https'
+        base_url = f"{scheme}://{organization.custom_tracking_domain}"
+    else:
+        base_url = settings.BACKEND_BASE_URL.rstrip('/')
+    return f"{base_url}/api/v1/unsubscribe/{lead.id}/{token}/"
 
 
 def send_gmail(account, to_email, subject, body_html, unsubscribe_url=None, thread_id=None):
