@@ -56,7 +56,30 @@ MAILBOX_CREDENTIALS_ENCRYPTION_KEY = os.getenv(
     'MAILBOX_CREDENTIALS_ENCRYPTION_KEY',
     'fallback-insecure-key-for-local-dev-and-testing' if (DEBUG or TESTING) else '',
 )
-ALLOWED_HOSTS = ['*']
+class DynamicAllowedHosts(list):
+    def __contains__(self, host):
+        from urllib.parse import urlparse
+        import os
+        
+        canonical_host = urlparse(os.getenv('BACKEND_BASE_URL', 'https://leadorbit.onrender.com')).hostname or 'leadorbit.onrender.com'
+        if host in ['localhost', '127.0.0.1', '[::1]', canonical_host]:
+            return True
+            
+        try:
+            from django.core.cache import cache
+            cache_key = f"allowed_host_{host}"
+            is_allowed = cache.get(cache_key)
+            if is_allowed is not None:
+                return is_allowed
+                
+            from tenants.models import Organization
+            is_allowed = Organization.objects.filter(custom_tracking_domain=host).exists()
+            cache.set(cache_key, is_allowed, 300)
+            return is_allowed
+        except Exception:
+            return False
+
+ALLOWED_HOSTS = DynamicAllowedHosts()
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
@@ -87,6 +110,7 @@ MIDDLEWARE = [
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'tenants.middleware.TenantMiddleware',  # custom tenant isolation
+    'backend.middleware.CustomDomainMiddleware', # Custom tracking domain routing
     'tenants.security.RateLimitMiddleware',  # API rate limiting
     'tenants.security.SecurityHeadersMiddleware',  # security headers
     'django.contrib.messages.middleware.MessageMiddleware',

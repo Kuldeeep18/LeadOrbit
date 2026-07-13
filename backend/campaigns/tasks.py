@@ -524,7 +524,8 @@ def rewrite_email_links(html_body, campaign_lead_id, step_id, organization=None)
     signed_token = signer.sign(token_payload)
     
     if organization and organization.custom_tracking_domain:
-        scheme = 'http' if getattr(django_settings, 'DEBUG', False) and 'localhost' in organization.custom_tracking_domain else 'https'
+        from tenants.utils import is_local_tracking_domain
+        scheme = 'http' if is_local_tracking_domain(organization.custom_tracking_domain) else 'https'
         base_url = f"{scheme}://{organization.custom_tracking_domain}"
     else:
         base_url = getattr(django_settings, 'BACKEND_BASE_URL', 'http://127.0.0.1:8000').rstrip('/')

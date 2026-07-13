@@ -23,7 +23,7 @@ class CustomDomainModelTests(TestCase):
     def setUp(self):
         self.org = Organization.objects.create(name="Acme Corp")
         
-    @patch('dns.resolver.resolve')
+    @patch('dns.resolver.Resolver.resolve')
     def test_valid_cname_configuration(self, mock_resolve):
         # Mocking dns.resolver to return a valid CNAME pointing to our target
         mock_resolve.return_value = [MockDnsRdata('leadorbit.onrender.com.')]
@@ -34,7 +34,7 @@ class CustomDomainModelTests(TestCase):
         self.org.save()
         self.assertEqual(self.org.custom_tracking_domain, 'track.acme.test')
 
-    @patch('dns.resolver.resolve')
+    @patch('dns.resolver.Resolver.resolve')
     def test_invalid_cname_configuration(self, mock_resolve):
         mock_resolve.return_value = [MockDnsRdata('wrong.target.com.')]
         
@@ -43,7 +43,7 @@ class CustomDomainModelTests(TestCase):
             self.org.clean()
         self.assertIn("CNAME record must point to", str(ctx.exception))
 
-    @patch('dns.resolver.resolve')
+    @patch('dns.resolver.Resolver.resolve')
     def test_dns_validation_failures(self, mock_resolve):
         import dns.resolver
         mock_resolve.side_effect = dns.resolver.NXDOMAIN
@@ -56,9 +56,11 @@ class CustomDomainModelTests(TestCase):
 
 from django.test import RequestFactory
 
-@override_settings(DEBUG=False)
+@override_settings(DEBUG=False, ALLOWED_HOSTS=['track.acme.test', 'localhost', '127.0.0.1'])
 class CustomDomainMiddlewareTests(TestCase):
     def setUp(self):
+        from django.core.cache import cache
+        cache.clear()
         self.factory = RequestFactory()
         self.org = Organization.objects.create(name="Acme Corp", custom_tracking_domain='track.acme.test')
         from backend.middleware import CustomDomainMiddleware

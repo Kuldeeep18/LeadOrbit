@@ -32,11 +32,28 @@ class CustomDomainMiddleware(MiddlewareMixin):
             return None
 
         # Check if the host matches a custom tracking domain
-        try:
-            org = Organization.objects.get(custom_tracking_domain=host)
-        except Organization.DoesNotExist:
-            # If no matching organization exists, continue normal request processing.
-            return None
+        from django.core.cache import cache
+        from django.core.exceptions import DisallowedHost
+        cache_key = f"org_for_host_{host}"
+        org_id = cache.get(cache_key)
+        
+        if org_id == "MISSING":
+            raise DisallowedHost(f"Invalid HTTP_HOST header: {host}")
+            
+        if org_id:
+            try:
+                org = Organization.objects.get(id=org_id)
+            except Organization.DoesNotExist:
+                cache.delete(cache_key)
+                raise DisallowedHost(f"Invalid HTTP_HOST header: {host}")
+        else:
+            try:
+                org = Organization.objects.get(custom_tracking_domain=host)
+                cache.set(cache_key, org.id, 300)
+            except Organization.DoesNotExist:
+                cache.set(cache_key, "MISSING", 300)
+                # If no matching organization exists, block the request
+                raise DisallowedHost(f"Invalid HTTP_HOST header: {host}")
 
         # Custom domain matched. Identify the correct tenant.
         _thread_locals.tenant = org
@@ -47,9 +64,10 @@ class CustomDomainMiddleware(MiddlewareMixin):
             if request.path.startswith(endpoint):
                 is_tracking_endpoint = True
                 break
-        
+
         if not is_tracking_endpoint:
-            logger.warning(f"Blocked non-tracking access on custom domain {host} for path {request.path}")
+            sanitized_path = request.path.replace('\n', '').replace('\r', '')
+            logger.warning(f"Blocked non-tracking access on custom domain {host} for path {sanitized_path}")
             return HttpResponseNotFound("Not Found")
             
         # The request will naturally proceed to the existing tracking handlers
