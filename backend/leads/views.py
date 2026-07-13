@@ -97,6 +97,15 @@ class LeadViewSet(viewsets.ModelViewSet):
         if not file_obj:
             return Response({"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST)
 
+        from django.conf import settings
+        max_size = getattr(settings, 'MAX_CSV_UPLOAD_SIZE', 10 * 1024 * 1024)
+        if file_obj.size > max_size:
+            return Response(
+                {"error": f"File size exceeds the limit of {max_size / (1024 * 1024):.1f}MB."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+
         job = LeadImportJob.objects.create(
             organization=request.user.organization,
             filename=file_obj.name or 'lead-import.csv',
