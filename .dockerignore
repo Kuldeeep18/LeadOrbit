@@ -1,0 +1,8 @@
+node_modules
+dist
+.env
+.git 
+.gitignore
+__pycache__/
+db.sqlite3
+.venv/

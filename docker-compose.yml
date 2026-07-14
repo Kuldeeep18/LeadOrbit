@@ -1,0 +1,64 @@
+services:
+    frontend:
+        image: nginx:latest
+        volumes: 
+            - ./frontend:/usr/share/nginx/html
+        ports:
+            - "8082:80"
+        networks:
+            - My_Network_new
+
+    backend:
+        build: 
+            context: .
+            dockerfile: Dockerfile
+        command: python backend/manage.py runserver 0.0.0.0:8000
+        env_file:
+            - backend/.env
+        ports:
+            - "8000:8000"
+        networks:
+            - My_Network_new
+        volumes: 
+            - .:/app
+        depends_on:
+            - redis
+
+    redis:
+        image: redis:7.2-alpine
+        ports: 
+            - "6379:6379"
+        networks: 
+            - My_Network_new
+
+    celery_worker:
+        build: .
+        networks: 
+            - My_Network_new
+        volumes: 
+            - .:/app
+        env_file:
+            - backend/.env
+        working_dir: /app/backend
+        command: celery -A backend worker -l info
+        depends_on: 
+            - redis
+            - backend
+
+    beat_scheduler:
+        build: .
+        networks: 
+            - My_Network_new
+        volumes: 
+            - .:/app
+        env_file:
+            - backend/.env
+        working_dir: /app/backend
+        command: celery -A backend beat -l info
+        depends_on: 
+            - redis
+            - backend
+        
+        
+networks:
+    My_Network_new:
