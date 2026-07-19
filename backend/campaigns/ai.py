@@ -217,7 +217,11 @@ def personalize_email(template_subject, template_body, lead):
     """
     Uses Gemini to personalize the given email template for a specific lead.
     """
+    print(">>> personalize_email() called")
+
+
     api_key = _get_gemini_api_key()
+    print(">>> API Key exists:", bool(api_key))
     merged_subject = _apply_merge_tags(template_subject, lead)
     merged_body = _apply_merge_tags(template_body, lead)
     if not api_key or not template_body:
@@ -254,10 +258,13 @@ Requirements:
         final_api_key = active_key if active_key else api_key
 
         genai.configure(api_key=final_api_key)
+        print(">>> Using Gemini model: gemini-2.5-flash")
         
-        # 3. Upgrade the deprecated engine version string to the current 2.0 version
-        model = genai.GenerativeModel('gemini-2.0-flash')
+       # Use the current Gemini Flash model
+        model = genai.GenerativeModel("gemini-2.5-flash")
+        print(">>> Sending request to Gemini...")
         response = model.generate_content(prompt)
+        print(">>> Gemini response received")
         # Parse basic JSON from response...
         # For MVP we will just do simple replacement if JSON parsing fails
         text = response.text.strip()

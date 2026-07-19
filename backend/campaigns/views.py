@@ -47,7 +47,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
         )
 
     def perform_create(self, serializer):
-        serializer.save(organization=self.request.user.organization)
+        serializer.save(organization=self.request.user.organization, created_by=self.request.user)
 
     @action(detail=True, methods=['post'])
     def enroll(self, request, pk=None):
