@@ -4,6 +4,7 @@ from datetime import timedelta
 
 from bs4 import BeautifulSoup
 from celery import shared_task
+from celery.exceptions import MaxRetriesExceededError, Retry
 from django.conf import settings as django_settings
 from django.core.signing import Signer
 from django.db.models import Q
@@ -541,8 +542,13 @@ def rewrite_email_links(html_body, campaign_lead_id, step_id):
 # -----------------------------------
 
 
-@shared_task
-def send_email_step(campaign_lead_id, step_id):
+@shared_task(
+    bind=True,
+    acks_late=True,
+    max_retries=3,
+    default_retry_delay=900,
+)
+def send_email_step(self, campaign_lead_id, step_id):
     """
     Dispatch an email through the selected connected account or fall back to mock logging.
     """
@@ -613,15 +619,29 @@ def send_email_step(campaign_lead_id, step_id):
                 clead.last_sent_message_id = message_id
                 clead.save(update_fields=['last_sent_message_id'])
             except Exception as send_err:
-                logger.error(f"Email send failed for {clead.lead.email}: {send_err}")
-                # Restore next_execution_time so the lead can be retried later.
+                logger.error(
+                    f"Email send failed for {clead.lead.email}: {send_err}"
+                )
+
                 clead.next_execution_time = timezone.now() + timedelta(minutes=15)
-                clead.save(update_fields=['next_execution_time'])
+                clead.save(update_fields=["next_execution_time"])
+
+                try:
+                    self.retry(exc=send_err)
+
+                except MaxRetriesExceededError:
+                    logger.error(
+                        f"Max retries exceeded for {clead.lead.email}"
+                    )
+
                 return
         else:
             logger.info(f"Mock SENDING EMAIL to {clead.lead.email} | Subject: {subject}")
 
         _advance_to_next_step(clead, step)
+
+    except Retry:
+        raise
 
     except Exception as e:
         logger.error(f"Failed to send email step: {e}")
