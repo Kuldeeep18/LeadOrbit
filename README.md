@@ -304,9 +304,7 @@ frontend/
   theme.css             # shared dashboard styling
   src/                  # leftover Vite starter files; not used by the live UI
 
-outreach_frontend/      # currently empty
-*.md                    # product and architecture docs from earlier phases
-```
+docs/                   # project and architecture documentation
 
 ## Local Setup
 
