@@ -217,12 +217,29 @@ def personalize_email(template_subject, template_body, lead):
     """
     Uses Gemini to personalize the given email template for a specific lead.
     """
+    logger.debug("personalize_email() called")
+
     api_key = _get_gemini_api_key()
     merged_subject = _apply_merge_tags(template_subject, lead)
     merged_body = _apply_merge_tags(template_body, lead)
-    if not api_key or not template_body:
+
+    # Resolve the effective key BEFORE the missing-key early return, so a
+    # tenant-level key can still enable personalization even when the global
+    # GEMINI_API_KEY env var is unset. Checking only `api_key` here previously
+    # skipped personalization for orgs with their own key configured.
+    active_key = None
+    if hasattr(lead, 'organization') and lead.organization:
+        if not getattr(lead.organization, 'enable_ai_personalization', True):
+            logger.debug("AI Personalization is explicitly disabled for this organization workspace.")
+            return merged_subject, merged_body
+        active_key = getattr(lead.organization, 'gemini_api_key', None)
+
+    final_api_key = active_key if active_key else api_key
+    logger.debug("Effective Gemini API key present: %s", bool(final_api_key))
+
+    if not final_api_key or not template_body:
         return merged_subject, merged_body
-        
+
     prompt = f"""
 You are an expert sales representative. Personalize the following email template for a lead.
 Lead details:
@@ -241,23 +258,21 @@ Requirements:
 
     try:
         import google.generativeai as genai
-        # 1. Check if organization has personal tracking tokens and personalization toggled on
-        active_key = None
-        if hasattr(lead, 'organization') and lead.organization:
-            # If the user explicitly disabled personalization, trigger an early exit exception to drop back to standard templates
-            if not getattr(lead.organization, 'enable_ai_personalization', True):
-                raise Exception("AI Personalization is explicitly disabled for this organization workspace.")
-            
-            active_key = getattr(lead.organization, 'gemini_api_key', None)
-
-        # 2. Fall back to the default system environment variable token if no tenant-level key exists
-        final_api_key = active_key if active_key else api_key
+        from google.generativeai.types import RequestOptions
 
         genai.configure(api_key=final_api_key)
-        
-        # 3. Upgrade the deprecated engine version string to the current 2.0 version
-        model = genai.GenerativeModel('gemini-2.0-flash')
-        response = model.generate_content(prompt)
+        logger.debug("Using Gemini model: gemini-2.5-flash")
+
+        # Use the current Gemini Flash model
+        model = genai.GenerativeModel("gemini-2.5-flash")
+        logger.debug("Sending request to Gemini...")
+        # send_email_step runs this inline, so an unbounded request could stall
+        # the worker and hold up campaign progression — cap it at 30s.
+        response = model.generate_content(
+            prompt,
+            request_options=RequestOptions(timeout=30),
+        )
+        logger.debug("Gemini response received")
         # Parse basic JSON from response...
         # For MVP we will just do simple replacement if JSON parsing fails
         text = response.text.strip()
