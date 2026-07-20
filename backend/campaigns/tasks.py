@@ -547,12 +547,14 @@ def _resolve_sandbox_recipient(campaign):
     "send the email to the logged-in user's address instead."
 
     Priority:
-      1. `campaign.created_by.email` — the actual logged-in user who created
+      1. An explicit `sandbox_email` override stored in campaign.settings —
+         this must win over the creator default, since it's the whole point
+         of exposing an override field: letting a rep deliberately test-deliver
+         to a different inbox than their own.
+      2. `campaign.created_by.email` — the actual logged-in user who created
          the campaign. This is the literal "logged-in user" from the spec,
          captured at creation time since Celery tasks have no request/session
          of their own to read a "logged-in user" from directly.
-      2. An explicit `sandbox_email` override stored in campaign.settings
-         (lets a rep test-deliver to any inbox, not just their own).
       3. The email of whoever connected the campaign's sending account, as a
          last-resort fallback for campaigns created before this field existed
          (created_by will be null on those).
@@ -560,14 +562,14 @@ def _resolve_sandbox_recipient(campaign):
     Returns None if no safe destination can be resolved, so callers can
     decide how to fail safely instead of silently emailing a real lead.
     """
-    if campaign.created_by_id and campaign.created_by.email:
-        return campaign.created_by.email
-
     settings_dict = campaign.settings if isinstance(campaign.settings, dict) else {}
 
     override = str(settings_dict.get('sandbox_email') or '').strip()
     if override:
         return override
+
+    if campaign.created_by_id and campaign.created_by.email:
+        return campaign.created_by.email
 
     account = campaign.connected_account
     if account and account.connected_by_id and account.connected_by.email:
@@ -583,7 +585,12 @@ def send_email_step(campaign_lead_id, step_id):
     """
     
     try:
-        clead = CampaignLead.objects.select_related('lead', 'campaign__connected_account').get(id=campaign_lead_id)
+        clead = CampaignLead.objects.select_related(
+            'lead',
+            'campaign__connected_account',
+            'campaign__created_by',
+            'campaign__connected_account__connected_by',
+        ).get(id=campaign_lead_id)
         step = SequenceStep.objects.get(id=step_id)
 
         if clead.lead.global_unsubscribe:

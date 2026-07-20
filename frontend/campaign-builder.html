@@ -1320,8 +1320,8 @@
           <input type="email"
                  class="form-control form-control-sm"
                  id="setting-sandbox-email"
-                 placeholder="Defaults to your connected account's owner email">
-          <div class="form-text">Leave blank to send test emails to the account owner instead.</div>
+                 placeholder="Leave blank to use your account email">
+          <div class="form-text">Leave blank to send test emails to the address of whoever created this campaign. If that's unavailable (older campaigns), it falls back to the connected sending account's owner.</div>
         </div>
 
         <div class="alert alert-warning py-2 px-3 small mb-0 d-none" id="sandbox-active-notice">
@@ -1886,7 +1886,15 @@ ${rows || `
 
         // ─── FLOWCHART VIEW (Mermaid) ───────
         function escapeMermaidLabel(text) {
+            // Escape HTML metacharacters first so user-controlled step text
+            // (email subjects, LinkedIn notes, manual task descriptions, etc.)
+            // can never be interpreted as markup or script, even though
+            // mermaid.initialize() uses securityLevel: 'loose' to allow the
+            // click-to-edit callback below.
             return String(text || '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
                 .replace(/"/g, '#quot;')
                 .replace(/\n/g, ' ')
                 .trim()
