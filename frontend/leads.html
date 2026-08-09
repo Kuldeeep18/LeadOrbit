@@ -1141,7 +1141,13 @@
                   '<span class="text-danger"><i class="bi bi-x-circle me-1" aria-hidden="true"></i>Upload failed.</span>';
               }
             } catch (err) {
-              statusEl.innerHTML = `<span class="text-danger">Error: ${err.message}</span>`;
+              statusEl.textContent = "";
+
+              const span = document.createElement("span");
+              span.className = "text-danger";
+              span.textContent = `Error: ${err.message}`;
+
+              statusEl.appendChild(span);
             } finally {
               btn.disabled = false;
               btn.innerHTML =
