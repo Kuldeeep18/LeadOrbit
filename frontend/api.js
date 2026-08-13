@@ -20,8 +20,32 @@ export const clearTokens = () => {
 let refreshPromise = null;
 
 const redirectToLogin = () => {
-    clearTokens();
+    localStorage.clear();
     window.location.href = '/login.html';
+};
+
+export const showGlobalError = (msg) => {
+    let errorDiv = document.getElementById('global-api-error');
+    if (!errorDiv) {
+        errorDiv = document.createElement('div');
+        errorDiv.id = 'global-api-error';
+        errorDiv.style.position = 'fixed';
+        errorDiv.style.top = '20px';
+        errorDiv.style.right = '20px';
+        errorDiv.style.backgroundColor = '#ef4444';
+        errorDiv.style.color = 'white';
+        errorDiv.style.padding = '12px 24px';
+        errorDiv.style.borderRadius = '8px';
+        errorDiv.style.zIndex = '9999';
+        errorDiv.style.boxShadow = '0 4px 6px -1px rgba(0, 0, 0, 0.1)';
+        document.body.appendChild(errorDiv);
+    }
+    errorDiv.innerText = msg;
+    setTimeout(() => {
+        if (errorDiv && errorDiv.parentNode) {
+            errorDiv.parentNode.removeChild(errorDiv);
+        }
+    }, 5000);
 };
 
 export const refreshAccessToken = async () => {
@@ -94,9 +118,11 @@ const sendApiRequest = async (endpoint, options = {}, token = getAccessToken()) 
         });
     } catch (error) {
         if (error.name === 'AbortError') {
+            showGlobalError('Network error: Request timed out.');
             throw new Error('Request timed out. Check if the backend is running on port 8000.');
         }
         if (error instanceof TypeError) {
+            showGlobalError('Network error: Backend unreachable.');
             throw new Error(`Cannot reach backend API at ${API_BASE}. Check that the backend server is running.`);
         }
         throw error;
