@@ -123,7 +123,8 @@ class CampaignLead(TenantModel):
         ('REPLIED', 'Replied'),
         ('BOUNCED', 'Bounced'),
         ('SKIPPED', 'Skipped'),
-        ('FINISHED', 'Finished')
+        ('FINISHED', 'Finished'),
+        ('FAILED', 'Failed')
     )
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     campaign = models.ForeignKey(Campaign, on_delete=models.CASCADE, related_name='enrolled_leads')
@@ -138,6 +139,7 @@ class CampaignLead(TenantModel):
     bounce_type = models.CharField(max_length=32, null=True, blank=True)
     bounce_code = models.CharField(max_length=64, null=True, blank=True)
     bounce_reason = models.TextField(null=True, blank=True)
+    error_message = models.TextField(null=True, blank=True)
 
     class Meta:
         unique_together = ('campaign', 'lead')
