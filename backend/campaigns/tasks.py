@@ -8,6 +8,7 @@ from django.conf import settings as django_settings
 from django.core.signing import Signer
 from django.db.models import Q
 from django.utils import timezone
+from twilio.base.exceptions import TwilioRestException
 
 from .ai import _apply_merge_tags, personalize_email
 from .gmail_service import (
@@ -472,6 +473,15 @@ def _execute_sms_step(clead, step, now=None):
     try:
         sid = send_sms(phone, body)
         logger.info(f"SMS sent to {clead.lead.email} ({phone}) | sid={sid}")
+    except TwilioRestException as err:
+        logger.error(f"Twilio SMS send failed for {clead.lead.email}: {err}")
+        clead.status = 'FAILED'
+        clead.error_message = str(err)
+        clead.current_step = None
+        clead.next_execution_time = None
+        clead.save(update_fields=['status', 'error_message', 'current_step', 'next_execution_time'])
+        _maybe_mark_campaign_completed(clead.campaign)
+        return
     except Exception as err:
         logger.error(f"SMS send failed for {clead.lead.email}: {err}")
         # Retry later
