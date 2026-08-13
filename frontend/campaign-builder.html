@@ -1271,7 +1271,7 @@
         };
 
         function createEmailStep(subject, body) {
-            return { type: 'EMAIL', subject, body, delay_minutes: 0 };
+            return { type: 'EMAIL', subject, body, delay_minutes: 0, use_ai: false };
         }
 
         function createWaitStep(delayValue = 1, delayUnit = 'days') {
@@ -2060,6 +2060,10 @@ ${rows || `
                     <div class="ep-label">Body</div>
                     <textarea class="ep-textarea" id="ep-body" placeholder="Write your email content...">${step.body || ''}</textarea>
                 </div>
+                <div class="mb-3 form-check form-switch">
+                    <input class="form-check-input" type="checkbox" id="ep-use-ai" ${step.use_ai ? 'checked' : ''}>
+                    <label class="form-check-label small text-muted fw-semibold" for="ep-use-ai">Enable AI Personalization at Send Time</label>
+                </div>
                 <div class="mb-3">
                     <div class="ep-label">Merge Tags</div>
                     <div class="d-flex flex-wrap gap-2">
@@ -2087,6 +2091,7 @@ ${rows || `
             // Bind inputs
             document.getElementById('ep-subject').addEventListener('input', (e) => { step.subject = e.target.value; });
             document.getElementById('ep-body').addEventListener('input', (e) => { step.body = e.target.value; });
+            document.getElementById('ep-use-ai').addEventListener('change', (e) => { step.use_ai = e.target.checked; });
 
             let activeEditor = document.getElementById('ep-body');
 

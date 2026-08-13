@@ -581,7 +581,11 @@ def send_email_step(campaign_lead_id, step_id):
             )
             return
 
-        subject, body = personalize_email(step.template_subject, step.template_body, clead.lead)
+        if getattr(step, 'use_ai', False):
+            subject, body = personalize_email(step.template_subject, step.template_body, clead.lead)
+        else:
+            from .ai import _apply_merge_tags
+            subject, body = _apply_merge_tags(step.template_subject, clead.lead), _apply_merge_tags(step.template_body, clead.lead)
 
        
         body = rewrite_email_links(body, campaign_lead_id, step_id)
