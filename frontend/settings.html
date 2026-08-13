@@ -246,7 +246,8 @@
                             <div class="section-title text-danger"><i class="bi bi-exclamation-triangle me-2" aria-hidden="true"></i>Danger Zone</div>
                             <p class="text-muted mb-3">These actions are irreversible.</p>
                             <button class="btn btn-outline-danger btn-sm me-2" id="delete-leads-btn">Delete All Leads</button>
-                            <button class="btn btn-outline-danger btn-sm" id="delete-org-btn">Delete Organization</button>
+                            <button class="btn btn-outline-danger btn-sm me-2" id="delete-org-btn">Delete Organization</button>
+                            <button class="btn btn-outline-danger btn-sm" id="delete-account-btn">Delete Account</button>
                         </div>
                     </div>
                 </div>
@@ -536,6 +537,42 @@
                                 } finally {
                                     deleteOrgBtn.disabled = false;
                                     deleteOrgBtn.textContent = 'Delete Organization';
+                                }
+                            })();
+                        });
+                    });
+                });
+            }
+
+            const deleteAccountBtn = document.getElementById('delete-account-btn');
+            if (deleteAccountBtn) {
+                deleteAccountBtn.addEventListener('click', async () => {
+                    const profileEmail = document.getElementById('profile-email').value.trim();
+                    showPromptModal('Delete Account', `Type "${profileEmail}" to permanently delete your account.`, `Enter "${profileEmail}"`, (typedName) => {
+                        if (!typedName) return;
+                        if (typedName.trim() !== profileEmail) {
+                            alert('Email did not match. Nothing was deleted.');
+                            return;
+                        }
+                        showConfirmModal('Confirm Deletion', 'This will permanently delete your account and sign you out. Continue?', 'Yes, Delete', () => {
+                            deleteAccountBtn.disabled = true;
+                            deleteAccountBtn.textContent = 'Deleting...';
+                            (async () => {
+                                try {
+                                    const res = await fetchWithAuth('/auth/me/', { method: 'DELETE' });
+                                    const data = await res.json().catch(() => ({}));
+                                    if (!res.ok) {
+                                        alert(data.detail || data.error || 'Could not delete account right now.');
+                                        return;
+                                    }
+                                    clearTokens();
+                                    alert(data.message || 'Account deleted. You have been signed out.');
+                                    window.location.href = '/login.html';
+                                } catch (e) {
+                                    alert('Could not delete account right now.');
+                                } finally {
+                                    deleteAccountBtn.disabled = false;
+                                    deleteAccountBtn.textContent = 'Delete Account';
                                 }
                             })();
                         });

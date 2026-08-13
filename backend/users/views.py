@@ -23,8 +23,15 @@ class AuthViewSet(viewsets.GenericViewSet):
             }, status=status.HTTP_201_CREATED)
         return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
 
-    @action(detail=False, methods=['get', 'patch'], permission_classes=[IsAuthenticated])
+    @action(detail=False, methods=['get', 'patch', 'delete'], permission_classes=[IsAuthenticated])
     def me(self, request):
+        if request.method == 'DELETE':
+            request.user.delete()
+            return Response(
+                {'message': 'Account successfully deleted.'},
+                status=status.HTTP_200_OK,
+            )
+
         if request.method == 'PATCH':
             payload = request.data or {}
             new_password = payload.get('new_password')
