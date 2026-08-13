@@ -20,7 +20,7 @@ CONDITION_TIME_TO_MINUTES = {
 class SequenceStepSerializer(serializers.ModelSerializer):
     class Meta:
         model = SequenceStep
-        fields = ['id', 'step_order', 'channel_type', 'delay_minutes', 'template_subject', 'template_body']
+        fields = ['id', 'step_order', 'channel_type', 'delay_minutes', 'template_subject', 'template_body', 'use_ai']
 
 
 class CampaignSerializer(serializers.ModelSerializer):
@@ -160,6 +160,7 @@ class CampaignSerializer(serializers.ModelSerializer):
                     delay_minutes=normalized['delay_minutes'],
                     template_subject=normalized['template_subject'],
                     template_body=normalized['template_body'],
+                    use_ai=normalized['use_ai'],
                 )
             )
 
@@ -189,12 +190,14 @@ class CampaignSerializer(serializers.ModelSerializer):
             or ''
         )
 
+        use_ai = bool(raw_step.get('use_ai', False))
+
         return {
-            'step_order': index + 1,
             'channel_type': channel_type,
             'delay_minutes': delay_minutes,
-            'template_subject': template_subject,
-            'template_body': template_body,
+            'template_subject': template_subject.strip(),
+            'template_body': template_body.strip(),
+            'use_ai': use_ai,
         }
 
     def _extract_delay_minutes(self, raw_step, channel_type):

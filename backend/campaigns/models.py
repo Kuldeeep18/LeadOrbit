@@ -98,6 +98,7 @@ class SequenceStep(TenantModel):
     delay_minutes = models.IntegerField(default=0)
     template_subject = models.TextField(blank=True, null=True)
     template_body = models.TextField(blank=True, null=True)
+    use_ai = models.BooleanField(default=False)
 
     class Meta:
         ordering = ['step_order']
