@@ -378,6 +378,13 @@
                         </table>
                     </div>
                 </div>
+                <div class="d-flex justify-content-between align-items-center mt-3">
+                    <div class="small text-muted" id="pagination-info">Showing 0 leads</div>
+                    <div class="btn-group">
+                        <button class="btn btn-sm btn-outline-secondary" id="btn-prev-page" disabled>Previous</button>
+                        <button class="btn btn-sm btn-outline-secondary" id="btn-next-page" disabled>Next</button>
+                    </div>
+                </div>
             </section>
         </main>
     </div>
@@ -450,7 +457,13 @@
         import { fetchWithAuth } from './api.js';
 
         // ─── State ──────────────────────────────────────────────────────────
-        let allLeads = [];           // full unfiltered list (client-side search backup)
+        let allLeads = [];
+        let currentPage = 1;
+        let totalPages = 1;
+        let totalCount = 0;
+        let nextUrl = null;
+        let prevUrl = null;
+        let searchQuery = '';
         let allTags = [];            // all org tags (for the filter panel)
         let allImportJobs = [];      // import job history
         let selectedTagIds = new Set(); // tags selected in the filter panel
@@ -745,27 +758,66 @@
             }
         }
 
-        async function fetchLeadsWithFilters(params = {}) {
-            const qs = new URLSearchParams(params).toString();
-            const endpoint = qs ? `/leads/?${qs}` : '/leads/';
-            const res = await fetchWithAuth(endpoint);
-            if (!res.ok) throw new Error('Failed to fetch leads');
-            return res.json();
+        async function fetchLeads(page = 1) {
+            try {
+                const tbody = document.getElementById('leads-table-body');
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center py-4 text-muted">
+                    <div class="spinner-border spinner-border-sm text-primary me-2" role="status" aria-label="Loading leads"></div>
+                    Loading leads...
+                </td></tr>`;
+
+                const params = new URLSearchParams(activeFilters);
+                params.append('page', page);
+                if (searchQuery) params.append('search', searchQuery);
+
+                const res = await fetchWithAuth(`/leads/?${params.toString()}`);
+                if (!res.ok) throw new Error('Failed to load leads');
+                
+                const data = await res.json();
+                
+                if (data.results) {
+                    allLeads = data.results;
+                    nextUrl = data.next;
+                    prevUrl = data.previous;
+                    totalCount = data.count;
+                } else {
+                    allLeads = data;
+                    nextUrl = null;
+                    prevUrl = null;
+                    totalCount = data.length;
+                }
+                
+                currentPage = page;
+                renderLeadRows(allLeads);
+                updatePaginationUI();
+                renderStats(allLeads);
+            } catch (error) {
+                console.error('Error fetching leads:', error);
+                document.getElementById('leads-table-body').innerHTML = `
+                    <tr><td colspan="7" class="text-center py-4 text-danger">Failed to load leads. Please try again.</td></tr>
+                `;
+            }
+        }
+
+        function updatePaginationUI() {
+            const prevBtn = document.getElementById('btn-prev-page');
+            const nextBtn = document.getElementById('btn-next-page');
+            const info = document.getElementById('pagination-info');
+            
+            prevBtn.disabled = !prevUrl;
+            nextBtn.disabled = !nextUrl;
+            
+            if (totalCount > 0) {
+                info.textContent = `Showing page ${currentPage} (Total leads: ${totalCount})`;
+            } else {
+                info.textContent = 'No leads found';
+            }
         }
 
         async function applyFilters() {
-            const params = getFilterParams();
-            activeFilters = params;
-            updateFilterIndicator(params);
-
-            try {
-                const leads = await fetchLeadsWithFilters(params);
-                allLeads = leads;
-                renderStats(leads);
-                renderLeadRows(leads);
-            } catch (e) {
-                console.error('Error applying filters:', e);
-            }
+            activeFilters = getFilterParams();
+            updateFilterIndicator(activeFilters);
+            fetchLeads(1);
         }
 
         function clearFilters() {
@@ -776,17 +828,10 @@
             activeFilters = {};
             renderTagFilterChips();
             updateFilterIndicator({});
+            fetchLeads(1);
         }
 
         // ─── Data loading ────────────────────────────────────────────────────
-
-        async function loadLeads() {
-            const res = await fetchWithAuth('/leads/');
-            if (!res.ok) return;
-            allLeads = await res.json();
-            renderStats(allLeads);
-            renderLeadRows(allLeads);
-        }
 
         async function loadImportHistory() {
             const res = await fetchWithAuth('/lead-import-jobs/');
@@ -796,31 +841,26 @@
             renderImportHistory(allImportJobs);
         }
 
-        // ─── Text search (client-side, applied on top of server results) ────
+        // ─── Text search (Server-side) ────
 
         function applySearch() {
-            const q = (document.getElementById('lead-search').value || '').trim().toLowerCase();
-            if (!q) {
-                renderLeadRows(allLeads);
-                return;
-            }
-            const filtered = allLeads.filter(lead => {
-                const row = `${lead.first_name || ''} ${lead.last_name || ''} ${lead.email || ''} ${lead.company || ''}`.toLowerCase();
-                const tagNames = (lead.tags || []).map(t => t.name.toLowerCase()).join(' ');
-                return row.includes(q) || tagNames.includes(q);
-            });
-            renderLeadRows(filtered);
+            searchQuery = (document.getElementById('lead-search').value || '').trim();
+            fetchLeads(1);
         }
 
         // ─── Bootstrap ──────────────────────────────────────────────────────
 
         document.addEventListener('DOMContentLoaded', async () => {
+            document.getElementById('btn-prev-page').addEventListener('click', () => {
+                if (prevUrl) fetchLeads(currentPage - 1);
+            });
+            document.getElementById('btn-next-page').addEventListener('click', () => {
+                if (nextUrl) fetchLeads(currentPage + 1);
+            });
+
             try {
-                await loadLeads();
+                await fetchLeads(1);
                 await loadImportHistory();
-            } catch (e) {
-                console.error('Error fetching leads:', e);
-            }
 
             await loadTags();
 
