@@ -6,8 +6,11 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.views import TokenObtainPairView as BaseTokenObtainPairView
 from users.jwt import CustomTokenObtainSerializer
 
+from rest_framework.throttling import AnonRateThrottle
+
 class CustomTokenObtainPairView(BaseTokenObtainPairView):
     serializer_class = CustomTokenObtainSerializer
+    throttle_classes = [AnonRateThrottle]
 
 from users.views import AuthViewSet
 from leads.views import BlockedDomainViewSet, LeadImportJobViewSet, LeadViewSet, TagViewSet

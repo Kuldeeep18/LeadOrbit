@@ -8,9 +8,10 @@ from .models import User
 from .permissions import IsOrgAdmin
 from .serializers import UserSerializer, RegisterSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework.throttling import AnonRateThrottle
 
 class AuthViewSet(viewsets.GenericViewSet):
-    @action(detail=False, methods=['post'], permission_classes=[AllowAny])
+    @action(detail=False, methods=['post'], permission_classes=[AllowAny], throttle_classes=[AnonRateThrottle])
     def register(self, request):
         serializer = RegisterSerializer(data=request.data)
         if serializer.is_valid():
