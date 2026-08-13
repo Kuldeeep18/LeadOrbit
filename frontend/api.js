@@ -20,7 +20,7 @@ export const clearTokens = () => {
 let refreshPromise = null;
 
 const redirectToLogin = () => {
-    clearTokens();
+    localStorage.clear();
     window.location.href = '/login.html';
 };
 
