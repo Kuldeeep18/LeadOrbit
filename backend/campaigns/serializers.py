@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.db.models import Q
 
-from .models import Campaign, CampaignLead, ConnectedEmailAccount, SequenceStep, EmailTemplate
+from .models import Campaign, CampaignLead, ConnectedEmailAccount, SequenceStep, EmailTemplate, ManualTask
 
 DELAY_UNIT_TO_MINUTES = {
     'minutes': 1,
@@ -21,6 +21,15 @@ class SequenceStepSerializer(serializers.ModelSerializer):
     class Meta:
         model = SequenceStep
         fields = ['id', 'step_order', 'channel_type', 'delay_minutes', 'template_subject', 'template_body']
+
+class ManualTaskSerializer(serializers.ModelSerializer):
+    lead_email = serializers.CharField(source='campaign_lead.lead.email', read_only=True)
+    lead_name = serializers.CharField(source='campaign_lead.lead.first_name', read_only=True)
+    campaign_name = serializers.CharField(source='campaign_lead.campaign.name', read_only=True)
+
+    class Meta:
+        model = ManualTask
+        fields = ['id', 'task_type', 'description', 'status', 'completed_at', 'lead_email', 'lead_name', 'campaign_name', 'created_at']
 
 
 class CampaignSerializer(serializers.ModelSerializer):

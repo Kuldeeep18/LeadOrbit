@@ -24,7 +24,7 @@ from .mailbox_service import (
 )
 from .notifications import notify_email_bounced
 from .sms_service import initiate_call, send_sms
-from .models import CampaignLead, ConnectedEmailAccount, SequenceStep
+from .models import Campaign, CampaignLead, ConnectedEmailAccount, EmailTemplate, ManualTask
 from leads.models import BlockedDomain, normalize_domain
 
 logger = logging.getLogger(__name__)
@@ -227,6 +227,22 @@ def _execute_non_email_step(clead, step, now=None):
     if step.channel_type == 'CALL':
         _execute_call_step(clead, step, now=now)
         return
+    if step.channel_type in ['MANUAL', 'LINKEDIN', 'WHATSAPP']:
+        from .models import ManualTask
+        task = ManualTask.objects.create(
+            organization=clead.campaign.organization,
+            campaign_lead=clead,
+            step=step,
+            task_type=step.channel_type,
+            description=step.template_body or f"{step.channel_type} step for {clead.lead.email}"
+        )
+        clead.status = 'PAUSED'
+        clead.waiting_on_task = task
+        clead.next_execution_time = None
+        clead.save(update_fields=['status', 'waiting_on_task', 'next_execution_time'])
+        logger.info(f"Generated {step.channel_type} task for {clead.lead.email} and paused campaign lead.")
+        return
+
     logger.info(f"Auto-advancing non-email step {step.channel_type} for {clead.lead.email}")
     _advance_to_next_step(clead, step, now=now)
 
