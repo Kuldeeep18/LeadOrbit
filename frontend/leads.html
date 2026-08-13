@@ -200,6 +200,9 @@
                             <i class="bi bi-funnel me-1" aria-hidden="true"></i>Filters
                             <span class="filter-dot" id="filter-active-dot" aria-hidden="true"></span>
                         </button>
+                        <button class="btn btn-sm btn-outline-success" id="export-csv-btn">
+                            <i class="bi bi-download me-1" aria-hidden="true"></i> Export CSV
+                        </button>
                         <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#uploadModal">
                             <i class="bi bi-upload me-1" aria-hidden="true"></i> Import CSV
                         </button>
@@ -820,6 +823,54 @@
                 await loadImportHistory();
             } catch (e) {
                 console.error('Error fetching leads:', e);
+            }
+
+            // Export to CSV Logic
+            const exportBtn = document.getElementById('export-csv-btn');
+            if (exportBtn) {
+                exportBtn.addEventListener('click', async () => {
+                    const originalText = exportBtn.innerHTML;
+                    exportBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Exporting...';
+                    exportBtn.disabled = true;
+                    try {
+                        const token = localStorage.getItem('access_token');
+                        const response = await fetch('http://localhost:8000/api/v1/leads/export/', {
+                            method: 'GET',
+                            headers: {
+                                'Authorization': `Bearer ${token}`
+                            }
+                        });
+                        
+                        if (!response.ok) {
+                            throw new Error('Export failed');
+                        }
+                        
+                        const blob = await response.blob();
+                        const url = window.URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.style.display = 'none';
+                        a.href = url;
+                        // Determine filename from Content-Disposition if available
+                        let filename = 'leads.csv';
+                        const disposition = response.headers.get('Content-Disposition');
+                        if (disposition && disposition.indexOf('attachment') !== -1) {
+                            const filenameRegex = /filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/;
+                            const matches = filenameRegex.exec(disposition);
+                            if (matches != null && matches[1]) { 
+                                filename = matches[1].replace(/['"]/g, '');
+                            }
+                        }
+                        a.download = filename;
+                        document.body.appendChild(a);
+                        a.click();
+                        window.URL.revokeObjectURL(url);
+                    } catch (error) {
+                        alert(error.message || 'Could not export leads.');
+                    } finally {
+                        exportBtn.innerHTML = originalText;
+                        exportBtn.disabled = false;
+                    }
+                });
             }
 
             await loadTags();

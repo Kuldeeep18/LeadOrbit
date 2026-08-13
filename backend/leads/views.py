@@ -1,4 +1,6 @@
 from django.db.models import Q
+from django.http import HttpResponse
+import csv
 from rest_framework import viewsets, parsers, status
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action
@@ -90,6 +92,28 @@ class LeadViewSet(viewsets.ModelViewSet):
             {"message": f"Successfully deleted {deleted_count} leads."},
             status=status.HTTP_200_OK,
         )
+
+    @action(detail=False, methods=['get'])
+    def export(self, request):
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="leads.csv"'
+        
+        writer = csv.writer(response)
+        writer.writerow(['Email', 'First Name', 'Last Name', 'Company', 'Phone', 'LinkedIn', 'Created At'])
+        
+        leads = self.get_queryset()
+        for lead in leads:
+            writer.writerow([
+                lead.email,
+                lead.first_name,
+                lead.last_name,
+                lead.company,
+                lead.phone,
+                lead.linkedin_url,
+                lead.created_at.strftime('%Y-%m-%d %H:%M:%S')
+            ])
+            
+        return response
 
     @action(detail=False, methods=['post'], parser_classes=[parsers.MultiPartParser])
     def import_csv(self, request):
