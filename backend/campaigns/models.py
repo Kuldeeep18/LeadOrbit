@@ -115,6 +115,23 @@ class EmailTemplate(TenantModel):
     def __str__(self):
         return self.name
 
+class ManualTask(TenantModel):
+    STATUS_CHOICES = (
+        ('PENDING', 'Pending'),
+        ('COMPLETED', 'Completed'),
+        ('SKIPPED', 'Skipped')
+    )
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    campaign_lead = models.ForeignKey('CampaignLead', on_delete=models.CASCADE, related_name='manual_tasks')
+    step = models.ForeignKey(SequenceStep, on_delete=models.CASCADE, related_name='manual_tasks')
+    task_type = models.CharField(max_length=50)
+    description = models.TextField(blank=True, null=True)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    def __str__(self):
+        return f"{self.task_type} Task for {self.campaign_lead.lead.email}"
+
 class CampaignLead(TenantModel):
     STATUS_CHOICES = (
         ('ENROLLED', 'Enrolled'),
@@ -130,6 +147,7 @@ class CampaignLead(TenantModel):
     lead = models.ForeignKey(Lead, on_delete=models.CASCADE, related_name='campaigns')
     current_step = models.ForeignKey(SequenceStep, on_delete=models.SET_NULL, null=True, blank=True)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ENROLLED')
+    waiting_on_task = models.ForeignKey(ManualTask, on_delete=models.SET_NULL, null=True, blank=True, related_name='blocked_leads')
     next_execution_time = models.DateTimeField(null=True, blank=True)
     last_sent_message_id = models.CharField(max_length=255, null=True, blank=True)
     last_opened_at = models.DateTimeField(null=True, blank=True)

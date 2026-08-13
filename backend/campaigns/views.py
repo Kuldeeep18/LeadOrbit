@@ -14,8 +14,9 @@ from rest_framework.response import Response
 from leads.models import Lead
 from users.permissions import IsOrgManager
 
-from .models import Campaign, CampaignLead, SequenceStep, EmailTemplate
-from .serializers import CampaignSerializer, SequenceStepSerializer, EmailTemplateSerializer
+from .models import Campaign, CampaignLead, SequenceStep, EmailTemplate, ManualTask
+from .serializers import CampaignSerializer, SequenceStepSerializer, EmailTemplateSerializer, ManualTaskSerializer
+from django.utils import timezone
 
 logger = logging.getLogger(__name__)
 
@@ -813,3 +814,33 @@ class ClickTrackingView(APIView):
         decoded_dest = urllib.parse.unquote(dest_url)
         return HttpResponseRedirect(decoded_dest)
 # ------------------------------------------
+
+class ManualTaskViewSet(viewsets.ModelViewSet):
+    serializer_class = ManualTaskSerializer
+    
+    def get_queryset(self):
+        return ManualTask.objects.filter(campaign_lead__campaign__organization=self.request.user.organization)
+
+    @action(detail=True, methods=['post'])
+    def complete(self, request, pk=None):
+        task = self.get_object()
+        if task.status != 'PENDING':
+            return Response({'error': 'Task is already completed or skipped'}, status=400)
+        
+        task.status = 'COMPLETED'
+        task.completed_at = timezone.now()
+        task.save()
+        
+        # Resume the lead
+        lead = task.campaign_lead
+        if lead.status == 'PAUSED' and lead.waiting_on_task_id == task.id:
+            lead.status = 'ACTIVE'
+            lead.waiting_on_task = None
+            lead.next_execution_time = timezone.now()
+            lead.save()
+            
+            # Trigger celery task to pick it up immediately
+            from .tasks import process_campaign_leads
+            process_campaign_leads.delay()
+            
+        return Response(self.get_serializer(task).data)
