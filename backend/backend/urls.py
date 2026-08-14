@@ -19,7 +19,7 @@ from campaigns.views import (
     AIGenerateView,
     unsubscribe_view
 )
-from campaigns.google_auth_views import GoogleOAuthLoginView, GoogleOAuthCallbackView, ConnectedAccountsListView
+from campaigns.google_auth_views import GoogleOAuthLoginView, GoogleOAuthCallbackView, ConnectedAccountsListView, TestConnectedAccountConnectionView
 
 
 def api_root(_request):
@@ -49,6 +49,7 @@ urlpatterns = [
     path('auth/google/login', GoogleOAuthLoginView.as_view(), name='google_oauth_login_fallback'),
     path('auth/google/callback', GoogleOAuthCallbackView.as_view(), name='google_oauth_callback_fallback'),
     path('api/v1/connected-accounts/', ConnectedAccountsListView.as_view(), name='connected_accounts'),
+    path('api/v1/connected-accounts/test-connection/', TestConnectedAccountConnectionView.as_view(), name='connected_account_test_connection'),
     path('api/v1/unsubscribe/<uuid:lead_id>/<str:token>/', unsubscribe_view, name='unsubscribe'),
     path('api/v1/', include(router.urls)),
 ]

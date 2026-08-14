@@ -7,7 +7,8 @@ import uuid
 class ConnectedEmailAccount(TenantModel):
     PROVIDER_CHOICES = (
         ('GOOGLE', 'Google'),
-        ('MICROSOFT', 'Microsoft')
+        ('MICROSOFT', 'Microsoft'),
+        ('SMTP', 'Custom SMTP/IMAP'),
     )
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email_address = models.EmailField()
@@ -22,6 +23,16 @@ class ConnectedEmailAccount(TenantModel):
     access_token = models.TextField()
     refresh_token = models.TextField(blank=True, null=True)
     token_expiry = models.DateTimeField(null=True, blank=True)
+    smtp_host = models.CharField(max_length=255, blank=True, default='')
+    smtp_port = models.PositiveIntegerField(null=True, blank=True)
+    smtp_username = models.CharField(max_length=255, blank=True, default='')
+    smtp_password = models.TextField(blank=True, default='')
+    smtp_use_tls = models.BooleanField(default=True)
+    imap_host = models.CharField(max_length=255, blank=True, default='')
+    imap_port = models.PositiveIntegerField(null=True, blank=True)
+    imap_username = models.CharField(max_length=255, blank=True, default='')
+    imap_password = models.TextField(blank=True, default='')
+    imap_use_ssl = models.BooleanField(default=True)
 
     def __str__(self):
         return f"{self.email_address} ({self.get_provider_display()})"

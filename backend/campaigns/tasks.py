@@ -1,5 +1,7 @@
 import logging
+import smtplib
 from datetime import timedelta
+from email.message import EmailMessage
 
 from celery import shared_task
 from django.conf import settings as django_settings
@@ -11,6 +13,28 @@ from .sms_service import send_sms, initiate_call
 from .models import CampaignLead, SequenceStep
 
 logger = logging.getLogger(__name__)
+
+
+def send_custom_smtp(account, to_email, subject, body_html, unsubscribe_url=None):
+    message = EmailMessage()
+    message['Subject'] = subject or ''
+    message['From'] = account.smtp_username or account.email_address
+    message['To'] = to_email
+    if unsubscribe_url:
+        message['List-Unsubscribe'] = f'<{unsubscribe_url}>'
+    message.set_content(body_html or '', subtype='html')
+
+    if not account.smtp_host or not account.smtp_port:
+        raise ValueError('Custom SMTP account is missing smtp_host or smtp_port.')
+
+    with smtplib.SMTP(account.smtp_host, account.smtp_port, timeout=15) as client:
+        if account.smtp_use_tls:
+            client.starttls()
+        if account.smtp_username:
+            client.login(account.smtp_username, account.smtp_password or '')
+        client.send_message(message)
+
+    return message.get('Message-ID') or f'smtp:{account.id}'
 
 def _get_campaign_steps(campaign):
     """
@@ -425,18 +449,27 @@ def send_email_step(campaign_lead_id, step_id):
         account = clead.campaign.connected_account
         if account:
             try:
-                message_id = send_gmail(
-                    account,
-                    clead.lead.email,
-                    subject,
-                    body,
-                    unsubscribe_url=build_unsubscribe_url(clead.lead),
-                )
+                if account.provider == 'SMTP':
+                    message_id = send_custom_smtp(
+                        account,
+                        clead.lead.email,
+                        subject,
+                        body,
+                        unsubscribe_url=build_unsubscribe_url(clead.lead),
+                    )
+                else:
+                    message_id = send_gmail(
+                        account,
+                        clead.lead.email,
+                        subject,
+                        body,
+                        unsubscribe_url=build_unsubscribe_url(clead.lead),
+                    )
                 clead.last_sent_message_id = message_id
                 clead.save(update_fields=['last_sent_message_id'])
-                logger.info(f"Gmail SENT to {clead.lead.email} | msg_id={message_id}")
-            except Exception as gmail_err:
-                logger.error(f"Gmail API send failed for {clead.lead.email}: {gmail_err}")
+                logger.info(f"{account.provider} SENT to {clead.lead.email} | msg_id={message_id}")
+            except Exception as send_err:
+                logger.error(f"{account.provider} send failed for {clead.lead.email}: {send_err}")
                 # Restore next_execution_time so the lead can be retried later.
                 clead.next_execution_time = timezone.now() + timedelta(minutes=15)
                 clead.save(update_fields=['next_execution_time'])

@@ -32,6 +32,91 @@ class CampaignWorkflowTests(APITestCase):
         )
         self.client.force_authenticate(self.user)
 
+    @patch('campaigns.google_auth_views.imaplib.IMAP4_SSL')
+    @patch('campaigns.google_auth_views.smtplib.SMTP')
+    def test_custom_smtp_imap_connection_endpoint_validates_credentials(self, mock_smtp, mock_imap):
+        payload = {
+            'smtp_host': 'smtp.example.com',
+            'smtp_port': 587,
+            'smtp_username': 'sender@example.com',
+            'smtp_password': 'secret',
+            'smtp_use_tls': True,
+            'imap_host': 'imap.example.com',
+            'imap_port': 993,
+            'imap_username': 'sender@example.com',
+            'imap_password': 'secret',
+            'imap_use_ssl': True,
+        }
+
+        response = self.client.post(
+            '/api/v1/connected-accounts/test-connection/',
+            payload,
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['connected'])
+        mock_smtp.return_value.__enter__.return_value.starttls.assert_called_once()
+        mock_smtp.return_value.__enter__.return_value.login.assert_called_once_with(
+            'sender@example.com',
+            'secret',
+        )
+        mock_imap.return_value.login.assert_called_once_with('sender@example.com', 'secret')
+
+    @patch('campaigns.tasks.smtplib.SMTP')
+    def test_send_email_step_uses_custom_smtp_provider(self, mock_smtp):
+        account = ConnectedEmailAccount.objects.create(
+            organization=self.organization,
+            connected_by=self.user,
+            email_address='sender@example.com',
+            provider='SMTP',
+            access_token='',
+            smtp_host='smtp.example.com',
+            smtp_port=587,
+            smtp_username='sender@example.com',
+            smtp_password='secret',
+            imap_host='imap.example.com',
+            imap_port=993,
+            imap_username='sender@example.com',
+            imap_password='secret',
+        )
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Custom SMTP campaign',
+            status='ACTIVE',
+            connected_account=account,
+        )
+        step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            template_subject='Hello {{firstName}}',
+            template_body='Hi {{firstName}}',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='lead@example.com',
+            first_name='Lead',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=step,
+            next_execution_time=timezone.now(),
+        )
+
+        send_email_step(campaign_lead.id, step.id)
+
+        smtp_client = mock_smtp.return_value.__enter__.return_value
+        mock_smtp.assert_called_once_with('smtp.example.com', 587, timeout=15)
+        smtp_client.starttls.assert_called_once()
+        smtp_client.login.assert_called_once_with('sender@example.com', 'secret')
+        smtp_client.send_message.assert_called_once()
+        campaign_lead.refresh_from_db()
+        self.assertTrue(campaign_lead.last_sent_message_id.startswith('smtp:'))
+
     def test_create_campaign_syncs_sequence_steps_from_builder_payload(self):
         account = ConnectedEmailAccount.objects.create(
             organization=self.organization,

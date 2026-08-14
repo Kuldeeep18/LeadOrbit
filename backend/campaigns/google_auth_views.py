@@ -10,6 +10,8 @@ Architecture notes:
 """
 import json
 import logging
+import imaplib
+import smtplib
 import requests
 from urllib.parse import urlencode, urlparse
 
@@ -384,3 +386,67 @@ class ConnectedAccountsListView(APIView):
             for a in deduped
         ]
         return Response(data)
+
+
+class TestConnectedAccountConnectionView(APIView):
+    """
+    POST /api/v1/connected-accounts/test-connection/
+    Validates custom SMTP and IMAP credentials without saving them.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        payload = request.data or {}
+        smtp_error = self._test_smtp(payload)
+        imap_error = self._test_imap(payload)
+
+        if smtp_error or imap_error:
+            return Response(
+                {
+                    'connected': False,
+                    'smtp': {'ok': smtp_error is None, 'error': smtp_error},
+                    'imap': {'ok': imap_error is None, 'error': imap_error},
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response({'connected': True, 'smtp': {'ok': True}, 'imap': {'ok': True}})
+
+    def _test_smtp(self, payload):
+        host = (payload.get('smtp_host') or '').strip()
+        username = (payload.get('smtp_username') or '').strip()
+        password = payload.get('smtp_password') or ''
+        if not host or not username or not password:
+            return 'smtp_host, smtp_username, and smtp_password are required.'
+        try:
+            port = int(payload.get('smtp_port') or 587)
+            with smtplib.SMTP(host, port, timeout=10) as client:
+                if payload.get('smtp_use_tls', True):
+                    client.starttls()
+                client.login(username, password)
+        except (OSError, smtplib.SMTPException, ValueError) as exc:
+            return str(exc)
+        return None
+
+    def _test_imap(self, payload):
+        host = (payload.get('imap_host') or '').strip()
+        username = (payload.get('imap_username') or '').strip()
+        password = payload.get('imap_password') or ''
+        if not host or not username or not password:
+            return 'imap_host, imap_username, and imap_password are required.'
+        try:
+            port = int(payload.get('imap_port') or 993)
+            if payload.get('imap_use_ssl', True):
+                client = imaplib.IMAP4_SSL(host, port, timeout=10)
+            else:
+                client = imaplib.IMAP4(host, port, timeout=10)
+            try:
+                client.login(username, password)
+            finally:
+                try:
+                    client.logout()
+                except Exception:
+                    pass
+        except (OSError, imaplib.IMAP4.error, ValueError) as exc:
+            return str(exc)
+        return None
