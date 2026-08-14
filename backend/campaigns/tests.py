@@ -124,6 +124,55 @@ class CampaignWorkflowTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
         self.assertIn('smtp_use_tls', response.data)
 
+    def test_custom_connected_account_test_connection_verifies_without_saving(self):
+        payload = {
+            'email_address': 'probe-sender@acme.test',
+            'smtp_host': 'smtp.acme.test',
+            'smtp_port': 587,
+            'smtp_username': 'smtp-user',
+            'smtp_password': 'smtp-pass',
+            'smtp_use_tls': True,
+            'smtp_use_ssl': False,
+            'imap_host': 'imap.acme.test',
+            'imap_port': 993,
+            'imap_username': 'imap-user',
+            'imap_password': 'imap-pass',
+            'imap_use_ssl': True,
+        }
+
+        with patch(
+            'campaigns.google_auth_views.test_mailbox_connection',
+            return_value={'smtp': 'connected', 'imap': 'connected'},
+        ) as mocked_test:
+            response = self.client.post('/api/v1/connected-accounts/test-connection/', payload, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['checks']['smtp'], 'connected')
+        self.assertFalse(ConnectedEmailAccount.objects.filter(email_address='probe-sender@acme.test').exists())
+        mocked_test.assert_called_once()
+
+    def test_custom_connected_account_test_connection_returns_validation_error(self):
+        payload = {
+            'email_address': 'probe-sender@acme.test',
+            'smtp_host': 'smtp.acme.test',
+            'smtp_port': 587,
+            'smtp_username': 'smtp-user',
+            'smtp_password': 'smtp-pass',
+            'smtp_use_tls': True,
+            'smtp_use_ssl': False,
+            'imap_host': 'imap.acme.test',
+            'imap_port': 993,
+            'imap_username': 'imap-user',
+            'imap_password': 'imap-pass',
+            'imap_use_ssl': True,
+        }
+
+        with patch('campaigns.google_auth_views.test_mailbox_connection', side_effect=OSError('auth failed')):
+            response = self.client.post('/api/v1/connected-accounts/test-connection/', payload, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('detail', response.data)
+
     def test_custom_connected_account_passwords_are_encrypted_at_rest(self):
         payload = {
             'email_address': 'encrypted-sender@acme.test',
