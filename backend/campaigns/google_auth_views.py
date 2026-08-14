@@ -26,6 +26,7 @@ from rest_framework import serializers, status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
 from .models import ConnectedEmailAccount
+from .mailbox_service import test_mailbox_connection
 
 logger = logging.getLogger(__name__)
 
@@ -485,6 +486,48 @@ class ConnectedAccountsListView(APIView):
             _serialize_connected_account(account),
             status=status.HTTP_201_CREATED if created else status.HTTP_200_OK,
         )
+
+
+class ConnectedAccountConnectionTestView(APIView):
+    """
+    POST /api/v1/connected-accounts/test-connection/
+    Verifies SMTP auth and IMAP login without saving the mailbox.
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = CustomMailboxAccountSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        payload = serializer.validated_data
+
+        account = ConnectedEmailAccount(
+            organization=request.user.organization,
+            connected_by=request.user,
+            provider='CUSTOM',
+            email_address=payload['email_address'],
+            smtp_host=payload['smtp_host'].strip(),
+            smtp_port=payload['smtp_port'],
+            smtp_username=payload['smtp_username'],
+            smtp_password=payload['smtp_password'],
+            smtp_use_tls=payload.get('smtp_use_tls', True),
+            smtp_use_ssl=payload.get('smtp_use_ssl', False),
+            imap_host=payload['imap_host'].strip(),
+            imap_port=payload['imap_port'],
+            imap_username=payload['imap_username'],
+            imap_password=payload['imap_password'],
+            imap_use_ssl=payload.get('imap_use_ssl', True),
+        )
+
+        try:
+            checks = test_mailbox_connection(account)
+        except Exception as exc:
+            logger.warning("[ConnectedAccounts] Custom mailbox connection test failed: %s", exc)
+            return Response(
+                {'detail': 'Could not connect to the custom mailbox with the supplied settings.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        return Response({'email': account.email_address, 'checks': checks}, status=status.HTTP_200_OK)
 
 
 class ConnectedAccountDetailView(APIView):
