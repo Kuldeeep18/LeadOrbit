@@ -28,6 +28,13 @@ Primary datastore is PostgreSQL. All models inherit from a `TenantModel` that en
 - `global_unsubscribe`: BOOLEAN
 - *Constraint: UNIQUE (organization_id, email)*
 
+### LeadNote
+- id: UUID (PK)
+- lead_id: UUID (FK)
+- content: TEXT
+- created_at: TIMESTAMP
+-
+
 ### `LeadTag`
 - `id`: UUID (PK)
 - `organization_id`: UUID (FK)
