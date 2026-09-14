@@ -93,3 +93,25 @@ class BlockedDomain(TenantModel):
 
     def __str__(self):
         return self.domain
+
+class LeadScrapeJob(TenantModel):
+    STATUS_CHOICES = (
+        ('PENDING', 'Pending'),
+        ('RUNNING', 'Running'),
+        ('COMPLETED', 'Completed'),
+        ('FAILED', 'Failed'),
+    )
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    query = models.CharField(max_length=255)
+    limit = models.IntegerField(default=50)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='PENDING')
+    leads_found = models.IntegerField(default=0)
+    error_message = models.TextField(blank=True, null=True)
+    started_at = models.DateTimeField(null=True, blank=True)
+    completed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"Scrape Job {self.id} - {self.query} ({self.status})"
