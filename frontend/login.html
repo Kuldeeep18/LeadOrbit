@@ -158,8 +158,9 @@
             if (form) {
                 form.addEventListener('submit', async (e) => {
                     e.preventDefault();
-                    const email = document.getElementById('floatingInput').value;
+                    const email = document.getElementById('floatingInput').value.trim();
                     const password = document.getElementById('floatingPassword').value;
+
                     try {
                         const btn = form.querySelector('button[type="submit"]');
                         btn.disabled = true;
