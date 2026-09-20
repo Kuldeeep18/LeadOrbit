@@ -27,6 +27,7 @@ from campaigns.google_auth_views import (
     GoogleOAuthLoginView,
     GoogleOAuthCallbackView,
     ConnectedAccountsListView,
+    ConnectedAccountConnectionTestView,
     ConnectedAccountDetailView,
 )
 
@@ -66,6 +67,7 @@ urlpatterns = [
     path('auth/google/login', GoogleOAuthLoginView.as_view(), name='google_oauth_login_fallback'),
     path('auth/google/callback', GoogleOAuthCallbackView.as_view(), name='google_oauth_callback_fallback'),
     path('api/v1/connected-accounts/', ConnectedAccountsListView.as_view(), name='connected_accounts'),
+    path('api/v1/connected-accounts/test-connection/', ConnectedAccountConnectionTestView.as_view(), name='connected_account_connection_test'),
     path('api/v1/connected-accounts/<uuid:account_id>/', ConnectedAccountDetailView.as_view(), name='connected_account_detail'),
     path('api/v1/unsubscribe/<uuid:lead_id>/<str:token>/', unsubscribe_view, name='unsubscribe'),
     path('api/v1/', include(router.urls)),

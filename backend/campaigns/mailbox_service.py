@@ -105,6 +105,29 @@ def _connect_imap(account):
     return client
 
 
+def test_mailbox_connection(account):
+    """Verify both SMTP and IMAP credentials for a custom mailbox."""
+    smtp_client = _connect_smtp(account)
+    try:
+        smtp_client.noop()
+    finally:
+        try:
+            smtp_client.quit()
+        except Exception:
+            smtp_client.close()
+
+    imap_client = _connect_imap(account)
+    try:
+        imap_client.noop()
+    finally:
+        imap_client.logout()
+
+    return {
+        'smtp': 'connected',
+        'imap': 'connected',
+    }
+
+
 def _looks_like_bounce(message):
     """Heuristically identify common bounce messages from subject or sender."""
     subject = str(message.get('Subject', '') or '').lower()
