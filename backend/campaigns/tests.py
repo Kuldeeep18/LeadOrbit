@@ -9,6 +9,7 @@ from django.test import override_settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
+from freezegun import freeze_time
 
 from campaigns.models import Campaign, CampaignLead, ConnectedEmailAccount, SequenceStep
 from campaigns.fields import decrypt_mailbox_credential, encrypt_mailbox_credential
@@ -495,6 +496,74 @@ class CampaignWorkflowTests(APITestCase):
                     campaign_lead.refresh_from_db()
                 self.assertEqual(campaign_lead.status, 'FINISHED')
                 self.assertEqual(campaign_lead.last_sent_message_id, 'msg-2')
+                
+    def test_multi_step_sequence_progresses_through_email_wait_and_linkedin(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Multi-step sequence flow',
+            status='ACTIVE',
+        )
+        email_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Welcome',
+            template_body='Hi {{firstName}}',
+        )
+        wait_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=2,
+            channel_type='WAIT',
+            delay_minutes=1440,
+        )
+        linkedin_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=3,
+            channel_type='LINKEDIN',
+            delay_minutes=5,
+            template_body='Connect on LinkedIn',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='multi-step@acme.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='ENROLLED',
+        )
+
+        with freeze_time('2026-01-01 12:00:00') as frozen_time:
+            with patch(
+                'campaigns.tasks.send_email_step.delay',
+                side_effect=lambda cid, sid: send_email_step(cid, sid),
+            ) as mocked_delay:
+                processed = process_active_leads_once(now=timezone.now())
+
+            self.assertEqual(processed, 1)
+            mocked_delay.assert_called_once_with(campaign_lead.id, email_step.id)
+            campaign_lead.refresh_from_db()
+            self.assertEqual(campaign_lead.current_step_id, wait_step.id)
+            self.assertEqual(campaign_lead.status, 'ACTIVE')
+
+            frozen_time.tick(delta=timedelta(hours=24))
+            processed = process_active_leads_once(now=timezone.now())
+            self.assertEqual(processed, 1)
+            campaign_lead.refresh_from_db()
+            self.assertEqual(campaign_lead.current_step_id, linkedin_step.id)
+            self.assertEqual(campaign_lead.status, 'ACTIVE')
+
+            frozen_time.tick(delta=timedelta(minutes=5, seconds=1))
+            processed = process_active_leads_once(now=timezone.now())
+            self.assertEqual(processed, 1)
+            campaign_lead.refresh_from_db()
+            self.assertIsNone(campaign_lead.current_step)
+            self.assertEqual(campaign_lead.status, 'FINISHED')
 
     def test_campaign_auto_completes_when_all_enrolled_leads_finish(self):
         campaign = Campaign.objects.create(
