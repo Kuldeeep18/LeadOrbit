@@ -118,3 +118,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.0/howto/static-files/
 
 STATIC_URL = "static/"
+
+# Maximum size allowed for CSV uploads (default 10MB)
+MAX_CSV_UPLOAD_SIZE = int(os.getenv('MAX_CSV_UPLOAD_SIZE', 10 * 1024 * 1024))
+

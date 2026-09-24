@@ -201,6 +201,39 @@ class LeadIsolationAPITests(APITestCase):
         self.assertFalse(Lead.objects.filter(organization=self.org_a).exists())
         self.assertTrue(Lead.objects.filter(id=self.lead_b.id).exists())
 
+    def test_import_csv_oversized_file_rejected(self):
+        self.client.force_authenticate(self.user_a)
+        with self.settings(MAX_CSV_UPLOAD_SIZE=50):
+            file_data = b"email,first_name,last_name\n" + b"a" * 100 + b"@example.com,John,Doe\n"
+            oversized_file = SimpleUploadedFile(
+                "too_large.csv",
+                file_data,
+                content_type="text/csv"
+            )
+            response = self.client.post(
+                '/api/v1/leads/import_csv/',
+                {'file': oversized_file},
+                format='multipart'
+            )
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+            self.assertIn("File size exceeds the limit", response.data['error'])
+
+    def test_import_csv_normal_size_file_accepted(self):
+        self.client.force_authenticate(self.user_a)
+        with self.settings(MAX_CSV_UPLOAD_SIZE=1000):
+            file_data = b"email,first_name,last_name\n" + b"john@example.com,John,Doe\n"
+            normal_file = SimpleUploadedFile(
+                "normal.csv",
+                file_data,
+                content_type="text/csv"
+            )
+            response = self.client.post(
+                '/api/v1/leads/import_csv/',
+                {'file': normal_file},
+                format='multipart'
+            )
+            self.assertEqual(response.status_code, status.HTTP_202_ACCEPTED)
+
     def test_blocked_domain_create_normalizes_domain_for_current_organization(self):
         self.client.force_authenticate(self.user_a)
 
