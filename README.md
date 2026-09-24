@@ -129,6 +129,37 @@ TWILIO_AUTH_TOKEN=
 TWILIO_PHONE_NUMBER=
 ```
 
+#### Environment Variable Descriptions
+
+- `DEBUG` – Enables or disables Django's debug mode.
+- `SECRET_KEY` – Secret key used by Django for cryptographic operations.
+- `BACKEND_BASE_URL` – Base URL where the backend server is hosted.
+- `FRONTEND_BASE_URL` – Base URL where the frontend application is served.
+
+**Celery**
+- `CELERY_TASK_ALWAYS_EAGER` – Executes Celery tasks synchronously during development.
+- `CELERY_BROKER_URL` – URL of the message broker (Redis).
+- `ENABLE_AUTO_REPLY_DETECTION` – Enables background email reply polling.
+- `LAUNCH_IMMEDIATE_PASSES` – Controls immediate campaign processing behavior.
+
+**AI Integrations**
+- `OPENROUTER_API_KEY` – API key for AI-powered email draft generation.
+- `OPENROUTER_MODEL` – AI model used for draft generation.
+- `OPENROUTER_APP_URL` – Application URL sent to OpenRouter.
+- `OPENROUTER_APP_NAME` – Application name used by OpenRouter.
+- `GEMINI_API_KEY` – API key for Gemini-based personalization.
+
+**Google OAuth**
+- `GOOGLE_CLIENT_ID` – Google OAuth client ID.
+- `GOOGLE_CLIENT_SECRET` – Google OAuth client secret.
+- `GOOGLE_REDIRECT_URI` – OAuth callback URL registered in Google Cloud.
+
+**Twilio**
+- `TWILIO_ACCOUNT_SID` – Twilio account identifier.
+- `TWILIO_AUTH_TOKEN` – Authentication token for the Twilio account.
+- `TWILIO_PHONE_NUMBER` – Twilio phone number used for SMS and voice calls.
+
+
 ### 3. Run migrations
 
 ```sh
