@@ -675,7 +675,7 @@ class CampaignWorkflowTests(APITestCase):
         )
 
         with patch('campaigns.tasks.send_gmail', side_effect=Exception('gmail disabled')):
-            send_email_step(campaign_lead.id, email_step.id)
+            send_email_step.run(campaign_lead.id, email_step.id)
 
         campaign_lead.refresh_from_db()
         self.assertEqual(campaign_lead.current_step_id, email_step.id)
