@@ -541,6 +541,43 @@ def rewrite_email_links(html_body, campaign_lead_id, step_id):
 # -----------------------------------
 
 
+def _resolve_sandbox_recipient(campaign):
+    """
+    Determines where Sandbox Mode emails should be redirected, per the spec:
+    "send the email to the logged-in user's address instead."
+
+    Priority:
+      1. An explicit `sandbox_email` override stored in campaign.settings —
+         this must win over the creator default, since it's the whole point
+         of exposing an override field: letting a rep deliberately test-deliver
+         to a different inbox than their own.
+      2. `campaign.created_by.email` — the actual logged-in user who created
+         the campaign. This is the literal "logged-in user" from the spec,
+         captured at creation time since Celery tasks have no request/session
+         of their own to read a "logged-in user" from directly.
+      3. The email of whoever connected the campaign's sending account, as a
+         last-resort fallback for campaigns created before this field existed
+         (created_by will be null on those).
+
+    Returns None if no safe destination can be resolved, so callers can
+    decide how to fail safely instead of silently emailing a real lead.
+    """
+    settings_dict = campaign.settings if isinstance(campaign.settings, dict) else {}
+
+    override = str(settings_dict.get('sandbox_email') or '').strip()
+    if override:
+        return override
+
+    if campaign.created_by_id and campaign.created_by.email:
+        return campaign.created_by.email
+
+    account = campaign.connected_account
+    if account and account.connected_by_id and account.connected_by.email:
+        return account.connected_by.email
+
+    return None
+
+
 @shared_task
 def send_email_step(campaign_lead_id, step_id):
     """
@@ -548,7 +585,12 @@ def send_email_step(campaign_lead_id, step_id):
     """
     
     try:
-        clead = CampaignLead.objects.select_related('lead', 'campaign__connected_account').get(id=campaign_lead_id)
+        clead = CampaignLead.objects.select_related(
+            'lead',
+            'campaign__connected_account',
+            'campaign__created_by',
+            'campaign__connected_account__connected_by',
+        ).get(id=campaign_lead_id)
         step = SequenceStep.objects.get(id=step_id)
 
         if clead.lead.global_unsubscribe:
@@ -587,40 +629,88 @@ def send_email_step(campaign_lead_id, step_id):
         body = rewrite_email_links(body, campaign_lead_id, step_id)
         # -------------------------------------------
 
+        # --- Sandbox Mode: redirect delivery without touching personalization,
+        # analytics, delays, or workflow progression below. ---------------------
+        original_recipient = clead.lead.email
+        recipient_email = original_recipient
+        sandbox_mode = bool((clead.campaign.settings or {}).get('sandbox_mode'))
+
+        if sandbox_mode:
+            sandbox_recipient = _resolve_sandbox_recipient(clead.campaign)
+            if sandbox_recipient:
+                recipient_email = sandbox_recipient
+                subject = f"[TEST SANDBOX] {subject}"
+                logger.info(
+                    "Sandbox Email Queued | Original Recipient: %s | Delivered To: %s | Campaign: %s | Step: %s",
+                    original_recipient, recipient_email, clead.campaign.name, step.step_order,
+                )
+            else:
+                # Fail safe: if we can't resolve a test inbox, do NOT risk emailing
+                # the real lead under a sandboxed campaign. Retry later instead.
+                logger.warning(
+                    "Sandbox Mode is enabled for campaign '%s' but no sandbox recipient could be "
+                    "resolved (no sandbox_email override and no connected account owner). "
+                    "Holding send and retrying in 15 minutes.",
+                    clead.campaign.name,
+                )
+                clead.next_execution_time = timezone.now() + timedelta(minutes=15)
+                clead.save(update_fields=['next_execution_time'])
+                return
+        # -------------------------------------------------------------------------
+
         account = clead.campaign.connected_account
         if account:
             try:
                 if account.provider == 'GOOGLE':
                     message_id = send_gmail(
                         account,
-                        clead.lead.email,
+                        recipient_email,
                         subject,
                         body,
                         unsubscribe_url=build_unsubscribe_url(clead.lead),
                     )
-                    logger.info(f"Gmail SENT to {clead.lead.email} | msg_id={message_id}")
+                    logger.info(f"Gmail SENT to {recipient_email} | msg_id={message_id}")
                 elif account.provider == 'CUSTOM':
                     message_id = send_smtp_email(
                         account,
-                        clead.lead.email,
+                        recipient_email,
                         subject,
                         body,
                         unsubscribe_url=build_unsubscribe_url(clead.lead),
                     )
-                    logger.info(f"SMTP SENT to {clead.lead.email} | msg_id={message_id}")
+                    logger.info(f"SMTP SENT to {recipient_email} | msg_id={message_id}")
                 else:
                     raise RuntimeError(f"Unsupported email provider: {account.provider}")
                 clead.last_sent_message_id = message_id
                 clead.save(update_fields=['last_sent_message_id'])
+
+                if sandbox_mode:
+                    logger.info(
+                        "Sandbox Email Sent\n"
+                        "  Original Recipient: %s\n"
+                        "  Delivered To:       %s\n"
+                        "  Subject:            %s\n"
+                        "  Campaign:           %s (step %s)",
+                        original_recipient, recipient_email, subject,
+                        clead.campaign.name, step.step_order,
+                    )
             except Exception as send_err:
-                logger.error(f"Email send failed for {clead.lead.email}: {send_err}")
+                logger.error(f"Email send failed for {recipient_email}: {send_err}")
                 # Restore next_execution_time so the lead can be retried later.
                 clead.next_execution_time = timezone.now() + timedelta(minutes=15)
                 clead.save(update_fields=['next_execution_time'])
                 return
         else:
-            logger.info(f"Mock SENDING EMAIL to {clead.lead.email} | Subject: {subject}")
+            if sandbox_mode:
+                logger.info(
+                    f"Mock SANDBOX SENDING EMAIL to {recipient_email} "
+                    f"(would have gone to {original_recipient}) | Subject: {subject}"
+                )
+            else:
+                logger.info(f"Mock SENDING EMAIL to {recipient_email} | Subject: {subject}")
 
+        # Sandbox sends still advance the lead through the workflow normally,
+        # so reps see the exact same progression/timing a real send would produce.
         _advance_to_next_step(clead, step)
 
     except Exception as e:
