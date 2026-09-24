@@ -51,6 +51,52 @@ Execution status by step type:
 - Fully implemented: `EMAIL`, `SMS`, `CALL`, `WAIT`, `CONDITION_OPEN`, `CONDITION_REPLY`, `CONDITION_CLICK`
 - Builder-visible but currently placeholder/auto-advance steps: `WHATSAPP`, `LINKEDIN`, `MANUAL`
 
+## 🚀 Quick Start
+
+Follow these steps to get LeadOrbit running locally:
+
+```sh
+# Clone the repository
+git clone https://github.com/Kuldeeep18/LeadOrbit.git
+
+# Navigate to the project directory
+cd LeadOrbit
+
+# Create and activate a virtual environment
+python -m venv .venv
+
+# Windows
+.venv\Scripts\activate
+
+# macOS/Linux
+source .venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
+
+# Apply database migrations
+python backend/manage.py migrate
+
+# Start the backend server
+cd backend
+python manage.py runserver 8000
+```
+
+In a new terminal, serve the frontend:
+
+```sh
+cd frontend
+python -m http.server 8080
+```
+
+Open your browser and visit:
+
+```
+http://127.0.0.1:8080/login.html
+```
+
+For detailed configuration, including environment variables and background jobs, refer to the **Local Setup** and **Background Jobs** sections below.
+
 ## Stack
 
 - Backend: Django 5, Django REST Framework, Simple JWT, Celery, `django-cors-headers`
@@ -128,6 +174,37 @@ TWILIO_ACCOUNT_SID=
 TWILIO_AUTH_TOKEN=
 TWILIO_PHONE_NUMBER=
 ```
+
+#### Environment Variable Descriptions
+
+- `DEBUG` – Enables or disables Django's debug mode.
+- `SECRET_KEY` – Secret key used by Django for cryptographic operations.
+- `BACKEND_BASE_URL` – Base URL where the backend server is hosted.
+- `FRONTEND_BASE_URL` – Base URL where the frontend application is served.
+
+**Celery**
+- `CELERY_TASK_ALWAYS_EAGER` – Executes Celery tasks synchronously during development.
+- `CELERY_BROKER_URL` – URL of the message broker (Redis).
+- `ENABLE_AUTO_REPLY_DETECTION` – Enables background email reply polling.
+- `LAUNCH_IMMEDIATE_PASSES` – Controls immediate campaign processing behavior.
+
+**AI Integrations**
+- `OPENROUTER_API_KEY` – API key for AI-powered email draft generation.
+- `OPENROUTER_MODEL` – AI model used for draft generation.
+- `OPENROUTER_APP_URL` – Application URL sent to OpenRouter.
+- `OPENROUTER_APP_NAME` – Application name used by OpenRouter.
+- `GEMINI_API_KEY` – API key for Gemini-based personalization.
+
+**Google OAuth**
+- `GOOGLE_CLIENT_ID` – Google OAuth client ID.
+- `GOOGLE_CLIENT_SECRET` – Google OAuth client secret.
+- `GOOGLE_REDIRECT_URI` – OAuth callback URL registered in Google Cloud.
+
+**Twilio**
+- `TWILIO_ACCOUNT_SID` – Twilio account identifier.
+- `TWILIO_AUTH_TOKEN` – Authentication token for the Twilio account.
+- `TWILIO_PHONE_NUMBER` – Twilio phone number used for SMS and voice calls.
+
 
 ### 3. Run migrations
 
