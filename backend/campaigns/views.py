@@ -269,8 +269,17 @@ class CampaignViewSet(viewsets.ModelViewSet):
         """Get paginated list of enrolled leads with metrics."""
         campaign = self.get_object()
         status_filter = request.query_params.get('status')
-        limit = int(request.query_params.get('limit', 50))
-        offset = int(request.query_params.get('offset', 0))
+        try:
+            limit = int(request.query_params.get("limit", 50))
+            offset = int(request.query_params.get("offset", 0))
+        except (TypeError, ValueError):
+            return Response(
+                {"error": "limit and offset must be integers."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        limit = max(1, min(limit, 200))
+
+        offset = max(0, offset)
 
         leads_qs = campaign.enrolled_leads.select_related('lead').order_by('-updated_at')
 
