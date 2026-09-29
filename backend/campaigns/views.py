@@ -11,7 +11,7 @@ from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 
-from leads.models import Lead
+from leads.models import Lead, LeadEngagementEvent
 from users.permissions import IsOrgManager
 
 from .models import Campaign, CampaignLead, SequenceStep, EmailTemplate
@@ -439,6 +439,8 @@ class WebhookView(APIView):
                 )
 
                 for cl in cleads:
+                    event_type_mapped = None
+                    metadata = {}
                     if event_type == 'bounce':
                         _mark_campaign_lead_bounced(
                             cl,
@@ -447,6 +449,12 @@ class WebhookView(APIView):
                             bounce_code=bounce_details['bounce_code'],
                             bounce_reason=bounce_details['bounce_reason'],
                         )
+                        event_type_mapped = 'EMAIL_BOUNCED'
+                        metadata = {
+                            'bounce_type': bounce_details['bounce_type'],
+                            'bounce_code': bounce_details['bounce_code'],
+                            'bounce_reason': bounce_details['bounce_reason'],
+                        }
                     elif event_type == 'reply':
                         cl.last_replied_at = now
                         # Only hard-stop if there is no reply-yes branch configured.
@@ -459,16 +467,29 @@ class WebhookView(APIView):
                             cl.save(update_fields=['last_replied_at'])
                             if cl.current_step and cl.current_step.channel_type == 'CONDITION_REPLY':
                                 _execute_condition_reply_step(cl, cl.current_step, now=now)
+                        event_type_mapped = 'EMAIL_REPLIED'
                     elif event_type == 'open':
                         cl.last_opened_at = now
                         cl.save(update_fields=['last_opened_at'])
                         if cl.current_step and cl.current_step.channel_type == 'CONDITION_OPEN':
                             _execute_condition_open_step(cl, cl.current_step, now=now)
+                        event_type_mapped = 'EMAIL_OPENED'
                     elif event_type == 'click':
                         cl.last_clicked_at = now
                         cl.save(update_fields=['last_clicked_at'])
                         if cl.current_step and cl.current_step.channel_type == 'CONDITION_CLICK':
                             _execute_condition_click_step(cl, cl.current_step, now=now)
+                        event_type_mapped = 'LINK_CLICKED'
+
+                    if event_type_mapped:
+                        LeadEngagementEvent.objects.create(
+                            organization=cl.organization,
+                            lead=cl.lead,
+                            campaign=cl.campaign,
+                            event_type=event_type_mapped,
+                            occurred_at=now,
+                            metadata=metadata,
+                        )
             except Exception as e:
                 logger.exception(
                     'Webhook processing error for event=%s email=%s: %s',
