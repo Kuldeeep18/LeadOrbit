@@ -1,7 +1,7 @@
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import status
 from rest_framework.test import APITestCase
-
+from django.test import override_settings
 from leads.models import BlockedDomain, Lead, Tag, LeadTag, LeadImportJob
 from leads.tasks import import_leads_from_csv
 from tenants.models import Organization
@@ -89,6 +89,38 @@ class LeadImportTests(APITestCase):
         self.assertEqual(job.error_log[0]['error'], 'Invalid email format')
         self.assertEqual(job.error_log[1]['error'], 'Missing email address')
 
+class CsvUploadSizeValidationTests(APITestCase):
+    def setUp(self):
+        self.organization = Organization.objects.create(name="Upload Limit Org")
+        self.user = _make_user(
+            self.organization,
+            email="upload-limit@example.com",
+        )
+
+    @override_settings(MAX_CSV_UPLOAD_SIZE=10)
+    def test_import_csv_rejects_oversized_file(self):
+        self.client.force_authenticate(self.user)
+
+        uploaded_file = SimpleUploadedFile(
+            "too-large.csv",
+            b"email\n" + b"x" * 11,
+            content_type="text/csv",
+        )
+
+        response = self.client.post(
+            "/api/v1/leads/import_csv/",
+            {"file": uploaded_file},
+            format="multipart",
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("maximum allowed upload size", response.data["error"])
+        self.assertEqual(
+            LeadImportJob.objects.filter(
+                organization=self.organization
+            ).count(),
+            0,
+        )
 
 class LeadIsolationAPITests(APITestCase):
     def setUp(self):

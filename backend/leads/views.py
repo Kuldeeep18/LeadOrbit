@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db.models import Q
 from rest_framework import viewsets, parsers, status
 from rest_framework.pagination import PageNumberPagination
@@ -96,7 +97,11 @@ class LeadViewSet(viewsets.ModelViewSet):
         file_obj = request.FILES.get('file')
         if not file_obj:
             return Response({"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST)
-
+        if file_obj.size > settings.MAX_CSV_UPLOAD_SIZE:
+            return Response(
+                {"error": "CSV file exceeds the maximum allowed upload size."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
         job = LeadImportJob.objects.create(
             organization=request.user.organization,
             filename=file_obj.name or 'lead-import.csv',
