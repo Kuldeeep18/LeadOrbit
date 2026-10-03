@@ -1,6 +1,7 @@
 from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import status
 from rest_framework.test import APITestCase
+from django.urls import reverse
 
 from leads.models import BlockedDomain, Lead, Tag, LeadTag, LeadImportJob
 from leads.tasks import import_leads_from_csv
@@ -225,6 +226,27 @@ class LeadIsolationAPITests(APITestCase):
         domains = {item['domain'] for item in response.data}
         self.assertEqual(domains, {'orga.test'})
 
+    def test_import_csv_rejects_oversized_file(self):
+        self.client.force_authenticate(self.user_a)
+
+        large_file = SimpleUploadedFile(
+            "large.csv", b"x" * (10 * 1024 * 1024 + 1),
+            content_type="text/csv",
+            )
+        url = reverse("leads-import-csv")
+        response = self.client.post(url,
+         {"file":large_file},
+         format="multipart",
+         )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(response.data["error"], "CSV file exceeds the 10 MB limit.")
+
+        self.assertEqual(   
+            LeadImportJob.objects.filter(organization=self.org_a).count(),
+            0,
+        )
+
     def test_import_history_endpoint_is_scoped_and_paginated(self):
         LeadImportJob.objects.create(
             organization=self.org_a,
@@ -250,6 +272,8 @@ class LeadIsolationAPITests(APITestCase):
         self.assertIn('results', response.data)
         self.assertEqual(response.data['count'], 1)
         self.assertEqual(response.data['results'][0]['filename'], 'orga.csv')
+
+
 
 
 # ── New tests for Issue #244 ───────────────────────────────────────────────────

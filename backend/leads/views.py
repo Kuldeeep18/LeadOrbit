@@ -4,6 +4,9 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from users.permissions import IsOrgManager
+# Maximum allowed CSV upload size (10 MB)
+MAX_CSV_UPLOAD_SIZE = 10 * 1024 * 1024
+
 from .models import BlockedDomain, Lead, LeadImportJob, Tag, LeadTag
 from .serializers import BlockedDomainSerializer, LeadImportJobSerializer, LeadSerializer, TagSerializer
 
@@ -97,6 +100,10 @@ class LeadViewSet(viewsets.ModelViewSet):
         if not file_obj:
             return Response({"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST)
 
+        if file_obj.size > MAX_CSV_UPLOAD_SIZE:
+            return Response(
+                {"error": "CSV file exceeds the 10 MB limit."},status=status.HTTP_400_BAD_REQUEST,
+            )
         job = LeadImportJob.objects.create(
             organization=request.user.organization,
             filename=file_obj.name or 'lead-import.csv',
