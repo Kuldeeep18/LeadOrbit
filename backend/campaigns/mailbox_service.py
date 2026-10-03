@@ -55,7 +55,7 @@ def _connect_smtp(account):
     return client
 
 
-def send_smtp_email(account, to_email, subject, body_html, unsubscribe_url=None):
+def send_smtp_email(account, to_email, subject, body_html, unsubscribe_url=None, message_id=None):
     """
     Send an HTML email via a custom SMTP account and return the RFC Message-ID.
     """
@@ -64,8 +64,13 @@ def send_smtp_email(account, to_email, subject, body_html, unsubscribe_url=None)
     message['From'] = formataddr(('LeadOrbit', account.email_address))
     message['Subject'] = subject
 
-    message_id = make_msgid(domain=(account.email_address.split('@', 1)[-1] if '@' in account.email_address else None))
-    message['Message-ID'] = message_id
+    # Use provided message_id or generate one
+    if message_id:
+        # message_id is already a fully formatted Message-ID
+        message['Message-ID'] = message_id
+    else:
+        message_id = make_msgid(domain=(account.email_address.split('@', 1)[-1] if '@' in account.email_address else None))
+        message['Message-ID'] = message_id
 
     if unsubscribe_url:
         message['List-Unsubscribe'] = f"<{unsubscribe_url}>"
@@ -198,3 +203,5 @@ def mark_imap_message_as_read(account, message_id):
             client.logout()
         except Exception:
             pass
+
+        
