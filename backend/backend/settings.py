@@ -142,7 +142,13 @@ REST_FRAMEWORK = {
     ),
     'DEFAULT_PERMISSION_CLASSES': (
         'rest_framework.permissions.IsAuthenticated',
-    )
+    ),
+    'DEFAULT_THROTTLE_RATES': {
+        'login': '10/min',
+        'signup': '5/min',
+        'campaign_launch': '20/min',
+        'ai_draft': '15/min',
+    },
 }
 
 # Celery Configuration

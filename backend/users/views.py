@@ -8,8 +8,14 @@ from .models import User
 from .permissions import IsOrgAdmin
 from .serializers import UserSerializer, RegisterSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
+from backend.throttles import SignupRateThrottle
 
 class AuthViewSet(viewsets.GenericViewSet):
+    def get_throttles(self):
+        if self.action == 'register':
+            return [SignupRateThrottle()]
+        return super().get_throttles()
+
     @action(detail=False, methods=['post'], permission_classes=[AllowAny])
     def register(self, request):
         serializer = RegisterSerializer(data=request.data)
