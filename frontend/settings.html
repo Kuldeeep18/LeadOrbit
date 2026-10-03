@@ -400,7 +400,7 @@
         }
 
         async function deleteConnectedAccount(accountId) {
-            showConfirmModal('Remove Email Account', 'Remove this connected sender account from LeadOrbit?', 'Remove', async () => {
+            showConfirmModal('Remove Email Account', 'Warning: Deleting this sender account will immediately pause all campaigns currently scheduled to send from it. Are you sure you want to disconnect?', 'Remove', async () => {
                 try {
                     const res = await fetchWithAuth(`/connected-accounts/${accountId}/`, { method: 'DELETE' });
                     if (!res.ok && res.status !== 204) {
