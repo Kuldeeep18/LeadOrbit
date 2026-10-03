@@ -606,3 +606,13 @@ if (document.readyState === 'loading') {
 } else {
     initKeyboardShortcuts();
 }
+    
+const originalTitle = document.title;
+
+document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+        document.title = "Come back to LeadOrbit!";
+    } else {
+        document.title = originalTitle;
+    }
+});
