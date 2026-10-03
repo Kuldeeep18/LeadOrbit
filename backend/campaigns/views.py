@@ -13,9 +13,9 @@ from rest_framework.response import Response
 
 from leads.models import Lead
 from users.permissions import IsOrgManager
-
 from .models import Campaign, CampaignLead, SequenceStep, EmailTemplate
-from .serializers import CampaignSerializer, SequenceStepSerializer, EmailTemplateSerializer
+from .utils import log_step_event
+from .serializers import CampaignSerializer, SequenceStepSerializer, EmailTemplateSerializer, StepStatsSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -264,6 +264,31 @@ class CampaignViewSet(viewsets.ModelViewSet):
             'click_through_rate': round((clicked / total * 100) if total > 0 else 0, 2),
         })
 
+    @action(detail=True, methods=['get'], url_path='step-stats')
+    def step_stats(self, request, pk=None):
+        """Per-step Sent/Opened/Clicked/Replied breakdown for the sequence."""
+        from django.db.models import Count, Q
+        campaign = self.get_object()
+
+        rows = (
+            campaign.step_events
+            .values('step_order', 'channel_type')
+            .annotate(
+                sent=Count('campaign_lead', filter=Q(event_type='SENT'), distinct=True),
+                opened=Count('campaign_lead', filter=Q(event_type='OPENED'), distinct=True),
+                clicked=Count('campaign_lead', filter=Q(event_type='CLICKED'), distinct=True),
+                replied=Count('campaign_lead', filter=Q(event_type='REPLIED'), distinct=True),
+            )
+            .order_by('step_order')
+        )
+
+        serializer = StepStatsSerializer(rows, many=True)
+        return Response({
+            'campaign_id': str(campaign.id),
+            'campaign_name': campaign.name,
+            'steps': serializer.data,
+        })
+
     @action(detail=True, methods=['get'])
     def leads(self, request, pk=None):
         """Get paginated list of enrolled leads with metrics."""
@@ -449,6 +474,8 @@ class WebhookView(APIView):
                         )
                     elif event_type == 'reply':
                         cl.last_replied_at = now
+                        if cl.current_step:
+                            log_step_event(cl, cl.current_step.step_order, cl.current_step.channel_type, 'REPLIED')
                         # Only hard-stop if there is no reply-yes branch configured.
                         if not _campaign_has_condition_reply_yes_branch(cl.campaign):
                             cl.status = 'REPLIED'
@@ -462,11 +489,15 @@ class WebhookView(APIView):
                     elif event_type == 'open':
                         cl.last_opened_at = now
                         cl.save(update_fields=['last_opened_at'])
+                        if cl.current_step:
+                            log_step_event(cl, cl.current_step.step_order, cl.current_step.channel_type, 'OPENED')
                         if cl.current_step and cl.current_step.channel_type == 'CONDITION_OPEN':
                             _execute_condition_open_step(cl, cl.current_step, now=now)
                     elif event_type == 'click':
                         cl.last_clicked_at = now
                         cl.save(update_fields=['last_clicked_at'])
+                        if cl.current_step:
+                            log_step_event(cl, cl.current_step.step_order, cl.current_step.channel_type, 'CLICKED')
                         if cl.current_step and cl.current_step.channel_type == 'CONDITION_CLICK':
                             _execute_condition_click_step(cl, cl.current_step, now=now)
             except Exception as e:
@@ -800,6 +831,12 @@ class ClickTrackingView(APIView):
             lead = CampaignLead.objects.get(id=campaign_lead_id)
             lead.last_clicked_at = timezone.now()
             lead.save(update_fields=['last_clicked_at'])
+
+            try:
+                clicked_step = SequenceStep.objects.get(id=step_id)
+                log_step_event(lead, clicked_step.step_order, clicked_step.channel_type, 'CLICKED')
+            except SequenceStep.DoesNotExist:
+                pass  # step edited/removed since the email was sent
 
             # Optional: Agar conditionally aage badhana hai sequence ko
             if lead.current_step and lead.current_step.channel_type == 'CONDITION_CLICK':

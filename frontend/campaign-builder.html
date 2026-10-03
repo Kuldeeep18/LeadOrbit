@@ -239,6 +239,14 @@
             color: #94a3b8;
         }
 
+        .flow-node .step-stats-bar {
+            font-size: 0.7rem;
+            color: #64748b;
+            margin-top: 4px;
+            padding-top: 4px;
+            border-top: 1px dashed #e2e8f0;
+        }
+        
         .node-error {
             color: #ef4444;
             font-size: 0.75rem;
@@ -1246,7 +1254,19 @@
         let aiComposerStep = null;
         let aiConversation = [];
         let aiLatestDraft = null;
+        let stepStatsByOrder = {};
 
+        async function loadStepStats() {
+            if (!campaignId) return;
+            try {
+                const res = await fetchWithAuth(`/campaigns/${campaignId}/step-stats/`);
+                if (!res.ok) return;
+                const data = await res.json();
+                stepStatsByOrder = {};
+                (data.steps || []).forEach(s => { stepStatsByOrder[s.step_order] = s; });
+                renderCanvas();
+            } catch (e) { console.warn('Could not load step stats', e); }
+        }
         // Steps are stored as an array of objects
         let steps = [
             // { type: 'EMAIL', subject: '', body: '', delay_minutes: 0, delay_unit: 'minutes' }
@@ -1872,12 +1892,19 @@ ${rows || `
                             ? '<span class="badge rounded-pill text-bg-danger me-1">No path</span>'
                             : '');
 
+                    const stats = step.type === 'EMAIL' ? stepStatsByOrder[i + 1] : null;
+                    const statsBar = stats ? `
+                        <div class="step-stats-bar">
+                            Sent: ${stats.sent} | Opened: ${stats.opened} (${stats.open_rate}%) | Replied: ${stats.replied} (${stats.reply_rate}%)
+                        </div>` : '';
+
                     html += `<div class="flow-node ${selectedNodeIndex === i ? 'selected' : ''}" data-index="${i}">
                         <div class="d-flex align-items-center gap-3">
                             <div class="node-icon ${info.cls}"><i class="bi ${info.icon}"></i></div>
                             <div class="flex-grow-1">
                                 <div class="node-label">${info.label}</div>
                                 <div class="node-meta">${branchMeta}${meta}</div>
+                                ${statsBar}
                             </div>
                             <button class="btn btn-sm" style="color:#94a3b8;" data-delete="${i}" title="Delete step"><i class="bi bi-three-dots"></i></button>
                         </div>
@@ -2688,7 +2715,7 @@ ${rows || `
                         if (data.settings && data.settings.steps) {
                             steps = data.settings.steps;
                         }
-
+                        loadStepStats();
                         const settings = data.settings || {};
 
 document.getElementById('setting-stop-reply').checked =
