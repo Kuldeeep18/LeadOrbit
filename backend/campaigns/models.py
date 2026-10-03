@@ -147,3 +147,15 @@ class CampaignLead(TenantModel):
 
     def __str__(self):
         return f"{self.lead.email} in {self.campaign.name}"
+
+
+class UnsubscribeFeedback(TenantModel):
+    lead = models.ForeignKey(
+        Lead,
+        on_delete=models.CASCADE,
+        related_name="unsubscribe_feedbacks",
+    )
+    reasons = models.JSONField(default=list, blank=True)
+
+    def __str__(self):
+        return f"Feedback for {self.lead.email}"

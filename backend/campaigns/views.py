@@ -14,7 +14,7 @@ from rest_framework.response import Response
 from leads.models import Lead
 from users.permissions import IsOrgManager
 
-from .models import Campaign, CampaignLead, SequenceStep, EmailTemplate
+from .models import Campaign, CampaignLead, SequenceStep, EmailTemplate, UnsubscribeFeedback
 from .serializers import CampaignSerializer, SequenceStepSerializer, EmailTemplateSerializer
 
 logger = logging.getLogger(__name__)
@@ -752,6 +752,13 @@ def unsubscribe_view(request, lead_id, token):
         form = (
             f'<form method="post" action="{request.path}">'
             f'<input type="hidden" name="csrfmiddlewaretoken" value="{csrf_token}">'
+
+            '<p><strong>Why are you unsubscribing?</strong> (Optional)</p>'
+
+            '<label><input type="checkbox" name="reasons" value="Too frequent emails"> Too frequent emails</label><br>'
+            '<label><input type="checkbox" name="reasons" value="No longer relevant"> No longer relevant</label><br>'
+            '<label><input type="checkbox" name="reasons" value="Never signed up"> Never signed up</label><br><br>'
+
             '<button type="submit">Confirm unsubscribe</button>'
             '</form>'
         )
@@ -764,6 +771,26 @@ def unsubscribe_view(request, lead_id, token):
 
     lead.global_unsubscribe = True
     lead.save(update_fields=["global_unsubscribe"])
+
+    ALLOWED_REASONS = {
+        "Too frequent emails",
+        "No longer relevant",
+        "Never signed up",
+    }
+
+    reasons = request.POST.getlist("reasons")
+    valid_reasons = [
+        reason for reason in reasons if reason in ALLOWED_REASONS
+    ]
+
+    if valid_reasons:
+        UnsubscribeFeedback.objects.update_or_create(
+            lead=lead,
+            defaults={
+                "organization": lead.organization,
+                "reasons": valid_reasons,
+            },
+        )
 
     html = _unsubscribe_page(
         'Unsubscribed',
