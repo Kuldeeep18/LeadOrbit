@@ -149,7 +149,14 @@ class GoogleOAuthLoginView(APIView):
                 try:
                     decoded = AccessToken(token_str)
                     user_id = decoded.get('user_id')
-                    user = User.objects.all().get(id=user_id)
+                    user = User.objects.get(id=user_id)
+                    if not user.organization_id:
+                        logger.error(f"[OAuth Login] User {user.email} has no organization")
+                        return _frontend_settings_redirect(
+                            request,
+                            google_auth='error',
+                            reason='no_organization'
+                        )
                     logger.info(f"[OAuth Login] Resolved user {user.email} from query token")
                 except Exception as e:
                     logger.error(f"[OAuth Login] Failed to decode token from query: {e}")
@@ -246,13 +253,27 @@ class GoogleOAuthCallbackView(APIView):
                 frontend_origin = _sanitize_frontend_base(request, state_data.get('frontend_origin', ''))
                 logger.info(f"[OAuth Callback] State decoded: user_id={user_id}, org_id={org_id}")
 
-                # Use .objects.all() on base manager to bypass tenant scoping
+                # Explicit tenant-scoped query for security
                 try:
-                    user = User.objects.all().get(id=user_id)
+                    user = User.objects.get(id=user_id, organization_id=org_id)
                     org = Organization.objects.get(id=org_id)
                     logger.info(f"[OAuth Callback] Resolved user={user.email}, org={org.name}")
-                except (User.DoesNotExist, Organization.DoesNotExist) as e:
-                    logger.warning(f"[OAuth Callback] Could not find user/org from state: {e}")
+                except User.DoesNotExist:
+                    logger.warning(f"[OAuth Callback] User {user_id} not found in org {org_id}")
+                    return _frontend_settings_redirect(
+                        request,
+                        preferred_frontend_base=frontend_origin,
+                        google_auth='error',
+                        reason='user_not_in_org',
+                    )
+                except Organization.DoesNotExist:
+                    logger.warning(f"[OAuth Callback] Organization {org_id} not found")
+                    return _frontend_settings_redirect(
+                        request,
+                        preferred_frontend_base=frontend_origin,
+                        google_auth='error',
+                        reason='org_not_found',
+                    )
             except (signing.BadSignature, signing.SignatureExpired, KeyError, TypeError) as e:
                 logger.warning(f"[OAuth Callback] Failed to parse state parameter: {e}")
 
@@ -512,3 +533,5 @@ class ConnectedAccountDetailView(APIView):
 
         account.delete()
         return Response(status=status.HTTP_204_NO_CONTENT)
+
+        
