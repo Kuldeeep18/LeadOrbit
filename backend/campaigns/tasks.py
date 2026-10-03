@@ -786,7 +786,8 @@ def poll_gmail_for_replies():
                     continue
 
                 clead.status = 'REPLIED'
-                clead.save(update_fields=['status'])
+                clead.last_replied_at = timezone.now()
+                clead.save(update_fields=['status', 'last_replied_at'])
                 total_replies += 1
                 logger.info(f"Reply detected for {clead.lead.email} in campaign {clead.campaign.name}")
                 _maybe_mark_campaign_completed(clead.campaign)

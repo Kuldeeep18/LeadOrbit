@@ -1094,6 +1094,7 @@ class CampaignWorkflowTests(APITestCase):
 
         campaign_lead.refresh_from_db()
         self.assertEqual(campaign_lead.status, 'ACTIVE')
+        self.assertIsNotNone(campaign_lead.last_replied_at)
 
     @override_settings(ENABLE_AUTO_REPLY_DETECTION=True)
     def test_poll_replies_handles_finished_leads(self):
@@ -1129,6 +1130,7 @@ class CampaignWorkflowTests(APITestCase):
 
         campaign_lead.refresh_from_db()
         self.assertEqual(campaign_lead.status, 'REPLIED')
+        self.assertIsNotNone(campaign_lead.last_replied_at)
 
     @override_settings(ENABLE_AUTO_BOUNCE_DETECTION=True)
     def test_check_imap_bounces_marks_matching_campaign_lead_bounced(self):
@@ -1689,6 +1691,59 @@ class CampaignWorkflowTests(APITestCase):
         self.assertEqual(response.data['total_leads'], 1)
         self.assertEqual(response.data['active_campaigns'], 1)
         self.assertEqual(response.data['replied'], 1)
+
+    def test_dashboard_analytics_counts_timestamped_reply_activity(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Reply Activity Campaign',
+            status='ACTIVE',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='reply-activity@acme.test',
+        )
+        CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='ACTIVE',
+            last_sent_message_id='activity-mid',
+            last_replied_at=timezone.now(),
+        )
+
+        response = self.client.get('/api/v1/analytics/dashboard/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['emails_sent'], 1)
+        self.assertEqual(response.data['replied'], 1)
+        self.assertEqual(response.data['campaign_stats'][0]['replied'], 1)
+        self.assertEqual(sum(response.data['time_series']['replied']), 1)
+
+    def test_dashboard_analytics_uses_reply_time_for_series_window(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Older Lead Reply Campaign',
+            status='ACTIVE',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='older-reply@acme.test',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='ACTIVE',
+            last_replied_at=timezone.now(),
+        )
+        CampaignLead.objects.filter(pk=campaign_lead.pk).update(
+            created_at=timezone.now() - timedelta(days=120)
+        )
+
+        response = self.client.get('/api/v1/analytics/dashboard/?days=30')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(sum(response.data['time_series']['replied']), 1)
 
     def test_dashboard_analytics_requires_authentication(self):
         self.client.force_authenticate(user=None)
