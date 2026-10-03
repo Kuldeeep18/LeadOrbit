@@ -383,31 +383,48 @@
     </div>
 
     <!-- CSV Upload Modal -->
-    <div class="modal fade" id="uploadModal" tabindex="-1">
+    <div class="modal fade" id="uploadModal" tabindex="-1" aria-labelledby="uploadModalLabel">
         <div class="modal-dialog">
             <div class="modal-content rounded-3 shadow">
                 <div class="modal-header border-0">
-                    <h5 class="modal-title fw-bold">Import Leads via CSV</h5>
+                    <h5 class="modal-title fw-bold" id="uploadModalLabel">Import Leads via CSV</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
                 </div>
                 <div class="modal-body">
-                    <div class="alert alert-info small mb-3">
-                        <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
-                        CSV must include an <strong>email</strong> column.
-                        Optional fields: <strong>firstName/first_name</strong>, <strong>lastName/last_name</strong>,
-                        <strong>companyName/company</strong>, <strong>linkedinUrl/linkedin_url</strong>,
-                        <strong>phone</strong>.
-                    </div>
-                    <form id="upload-form" aria-label="CSV upload form">
-                        <div class="mb-3">
-                            <label for="csv-file" class="form-label">Select CSV file</label>
-                            <input type="file" class="form-control" id="csv-file" accept=".csv" required>
+                    <!-- ── Step 1: Upload form ── -->
+                    <div id="upload-form-view">
+                        <div class="alert alert-info small mb-3">
+                            <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+                            CSV must include an <strong>email</strong> column.
+                            Optional fields: <strong>firstName/first_name</strong>, <strong>lastName/last_name</strong>,
+                            <strong>companyName/company</strong>, <strong>linkedinUrl/linkedin_url</strong>,
+                            <strong>phone</strong>.
                         </div>
-                        <button type="submit" class="btn btn-primary w-100" id="upload-btn">
-                            <i class="bi bi-cloud-upload me-1" aria-hidden="true"></i> Upload and Process
-                        </button>
-                        <div id="upload-status" class="mt-2 text-center small"></div>
-                    </form>
+                        <form id="upload-form" aria-label="CSV upload form">
+                            <div class="mb-3">
+                                <label for="csv-file" class="form-label">Select CSV file</label>
+                                <input type="file" class="form-control" id="csv-file" accept=".csv" required>
+                            </div>
+                            <button type="submit" class="btn btn-primary w-100" id="upload-btn">
+                                <i class="bi bi-cloud-upload me-1" aria-hidden="true"></i> Upload and Process
+                            </button>
+                            <div id="upload-status" class="mt-2 text-center small"></div>
+                        </form>
+                    </div>
+
+                    <!-- ── Step 2: Processing spinner ── -->
+                    <div id="upload-processing-view" style="display:none;" aria-live="polite">
+                        <div class="text-center py-4">
+                            <div class="spinner-border text-primary mb-3" role="status" aria-label="Processing import"></div>
+                            <div class="fw-semibold mb-1" id="processing-filename"></div>
+                            <div class="text-muted small">Processing your CSV — this usually takes a few seconds…</div>
+                        </div>
+                    </div>
+
+                    <!-- ── Step 3: Import summary ── -->
+                    <div id="upload-summary-view" style="display:none;" aria-live="polite">
+                        <!-- injected by showImportSummary() -->
+                    </div>
                 </div>
             </div>
         </div>
@@ -812,6 +829,146 @@
             renderLeadRows(filtered);
         }
 
+        // ─── Import polling & summary ────────────────────────────────────────
+
+        /**
+         * Poll GET /lead-import-jobs/{jobId}/ every 2 s until the job has
+         * total_rows > 0 (Celery wrote the result) or 30 s have elapsed.
+         * Returns the final job object.
+         */
+        async function pollImportJob(jobId, { intervalMs = 2000, timeoutMs = 30000 } = {}) {
+            const deadline = Date.now() + timeoutMs;
+
+            while (Date.now() < deadline) {
+                await new Promise(resolve => setTimeout(resolve, intervalMs));
+
+                try {
+                    const res = await fetchWithAuth(`/lead-import-jobs/${jobId}/`);
+                    if (res.ok) {
+                        const job = await res.json();
+                        // The task writes total_rows when it finishes
+                        if (job.total_rows > 0 || job.imported_count > 0 || job.failed_count > 0) {
+                            return job;
+                        }
+                    }
+                } catch {
+                    // transient network hiccup — keep polling
+                }
+            }
+
+            // Timed out — return a minimal stub so the UI doesn't hang
+            return { total_rows: 0, imported_count: 0, created_count: 0, updated_count: 0, failed_count: 0, error_log: [], filename: '' };
+        }
+
+        /** Render the import summary inside the modal and switch to that view. */
+        function showImportSummary(job) {
+            const total      = Number(job.total_rows)     || 0;
+            const imported   = Number(job.imported_count) || 0;
+            const created    = Number(job.created_count)  || 0;
+            const updated    = Number(job.updated_count)  || 0;
+            const failed     = Number(job.failed_count)   || 0;
+            const errors     = Array.isArray(job.error_log) ? job.error_log : [];
+            const hasErrors  = failed > 0;
+            const allFailed  = total > 0 && imported === 0;
+            const allSuccess = total > 0 && failed === 0;
+
+            const headerIcon  = allFailed  ? 'bi-x-circle-fill text-danger'
+                              : allSuccess ? 'bi-check-circle-fill text-success'
+                              :              'bi-exclamation-circle-fill text-warning';
+            const headerMsg   = allFailed  ? 'Import completed with errors'
+                              : allSuccess ? 'Import successful!'
+                              :              'Import completed with some issues';
+
+            const summaryHTML = `
+                <div class="text-center mb-3">
+                    <i class="bi ${headerIcon} fs-1" aria-hidden="true"></i>
+                    <h6 class="fw-bold mt-2 mb-0">${headerMsg}</h6>
+                    <div class="text-muted small">${escapeHtml(job.filename || 'Imported file')}</div>
+                </div>
+
+                <div class="row g-2 mb-3 text-center">
+                    <div class="col-6 col-sm-3">
+                        <div class="rounded-3 py-2 px-1" style="background:var(--panel-muted);border:1px solid var(--line);">
+                            <div class="fw-bold fs-5" style="color:var(--ink-900);">${total}</div>
+                            <div class="text-muted" style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Total</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-sm-3">
+                        <div class="rounded-3 py-2 px-1" style="background:#dcfce7;border:1px solid #bbf7d0;">
+                            <div class="fw-bold fs-5" style="color:#166534;">${created}</div>
+                            <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#166534;">New</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-sm-3">
+                        <div class="rounded-3 py-2 px-1" style="background:#dbeafe;border:1px solid #bfdbfe;">
+                            <div class="fw-bold fs-5" style="color:#1d4ed8;">${updated}</div>
+                            <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:#1d4ed8;">Updated</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-sm-3">
+                        <div class="rounded-3 py-2 px-1" style="background:${hasErrors ? '#fee2e2' : 'var(--panel-muted)'};border:1px solid ${hasErrors ? '#fecaca' : 'var(--line)'};">
+                            <div class="fw-bold fs-5" style="color:${hasErrors ? '#b91c1c' : 'var(--ink-500)'};">${failed}</div>
+                            <div style="font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.04em;color:${hasErrors ? '#b91c1c' : 'var(--ink-500)'};">Failed</div>
+                        </div>
+                    </div>
+                </div>
+
+                ${hasErrors ? `
+                <div class="alert alert-warning py-2 small mb-3">
+                    <i class="bi bi-exclamation-triangle me-1" aria-hidden="true"></i>
+                    <strong>${failed}</strong> row${failed === 1 ? '' : 's'} could not be imported.
+                    ${errors.length > 0 ? 'Common issues: missing email, invalid format, or duplicate within the file.' : ''}
+                </div>` : ''}
+
+                <div class="d-flex gap-2 flex-wrap">
+                    <button class="btn btn-primary btn-sm flex-grow-1" id="import-another-btn">
+                        <i class="bi bi-upload me-1" aria-hidden="true"></i> Import Another
+                    </button>
+                    ${hasErrors && errors.length > 0 ? `
+                    <button class="btn btn-outline-warning btn-sm" id="summary-view-errors-btn" data-job-id="${escapeHtml(job.id || '')}">
+                        <i class="bi bi-list-ul me-1" aria-hidden="true"></i> View ${failed} Error${failed === 1 ? '' : 's'}
+                    </button>` : ''}
+                    <button class="btn btn-outline-secondary btn-sm" data-bs-dismiss="modal">
+                        Close
+                    </button>
+                </div>`;
+
+            const summaryView = document.getElementById('upload-summary-view');
+            summaryView.innerHTML = summaryHTML;
+
+            document.getElementById('upload-processing-view').style.display = 'none';
+            summaryView.style.display = 'block';
+
+            // Wire up "Import Another"
+            document.getElementById('import-another-btn')?.addEventListener('click', resetUploadModal);
+
+            // Wire up "View Errors" — piggybacks on the existing error log modal
+            const viewErrorsBtn = document.getElementById('summary-view-errors-btn');
+            if (viewErrorsBtn) {
+                viewErrorsBtn.addEventListener('click', () => {
+                    // Inject job into allImportJobs if not already there so openImportErrors can find it
+                    if (job.id && !allImportJobs.find(j => j.id === job.id)) {
+                        allImportJobs.unshift(job);
+                    }
+                    if (job.id) {
+                        openImportErrors(job.id);
+                    }
+                });
+            }
+        }
+
+        /** Reset the upload modal back to the clean form state. */
+        function resetUploadModal() {
+            document.getElementById('upload-summary-view').style.display = 'none';
+            document.getElementById('upload-processing-view').style.display = 'none';
+            document.getElementById('upload-form-view').style.display = 'block';
+
+            const btn = document.getElementById('upload-btn');
+            btn.disabled = false;
+            btn.innerHTML = '<i class="bi bi-cloud-upload me-1" aria-hidden="true"></i> Upload and Process';
+            document.getElementById('upload-status').innerHTML = '';
+        }
+
         // ─── Bootstrap ──────────────────────────────────────────────────────
 
         document.addEventListener('DOMContentLoaded', async () => {
@@ -853,9 +1010,11 @@
 
                 const btn = document.getElementById('upload-btn');
                 const statusEl = document.getElementById('upload-status');
+                const filename = fileInput.files[0].name;
 
                 btn.disabled = true;
                 btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span> Uploading...';
+
                 const formData = new FormData();
                 formData.append('file', fileInput.files[0]);
 
@@ -865,21 +1024,44 @@
                         body: formData,
                     });
 
-                    if (res.status === 202) {
-                        statusEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>File uploaded. Processing now...</span>';
-                        await loadLeads();
-                        await loadImportHistory();
-                        fileInput.value = '';
-                        bootstrap.Modal.getOrCreateInstance(document.getElementById('uploadModal')).hide();
-                    } else {
+                    if (res.status !== 202) {
                         statusEl.innerHTML = '<span class="text-danger"><i class="bi bi-x-circle me-1" aria-hidden="true"></i>Upload failed.</span>';
+                        btn.disabled = false;
+                        btn.innerHTML = '<i class="bi bi-cloud-upload me-1" aria-hidden="true"></i> Upload and Process';
+                        return;
                     }
+
+                    const { job_id } = await res.json();
+
+                    // Switch to the processing view
+                    document.getElementById('upload-form-view').style.display = 'none';
+                    document.getElementById('upload-processing-view').style.display = 'block';
+                    document.getElementById('processing-filename').textContent = filename;
+
+                    // Poll the job until Celery finishes (total_rows > 0 means it wrote results)
+                    const job = await pollImportJob(job_id);
+
+                    // Refresh the lead table and import history
+                    await loadLeads();
+                    await loadImportHistory();
+                    fileInput.value = '';
+
+                    // Show summary
+                    showImportSummary(job);
+
                 } catch (err) {
-                    statusEl.innerHTML = `<span class="text-danger">Error: ${err.message}</span>`;
-                } finally {
+                    // Restore the form on unexpected errors
+                    document.getElementById('upload-processing-view').style.display = 'none';
+                    document.getElementById('upload-form-view').style.display = 'block';
+                    statusEl.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1" aria-hidden="true"></i>Error: ${escapeHtml(err.message)}</span>`;
                     btn.disabled = false;
                     btn.innerHTML = '<i class="bi bi-cloud-upload me-1" aria-hidden="true"></i> Upload and Process';
                 }
+            });
+
+            // ── Reset the upload modal back to the form view ────────────────
+            document.getElementById('uploadModal').addEventListener('hidden.bs.modal', () => {
+                resetUploadModal();
             });
         });
     </script>
