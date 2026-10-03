@@ -136,7 +136,7 @@ class LeadIsolationAPITests(APITestCase):
         self.client.force_authenticate(self.user_a)
         response = self.client.get('/api/v1/leads/')
         self.assertEqual(response.status_code, status.HTTP_200_OK)
-        emails = {item['email'] for item in response.data}
+        emails = {item['email'] for item in response.data['results']}
         self.assertIn(self.lead_a.email, emails)
         self.assertNotIn(self.lead_b.email, emails)
 
@@ -401,21 +401,21 @@ class LeadFilterTests(APITestCase):
     def test_filter_by_status_active(self):
         resp = self._get(status='active')
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        emails = {l['email'] for l in resp.data}
+        emails = {l['email'] for l in resp.data['results']}
         self.assertNotIn('unsub@example.com', emails)
         self.assertIn('active@example.com', emails)
 
     def test_filter_by_status_unsubscribed(self):
         resp = self._get(status='unsubscribed')
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        emails = {l['email'] for l in resp.data}
+        emails = {l['email'] for l in resp.data['results']}
         self.assertIn('unsub@example.com', emails)
         self.assertNotIn('active@example.com', emails)
 
     def test_filter_by_single_tag(self):
         resp = self._get(tags=str(self.tag_vip.id))
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        emails = {l['email'] for l in resp.data}
+        emails = {l['email'] for l in resp.data['results']}
         self.assertIn('vip@example.com', emails)
         self.assertNotIn('cold@example.com', emails)
         self.assertNotIn('active@example.com', emails)
@@ -425,7 +425,7 @@ class LeadFilterTests(APITestCase):
         LeadTag.objects.create(lead=self.lead_vip, tag=self.tag_cold, organization=self.org)
         resp = self._get(tags=f'{self.tag_vip.id},{self.tag_cold.id}')
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        emails = {l['email'] for l in resp.data}
+        emails = {l['email'] for l in resp.data['results']}
         # lead_vip has both tags — should appear
         self.assertIn('vip@example.com', emails)
         # lead_cold only has tag_cold — should NOT appear (missing tag_vip)
@@ -435,17 +435,17 @@ class LeadFilterTests(APITestCase):
         resp = self._get(created_after='1970-01-01')
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
         # All leads were created after 1970; all should be returned
-        self.assertGreaterEqual(len(resp.data), 4)
+        self.assertGreaterEqual(len(resp.data['results']), 4)
 
     def test_filter_by_created_before_far_future(self):
         resp = self._get(created_before='2099-12-31')
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertGreaterEqual(len(resp.data), 4)
+        self.assertGreaterEqual(len(resp.data['results']), 4)
 
     def test_combined_tag_and_status_filter(self):
         resp = self._get(tags=str(self.tag_vip.id), status='active')
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        emails = {l['email'] for l in resp.data}
+        emails = {l['email'] for l in resp.data['results']}
         self.assertIn('vip@example.com', emails)
         self.assertNotIn('unsub@example.com', emails)
         self.assertNotIn('cold@example.com', emails)
@@ -453,11 +453,51 @@ class LeadFilterTests(APITestCase):
     def test_no_filter_returns_all_org_leads(self):
         resp = self._get()
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertEqual(len(resp.data), 4)
+        self.assertEqual(len(resp.data['results']), 4)
 
     def test_filter_does_not_leak_other_org_leads(self):
         other_org = Organization.objects.create(name='Spy Org')
         _make_lead(other_org, 'spy@example.com')
         resp = self._get()
-        emails = {l['email'] for l in resp.data}
+        emails = {l['email'] for l in resp.data['results']}
         self.assertNotIn('spy@example.com', emails)
+
+
+class LeadPaginationAPITests(APITestCase):
+    """Tests pagination behavior for GET /api/v1/leads/"""
+
+    def setUp(self):
+        self.org = Organization.objects.create(name='Pagination Org')
+        self.user = _make_user(self.org, email='paginator@example.com')
+        # Create 60 leads so we can test page 1, page 2 and page size query parameter
+        self.leads = [
+            _make_lead(self.org, f'lead{i}@example.com') for i in range(60)
+        ]
+
+    def test_pagination_defaults_to_50_per_page(self):
+        self.client.force_authenticate(self.user)
+        resp = self.client.get('/api/v1/leads/')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertIn('count', resp.data)
+        self.assertIn('next', resp.data)
+        self.assertIn('previous', resp.data)
+        self.assertIn('results', resp.data)
+        self.assertEqual(resp.data['count'], 60)
+        self.assertEqual(len(resp.data['results']), 50)
+
+    def test_pagination_page_size_query_param(self):
+        self.client.force_authenticate(self.user)
+        # Request page size of 10
+        resp = self.client.get('/api/v1/leads/', {'page_size': 10})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.data['results']), 10)
+
+    def test_pagination_max_page_size(self):
+        self.client.force_authenticate(self.user)
+        # Create extra leads to exceed 200
+        for i in range(60, 250):
+            _make_lead(self.org, f'lead{i}@example.com')
+        # Request page size of 300
+        resp = self.client.get('/api/v1/leads/', {'page_size': 300})
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.data['results']), 200) # capped at max_page_size

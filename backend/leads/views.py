@@ -12,8 +12,15 @@ class LeadImportJobPagination(PageNumberPagination):
     page_size = 10
 
 
+class LeadPagination(PageNumberPagination):
+    page_size = 50
+    page_size_query_param = 'page_size'
+    max_page_size = 200
+
+
 class LeadViewSet(viewsets.ModelViewSet):
     serializer_class = LeadSerializer
+    pagination_class = LeadPagination
     queryset = Lead.objects.all()
     manager_actions = frozenset({
         'create',
@@ -78,7 +85,7 @@ class LeadViewSet(viewsets.ModelViewSet):
                 | Q(company__icontains=search)
             )
 
-        return qs.distinct()
+        return qs.distinct().order_by('-created_at')
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization)
