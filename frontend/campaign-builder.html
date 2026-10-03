@@ -1003,8 +1003,6 @@
         </ol>
     </nav>
 
-    <!-- â”€â”€â”€ Main Layout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
-    <!-- ─── Main Layout ─────────────────────── -->
     <div class="main-layout">
         <!-- Canvas -->
         <div class="canvas-area" id="canvas">
@@ -1221,6 +1219,67 @@
                  value="100">
         </div>
 
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- No Sequence Steps Modal -->
+<div class="modal fade" id="noStepsModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <h5 class="modal-title">Cannot Activate Campaign</h5>
+        <button type="button"
+                class="btn-close"
+                data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+        Cannot activate campaign with no sequence steps.
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-primary"
+                data-bs-dismiss="modal">
+          OK
+        </button>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- Zero Leads Warning Modal -->
+<div class="modal fade" id="zeroLeadsModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+
+      <div class="modal-header">
+        <h5 class="modal-title">Warning</h5>
+        <button type="button"
+                class="btn-close"
+                data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+        You are activating a campaign with 0 leads.
+        <br><br>
+        Are you sure you want to continue?
+      </div>
+
+      <div class="modal-footer">
+        <button class="btn btn-secondary"
+                data-bs-dismiss="modal">
+          Cancel
+        </button>
+
+        <button class="btn btn-primary"
+                id="confirmActivationBtn">
+          Activate Anyway
+        </button>
       </div>
 
     </div>
@@ -2610,12 +2669,59 @@ ${rows || `
             });
         });
 
-        // Status toggle
-        document.getElementById('status-toggle').addEventListener('click', function () {
-            this.classList.toggle('on');
-            this.classList.toggle('off');
-            if (activeTab === 'launch') renderLaunchTab();
-        });
+document.getElementById('status-toggle').addEventListener('click', function () {
+
+    const toggle = this;
+
+    // Only validate when activating (OFF -> ON)
+    if (toggle.classList.contains('off')) {
+
+        // Campaign must have at least one sequence step
+        if (!steps || steps.length === 0) {
+            const modal = new bootstrap.Modal(
+                document.getElementById('noStepsModal')
+            );
+            modal.show();
+            return;
+        }
+
+        // Warn if no enrolled leads
+        if (selectedLeadIds.size === 0) {
+            const modal = new bootstrap.Modal(
+                document.getElementById('zeroLeadsModal')
+            );
+            modal.show();
+            return;
+        }
+    }
+
+    toggle.classList.toggle('on');
+    toggle.classList.toggle('off');
+
+    if (activeTab === 'launch') {
+        renderLaunchTab();
+    }
+});
+
+// Continue activation after confirmation
+document.getElementById('confirmActivationBtn').addEventListener('click', function () {
+
+    const modalElement = document.getElementById('zeroLeadsModal');
+    const modal =
+    bootstrap.Modal.getInstance(modalElement) ||
+    new bootstrap.Modal(modalElement);
+
+modal.hide();
+
+    const toggle = document.getElementById('status-toggle');
+
+    toggle.classList.remove('off');
+    toggle.classList.add('on');
+
+    if (activeTab === 'launch') {
+        renderLaunchTab();
+    }
+});
 
         // ─── SAVE / NEXT ────────────────────
         document.getElementById('next-step-btn').addEventListener('click', async () => {
@@ -2724,29 +2830,33 @@ document.getElementById('setting-daily-limit').value =
         document.getElementById('').style.display = 'block';
     });
 
-    function renderFlowchart() {
-        const steps = window.campaignSteps;
-        if (!steps || steps.length === 0) return;
+function renderFlowchart() {
+    const steps = window.campaignSteps;
+    if (!steps || steps.length === 0) return;
 
-        let graph = 'graph TD\n';
-        steps.forEach((step, i) => {
-            const nodeId = step${i};
-            if (step.type === 'condition' || step.type === 'CONDITION') {
-                graph +=     ${nodeId}{${step.name || 'Condition'}}\n;
-            } else {
-                graph +=     ${nodeId}[${step.name || 'Action'}]\n;
-            }
-            if (i < steps.length - 1) {
-                graph +=     ${nodeId} --> step${i+1}\n;
-            }
-        });
-        steps.forEach((step, i) => {
-            graph +=     click step${i} openStepDetail\n;
-        });
+    let graph = 'graph TD\n';
 
-        document.getElementById('mermaidFlowchart').textContent = graph;
-        mermaid.init(undefined, document.getElementById('mermaidFlowchart'));
-    }
+    steps.forEach((step, i) => {
+        const nodeId = `step${i}`;
+
+        if (step.type === 'condition' || step.type === 'CONDITION') {
+            graph += `    ${nodeId}{${step.name || 'Condition'}}\n`;
+        } else {
+            graph += `    ${nodeId}[${step.name || 'Action'}]\n`;
+        }
+
+        if (i < steps.length - 1) {
+            graph += `    ${nodeId} --> step${i + 1}\n`;
+        }
+    });
+
+    steps.forEach((step, i) => {
+        graph += `    click step${i} openStepDetail\n`;
+    });
+
+    document.getElementById('mermaidFlowchart').textContent = graph;
+    mermaid.init(undefined, document.getElementById('mermaidFlowchart'));
+}
 
     function openStepDetail(stepId) {
         console.log('Clicked node:', stepId);
