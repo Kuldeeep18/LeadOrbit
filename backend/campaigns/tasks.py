@@ -29,6 +29,7 @@ from leads.models import BlockedDomain, normalize_domain
 
 logger = logging.getLogger(__name__)
 
+
 def _get_campaign_steps(campaign):
     """
     Returns ordered steps for a campaign.
@@ -40,6 +41,7 @@ def _get_campaign_steps(campaign):
             campaign=campaign
         ).order_by("step_order")
     )
+
 
 def _get_campaign_raw_steps(campaign):
     settings = campaign.settings if isinstance(campaign.settings, dict) else {}
@@ -325,7 +327,7 @@ def _execute_condition_reply_step(clead, step, now=None):
         if yes_branch_step_order and yes_branch_step_order > step.step_order:
             steps = _get_campaign_steps(clead.campaign)
             yes_step = next((s for s in steps if s.step_order == yes_branch_step_order), None)
-            
+
             if yes_step:
                 _activate_step(clead, yes_step, now=now)
                 logger.info(
@@ -363,12 +365,12 @@ def _execute_condition_reply_step(clead, step, now=None):
         )
         return
 
-    # Condition window expired — route to "no" branch or finish.
+    # Condition window expired -- route to "no" branch or finish.
     logger.info(f"Reply window expired for {clead.lead.email}")
     if no_branch_step_order and no_branch_step_order > step.step_order:
         steps = _get_campaign_steps(clead.campaign)
         no_step = next((s for s in steps if s.step_order == no_branch_step_order), None)
-        
+
         if no_step:
             _activate_step(clead, no_step, now=now)
             logger.info(
@@ -500,13 +502,11 @@ def _execute_call_step(clead, step, now=None):
         sid = initiate_call(phone, call_script or None)
         logger.info(f"Call initiated to {clead.lead.email} ({phone}) | sid={sid}")
     except RuntimeError:
-        
         logger.info(f"CALL step (manual) for {clead.lead.email} ({phone}): {call_script or 'No script'}")
     except Exception as err:
         logger.error(f"Call failed for {clead.lead.email}: {err}")
 
     _advance_to_next_step(clead, step, now=now)
-
 
 
 def rewrite_email_links(html_body, campaign_lead_id, step_id):
@@ -519,26 +519,30 @@ def rewrite_email_links(html_body, campaign_lead_id, step_id):
 
     soup = BeautifulSoup(html_body, 'html.parser')
     signer = Signer()
-    
-    token_payload = f"{campaign_lead_id}:{step_id}"
-    signed_token = signer.sign(token_payload)
-    
+
     base_url = getattr(django_settings, 'BACKEND_BASE_URL', 'http://127.0.0.1:8000').rstrip('/')
     tracking_endpoint = f"{base_url}/api/v1/clicks/track/"
-    
+
     for a_tag in soup.find_all('a', href=True):
         original_url = a_tag.get('href', '')
-        
+
         if not original_url or original_url.startswith(('mailto:', 'tel:')) or tracking_endpoint in original_url:
             continue
-            
-        encoded_dest = urllib.parse.quote(original_url, safe='')
-        
-        tracking_url = f"{tracking_endpoint}?t={signed_token}&dest={encoded_dest}"
+
+        scheme = urllib.parse.urlsplit(original_url).scheme.lower()
+if scheme not in ('http', 'https'):
+    continue
+
+        # Sign campaign_lead_id, step_id, AND the destination together so the
+        # destination can't be swapped out while reusing a previously-issued,
+        # otherwise-valid token (open-redirect prevention).
+        token_payload = f"{campaign_lead_id}:{step_id}:{original_url}"
+        signed_token = signer.sign(token_payload)
+
+        tracking_url = f"{tracking_endpoint}?t={urllib.parse.quote(signed_token, safe='')}"
         a_tag['href'] = tracking_url
-        
+
     return str(soup)
-# -----------------------------------
 
 
 @shared_task
@@ -546,7 +550,6 @@ def send_email_step(campaign_lead_id, step_id):
     """
     Dispatch an email through the selected connected account or fall back to mock logging.
     """
-    
     try:
         clead = CampaignLead.objects.select_related('lead', 'campaign__connected_account').get(id=campaign_lead_id)
         step = SequenceStep.objects.get(id=step_id)
@@ -583,9 +586,7 @@ def send_email_step(campaign_lead_id, step_id):
 
         subject, body = personalize_email(step.template_subject, step.template_body, clead.lead)
 
-       
         body = rewrite_email_links(body, campaign_lead_id, step_id)
-        # -------------------------------------------
 
         account = clead.campaign.connected_account
         if account:
@@ -667,10 +668,10 @@ def process_active_leads_once(now=None):
             if not clead.current_step:
                 if clead.status not in {'ENROLLED', 'ACTIVE'}:
                     break
-                
+
                 steps = _get_campaign_steps(clead.campaign)
                 first_step = steps[0] if steps else None
-                
+
                 if not first_step:
                     break
                 clead.current_step = first_step
@@ -803,7 +804,7 @@ def check_imap_bounces():
         return "Bounce polling disabled"
 
     accounts = (
-        ConnectedEmailAccount._default_manager.filter(
+        ConnectedEmailAccount.objects.filter(
             campaigns__enrolled_leads__last_sent_message_id__isnull=False,
             campaigns__enrolled_leads__status__in=['ACTIVE', 'ENROLLED', 'FINISHED'],
         )
@@ -820,7 +821,8 @@ def check_imap_bounces():
                 candidates = find_imap_bounce_candidates(account)
             else:
                 logger.info(
-                    f"Skipping bounce polling for {account.email_address}: provider {account.provider} is not supported yet."
+                    f"Skipping bounce polling for {account.email_address}: "
+                    f"provider {account.provider} is not supported yet."
                 )
                 continue
         except Exception as exc:
