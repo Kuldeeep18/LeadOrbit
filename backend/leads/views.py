@@ -4,8 +4,9 @@ from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from users.permissions import IsOrgManager
-from .models import BlockedDomain, Lead, LeadImportJob, Tag, LeadTag
-from .serializers import BlockedDomainSerializer, LeadImportJobSerializer, LeadSerializer, TagSerializer
+from .models import BlockedDomain, Lead, LeadImportJob, Tag, LeadTag, LeadScrapeJob
+from .serializers import BlockedDomainSerializer, LeadImportJobSerializer, LeadSerializer, TagSerializer, LeadScrapeJobSerializer
+
 
 
 class LeadImportJobPagination(PageNumberPagination):
@@ -188,3 +189,17 @@ class BlockedDomainViewSet(viewsets.ModelViewSet):
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization)
+
+
+class LeadScrapeJobViewSet(viewsets.ModelViewSet):
+    serializer_class = LeadScrapeJobSerializer
+    queryset = LeadScrapeJob.objects.all()
+
+    def get_queryset(self):
+        return LeadScrapeJob.objects.filter(organization=self.request.user.organization).order_by('-created_at')
+
+    def perform_create(self, serializer):
+        job = serializer.save(organization=self.request.user.organization)
+        from .tasks import run_web_scraper
+        run_web_scraper.delay(str(job.id), job.query)
+

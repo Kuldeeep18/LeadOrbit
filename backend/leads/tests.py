@@ -2,7 +2,7 @@ from django.core.files.uploadedfile import SimpleUploadedFile
 from rest_framework import status
 from rest_framework.test import APITestCase
 
-from leads.models import BlockedDomain, Lead, Tag, LeadTag, LeadImportJob
+from leads.models import BlockedDomain, Lead, Tag, LeadTag, LeadImportJob, LeadScrapeJob
 from leads.tasks import import_leads_from_csv
 from tenants.models import Organization
 from users.models import User
@@ -461,3 +461,56 @@ class LeadFilterTests(APITestCase):
         resp = self._get()
         emails = {l['email'] for l in resp.data}
         self.assertNotIn('spy@example.com', emails)
+
+
+class LeadScrapeJobTests(APITestCase):
+    def setUp(self):
+        self.org_a = Organization.objects.create(name='Org A')
+        self.org_b = Organization.objects.create(name='Org B')
+        self.user_a = _make_user(self.org_a, email='user-a@example.com')
+        self.user_b = _make_user(self.org_b, email='user-b@example.com')
+
+    def test_list_scrape_jobs_tenant_isolation(self):
+        LeadScrapeJob.objects.create(organization=self.org_a, query='https://orga.com', status='COMPLETED')
+        LeadScrapeJob.objects.create(organization=self.org_b, query='https://orgb.com', status='COMPLETED')
+
+        self.client.force_authenticate(self.user_a)
+        resp = self.client.get('/api/v1/lead-scrape-jobs/')
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.data), 1)
+        self.assertEqual(resp.data[0]['query'], 'https://orga.com')
+
+    def test_create_scrape_job_runs_task_and_creates_leads(self):
+        self.client.force_authenticate(self.user_a)
+        self.assertEqual(Lead.objects.filter(organization=self.org_a).count(), 0)
+
+        resp = self.client.post('/api/v1/lead-scrape-jobs/', {'query': 'testcompany.com'}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+
+        job_id = resp.data['id']
+        job = LeadScrapeJob.objects.get(id=job_id)
+        self.assertEqual(job.status, 'COMPLETED')
+        self.assertEqual(job.leads_found, 3)
+        self.assertGreater(len(job.log_messages), 0)
+
+        self.assertEqual(Lead.objects.filter(organization=self.org_a).count(), 3)
+        lead = Lead.objects.filter(organization=self.org_a, email='john.doe@testcompany.com').first()
+        self.assertIsNotNone(lead)
+        self.assertEqual(lead.company, 'Testcompany')
+
+    def test_scrape_job_respects_blocked_domains(self):
+        BlockedDomain.objects.create(organization=self.org_a, domain='competitor.com')
+
+        self.client.force_authenticate(self.user_a)
+        resp = self.client.post('/api/v1/lead-scrape-jobs/', {'query': 'https://www.competitor.com/careers'}, format='json')
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+
+        job_id = resp.data['id']
+        job = LeadScrapeJob.objects.get(id=job_id)
+        self.assertEqual(job.status, 'FAILED')
+        self.assertEqual(job.leads_found, 0)
+        
+        log_msgs = [m['message'] for m in job.log_messages]
+        self.assertTrue(any("blocked" in m for m in log_msgs))
+        self.assertEqual(Lead.objects.filter(organization=self.org_a, email__endswith='@competitor.com').count(), 0)
+

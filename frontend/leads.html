@@ -135,6 +135,36 @@
         [data-theme='dark'] input[type='date'] {
             color-scheme: dark;
         }
+
+        /* ── Logs Terminal ── */
+        .logs-terminal {
+            background: #0f172a;
+            color: #38bdf8;
+            font-family: 'Courier New', Courier, monospace;
+            font-size: 0.85rem;
+            padding: 1.2rem;
+            border-radius: 8px;
+            max-height: 400px;
+            overflow-y: auto;
+            border: 1px solid var(--line);
+            box-shadow: inset 0 2px 8px rgba(0, 0, 0, 0.5);
+        }
+        .log-entry {
+            margin-bottom: 0.4rem;
+            line-height: 1.4;
+            display: flex;
+            align-items: flex-start;
+        }
+        .log-time {
+            color: #64748b;
+            margin-right: 0.75rem;
+            font-weight: bold;
+            white-space: nowrap;
+        }
+        .log-msg {
+            word-break: break-all;
+            white-space: pre-wrap;
+        }
     </style>
 </head>
 
@@ -353,6 +383,44 @@
                     </div>
                 </div>
 
+                <div class="table-shell mb-4">
+                    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 px-3 py-3 border-bottom">
+                        <div>
+                            <div class="fw-bold">Scraper Jobs</div>
+                            <div class="text-muted small">Monitor real-time search queries and web scraping logs.</div>
+                        </div>
+                        <div class="d-flex gap-2">
+                            <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#scraperModal">
+                                <i class="bi bi-search me-1" aria-hidden="true"></i> New Scrape Job
+                            </button>
+                            <button class="btn btn-sm btn-outline-secondary" type="button" id="refresh-scraper-btn">
+                                <i class="bi bi-arrow-clockwise me-1" aria-hidden="true"></i> Refresh
+                            </button>
+                        </div>
+                    </div>
+                    <div class="table-responsive">
+                        <table class="table table-hover mb-0 align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Query</th>
+                                    <th>Leads Found</th>
+                                    <th>Status</th>
+                                    <th>Started At</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="scraper-history-body">
+                                <tr>
+                                    <td colspan="5" class="text-center py-4 text-muted">
+                                        <div class="spinner-border spinner-border-sm text-primary me-2" role="status" aria-label="Loading scraper jobs"></div>
+                                        Loading scraper jobs...
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <div class="table-shell">
                     <div class="table-responsive">
                         <table class="table table-hover mb-0 align-middle">
@@ -443,6 +511,53 @@
                 </div>
             </div>
         </div>
+    <!-- Scraper Modal -->
+    <div class="modal fade" id="scraperModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content rounded-3 shadow">
+                <div class="modal-header border-0">
+                    <h5 class="modal-title fw-bold">New Scraper Job</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="alert alert-info small mb-3">
+                        <i class="bi bi-info-circle me-1" aria-hidden="true"></i>
+                        Enter a domain or a search query to crawl the web for B2B leads.
+                        The scraper will generate contact records and skip any domains blocked in your Settings.
+                    </div>
+                    <form id="scraper-form" aria-label="Scraper form">
+                        <div class="mb-3">
+                            <label for="scraper-query" class="form-label">Search Query or Domain</label>
+                            <input type="text" class="form-control" id="scraper-query" placeholder="e.g., competitor.com or B2B sales" required>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100" id="start-scraper-btn">
+                            <i class="bi bi-search me-1" aria-hidden="true"></i> Start Web Scraper
+                        </button>
+                        <div id="scraper-status" class="mt-2 text-center small"></div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scraper Logs Modal -->
+    <div class="modal fade" id="scraperLogsModal" tabindex="-1" aria-labelledby="scraperLogsModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content rounded-3 shadow">
+                <div class="modal-header border-0">
+                    <div>
+                        <h5 class="modal-title fw-bold" id="scraperLogsModalLabel">Scraper execution logs</h5>
+                        <div class="text-muted small" id="scraper-logs-meta"></div>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="logs-terminal" id="scraper-logs-terminal">
+                        <div class="text-muted">No logs selected.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script type="module" src="./main.js"></script>
@@ -453,8 +568,10 @@
         let allLeads = [];           // full unfiltered list (client-side search backup)
         let allTags = [];            // all org tags (for the filter panel)
         let allImportJobs = [];      // import job history
+        let allScraperJobs = [];     // scraper jobs history
         let selectedTagIds = new Set(); // tags selected in the filter panel
         let activeFilters = {};      // last applied filter state
+        let activeLogJobId = null;   // currently viewed job in logs modal
 
         // ─── Utilities ──────────────────────────────────────────────────────
 
@@ -542,6 +659,91 @@
             renderImportErrorRows(job);
             bootstrap.Modal.getOrCreateInstance(document.getElementById('importErrorsModal')).show();
         }
+
+        function renderScraperJobs(jobs) {
+            const tbody = document.getElementById('scraper-history-body');
+            if (!jobs.length) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="5" class="text-center py-4 text-muted">
+                            No scraper jobs found. Click <strong>New Scrape Job</strong> to start.
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = jobs.map(job => {
+                let statusBadge = '';
+                if (job.status === 'PENDING') {
+                    statusBadge = '<span class="chip" style="background:#e2e8f0;color:#475569;">Pending</span>';
+                } else if (job.status === 'RUNNING') {
+                    statusBadge = '<span class="chip" style="background:#fef3c7;color:#d97706;"><span class="spinner-border spinner-border-sm me-1" style="width:10px;height:10px;border-width:1.5px;" role="status"></span>Running</span>';
+                } else if (job.status === 'COMPLETED') {
+                    statusBadge = '<span class="chip" style="background:#dcfce7;color:#15803d;">Completed</span>';
+                } else {
+                    statusBadge = '<span class="chip" style="background:#fee2e2;color:#b91c1c;">Failed</span>';
+                }
+
+                return `
+                    <tr>
+                        <td class="fw-semibold">${escapeHtml(job.query)}</td>
+                        <td><span class="chip" style="background:#e0f2fe;color:#0369a1;">${job.leads_found ?? 0}</span></td>
+                        <td>${statusBadge}</td>
+                        <td>${formatTimestamp(job.created_at)}</td>
+                        <td>
+                            <div class="d-flex gap-1">
+                                <button class="btn btn-sm btn-outline-primary view-scraper-logs-btn" data-job-id="${job.id}">
+                                    <i class="bi bi-terminal me-1" aria-hidden="true"></i>Logs
+                                </button>
+                                <button class="btn btn-sm btn-outline-danger delete-scraper-job-btn" data-job-id="${job.id}">
+                                    <i class="bi bi-trash" aria-hidden="true"></i>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+
+            tbody.querySelectorAll('.view-scraper-logs-btn').forEach(btn => {
+                btn.addEventListener('click', () => openScraperLogs(btn.dataset.jobId));
+            });
+
+            tbody.querySelectorAll('.delete-scraper-job-btn').forEach(btn => {
+                btn.addEventListener('click', () => deleteScraperJob(btn.dataset.jobId));
+            });
+        }
+
+        function renderScraperLogs(job) {
+            const terminal = document.getElementById('scraper-logs-terminal');
+            const logs = Array.isArray(job?.log_messages) ? job.log_messages : [];
+            if (!logs.length) {
+                terminal.innerHTML = '<div class="text-muted">No logs recorded yet.</div>';
+                return;
+            }
+            terminal.innerHTML = logs.map(entry => {
+                const time = entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString() : '';
+                return `
+                    <div class="log-entry">
+                        <span class="log-time">[${time}]</span>
+                        <span class="log-msg">${escapeHtml(entry.message)}</span>
+                    </div>
+                `;
+            }).join('');
+            terminal.scrollTop = terminal.scrollHeight;
+        }
+
+        function openScraperLogs(jobId) {
+            const job = allScraperJobs.find(item => item.id === jobId);
+            if (!job) return;
+
+            activeLogJobId = jobId;
+            document.getElementById('scraper-logs-meta').textContent =
+                `${job.query} · ${job.status} · ${job.leads_found} lead(s) found`;
+            renderScraperLogs(job);
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('scraperLogsModal')).show();
+        }
+
 
         function renderLeadRows(leads) {
             const tbody = document.getElementById('leads-table-body');
@@ -796,6 +998,70 @@
             renderImportHistory(allImportJobs);
         }
 
+        let scraperPollInterval = null;
+
+        function checkAndPollScraper() {
+            const hasActive = allScraperJobs.some(j => j.status === 'PENDING' || j.status === 'RUNNING');
+            if (hasActive) {
+                if (!scraperPollInterval) {
+                    scraperPollInterval = setInterval(async () => {
+                        const wasActiveBefore = allScraperJobs.some(j => j.status === 'PENDING' || j.status === 'RUNNING');
+                        await loadScraperJobs();
+                        const isActiveNow = allScraperJobs.some(j => j.status === 'PENDING' || j.status === 'RUNNING');
+                        
+                        if (wasActiveBefore && !isActiveNow) {
+                            await loadLeads();
+                        }
+                    }, 3000);
+                }
+            } else {
+                if (scraperPollInterval) {
+                    clearInterval(scraperPollInterval);
+                    scraperPollInterval = null;
+                }
+            }
+        }
+
+        async function loadScraperJobs() {
+            try {
+                const res = await fetchWithAuth('/lead-scrape-jobs/');
+                if (!res.ok) return;
+                const payload = await res.json();
+                allScraperJobs = Array.isArray(payload) ? payload : (payload.results || []);
+                renderScraperJobs(allScraperJobs);
+                checkAndPollScraper();
+
+                if (activeLogJobId) {
+                    const activeJob = allScraperJobs.find(item => item.id === activeLogJobId);
+                    if (activeJob) {
+                        document.getElementById('scraper-logs-meta').textContent =
+                            `${activeJob.query} · ${activeJob.status} · ${activeJob.leads_found} lead(s) found`;
+                        renderScraperLogs(activeJob);
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to load scraper jobs:', e);
+            }
+        }
+
+        async function deleteScraperJob(jobId) {
+            if (!confirm('Are you sure you want to delete this scraper job log?')) return;
+            try {
+                const res = await fetchWithAuth(`/lead-scrape-jobs/${jobId}/`, {
+                    method: 'DELETE',
+                });
+                if (res.ok) {
+                    if (activeLogJobId === jobId) {
+                        activeLogJobId = null;
+                        bootstrap.Modal.getInstance(document.getElementById('scraperLogsModal'))?.hide();
+                    }
+                    await loadScraperJobs();
+                }
+            } catch (e) {
+                console.error('Failed to delete scraper job:', e);
+            }
+        }
+
         // ─── Text search (client-side, applied on top of server results) ────
 
         function applySearch() {
@@ -818,6 +1084,7 @@
             try {
                 await loadLeads();
                 await loadImportHistory();
+                await loadScraperJobs();
             } catch (e) {
                 console.error('Error fetching leads:', e);
             }
@@ -826,6 +1093,7 @@
 
             document.getElementById('lead-search').addEventListener('input', applySearch);
             document.getElementById('refresh-history-btn').addEventListener('click', loadImportHistory);
+            document.getElementById('refresh-scraper-btn').addEventListener('click', loadScraperJobs);
 
             const filterPanel = document.getElementById('filter-panel');
             document.getElementById('filter-toggle-btn').addEventListener('click', () => {
@@ -880,6 +1148,49 @@
                     btn.disabled = false;
                     btn.innerHTML = '<i class="bi bi-cloud-upload me-1" aria-hidden="true"></i> Upload and Process';
                 }
+            });
+
+            document.getElementById('scraper-form').addEventListener('submit', async (e) => {
+                e.preventDefault();
+                const queryInput = document.getElementById('scraper-query');
+                const query = (queryInput.value || '').trim();
+                if (!query) return;
+
+                const btn = document.getElementById('start-scraper-btn');
+                const statusEl = document.getElementById('scraper-status');
+
+                btn.disabled = true;
+                btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span> Initializing scraper...';
+                statusEl.innerHTML = '';
+
+                try {
+                    const res = await fetchWithAuth('/lead-scrape-jobs/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ query }),
+                    });
+
+                    if (res.status === 201) {
+                        statusEl.innerHTML = '<span class="text-success"><i class="bi bi-check-circle me-1" aria-hidden="true"></i>Scraper job initialized successfully.</span>';
+                        queryInput.value = '';
+                        await loadScraperJobs();
+                        bootstrap.Modal.getOrCreateInstance(document.getElementById('scraperModal')).hide();
+                    } else {
+                        const errData = await res.json().catch(() => ({}));
+                        statusEl.innerHTML = `<span class="text-danger"><i class="bi bi-x-circle me-1" aria-hidden="true"></i>Failed to start scraper: ${errData.detail || 'Server error'}</span>`;
+                    }
+                } catch (err) {
+                    statusEl.innerHTML = `<span class="text-danger">Error: ${err.message}</span>`;
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = '<i class="bi bi-search me-1" aria-hidden="true"></i> Start Web Scraper';
+                }
+            });
+
+            document.getElementById('scraperLogsModal').addEventListener('hidden.bs.modal', () => {
+                activeLogJobId = null;
             });
         });
     </script>
