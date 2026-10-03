@@ -535,13 +535,33 @@ class DashboardAnalyticsView(APIView):
         open_rate = round((opened / emails_sent * 100) if emails_sent > 0 else 0, 1)
         reply_rate = round((replied / emails_sent * 100) if emails_sent > 0 else 0, 1)
         click_rate = round((clicked / emails_sent * 100) if emails_sent > 0 else 0, 1)
-        bounce_rate = round((bounced / emails_sent * 100) if emails_sent > 0 else 0, 1)
+        
+        # Calculate bounce rate for the last 7 days
+        warning_cutoff = timezone.now() - timedelta(days=7)
+        sent_statuses = ['ACTIVE', 'FINISHED', 'REPLIED', 'BOUNCED']
+        recent_campaign_leads = CampaignLead.objects.filter(
+            organization=org,
+            created_at__gte=warning_cutoff,
+        )
+
+        sent_last_7_days = recent_campaign_leads.filter(
+            status__in=sent_statuses
+        ).count()
+        bounced_last_7_days = recent_campaign_leads.filter(
+            status='BOUNCED'
+        ).count()
+
+        bounce_rate = round(
+            (bounced_last_7_days / sent_last_7_days * 100)
+            if sent_last_7_days > 0 else 0,
+            1,
+        )
+        bounce_warning = bounce_rate > 5
 
         # ── Time-series: daily aggregates within the window ──
         # Still need to query CampaignLead for time-series breakdown
         all_cls = CampaignLead.objects.filter(organization=org, created_at__gte=cutoff)
 
-        sent_statuses = ['ACTIVE', 'FINISHED', 'REPLIED', 'BOUNCED']
         sent_by_day = dict(
             all_cls.filter(status__in=sent_statuses)
             .annotate(day=TruncDate('created_at'))
@@ -619,6 +639,7 @@ class DashboardAnalyticsView(APIView):
             'reply_rate': reply_rate,
             'click_rate': click_rate,
             'bounce_rate': bounce_rate,
+            'bounce_warning': bounce_warning,
             'time_series': {
                 'labels': labels,
                 'sent': sent_series,
