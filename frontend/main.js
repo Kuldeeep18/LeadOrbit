@@ -199,23 +199,51 @@ function initThemeToggle() {
     const themeToggle = document.getElementById('theme-toggle');
     if (!themeToggle) {
         console.debug('Theme toggle not found on this page');
-        return;
+    } else {
+        // Set initial state from saved or system preference
+        const currentTheme = getTheme();
+        themeToggle.checked = currentTheme === 'dark';
+        applyTheme(currentTheme);
+
+        // Remove existing listeners by cloning (prevents duplicates)
+        const newToggle = themeToggle.cloneNode(true);
+        themeToggle.parentNode.replaceChild(newToggle, themeToggle);
+
+        // Add change listener
+        newToggle.addEventListener('change', () => {
+            const newTheme = newToggle.checked ? 'dark' : 'light';
+            setTheme(newTheme);
+        });
     }
 
-    // Set initial state from saved or system preference
-    const currentTheme = getTheme();
-    themeToggle.checked = currentTheme === 'dark';
-    applyTheme(currentTheme);
-    
-    // Remove existing listeners by cloning (prevents duplicates)
-    const newToggle = themeToggle.cloneNode(true);
-    themeToggle.parentNode.replaceChild(newToggle, themeToggle);
-    
-    // Add change listener
-    newToggle.addEventListener('change', () => {
-        const newTheme = newToggle.checked ? 'dark' : 'light';
-        setTheme(newTheme);
-    });
+    // Header icon button (present on dashboard, leads, campaigns, analytics)
+    const headerThemeBtn = document.getElementById('header-theme-toggle');
+    if (headerThemeBtn) {
+        const updateHeaderIcon = (theme) => {
+            const icon = headerThemeBtn.querySelector('i');
+            if (!icon) return;
+            if (theme === 'dark') {
+                icon.className = 'bi bi-sun';
+                headerThemeBtn.setAttribute('aria-label', 'Switch to light mode');
+                headerThemeBtn.setAttribute('title', 'Switch to light mode (Ctrl+T)');
+            } else {
+                icon.className = 'bi bi-moon-stars';
+                headerThemeBtn.setAttribute('aria-label', 'Switch to dark mode');
+                headerThemeBtn.setAttribute('title', 'Switch to dark mode (Ctrl+T)');
+            }
+        };
+
+        // Set initial icon state
+        updateHeaderIcon(getTheme());
+
+        headerThemeBtn.addEventListener('click', () => {
+            const newTheme = toggleTheme();
+            updateHeaderIcon(newTheme);
+        });
+
+        // Keep icon in sync when theme changes via other means (settings page, keyboard shortcut, other tab)
+        window.addEventListener('themeChanged', (e) => updateHeaderIcon(e.detail.theme));
+    }
 }
 
 // Sync theme across multiple tabs
@@ -224,10 +252,19 @@ window.addEventListener('storage', (event) => {
         const newTheme = event.newValue === 'dark' ? 'dark' : 'light';
         applyTheme(newTheme);
         
-        // Update toggle if it exists
+        // Update settings page toggle if it exists
         const themeToggle = document.getElementById('theme-toggle');
         if (themeToggle) {
             themeToggle.checked = newTheme === 'dark';
+        }
+
+        // Update header icon button if it exists
+        const headerThemeBtn = document.getElementById('header-theme-toggle');
+        if (headerThemeBtn) {
+            const icon = headerThemeBtn.querySelector('i');
+            if (icon) {
+                icon.className = newTheme === 'dark' ? 'bi bi-sun' : 'bi bi-moon-stars';
+            }
         }
     }
 });
