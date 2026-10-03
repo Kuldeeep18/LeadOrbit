@@ -1,5 +1,6 @@
 import logging
 import urllib.parse
+import base64
 from datetime import timedelta
 
 from bs4 import BeautifulSoup
@@ -538,7 +539,6 @@ def rewrite_email_links(html_body, campaign_lead_id, step_id):
         a_tag['href'] = tracking_url
         
     return str(soup)
-# -----------------------------------
 
 
 @shared_task
@@ -585,7 +585,6 @@ def send_email_step(campaign_lead_id, step_id):
 
        
         body = rewrite_email_links(body, campaign_lead_id, step_id)
-        # -------------------------------------------
 
         account = clead.campaign.connected_account
         if account:
@@ -600,12 +599,21 @@ def send_email_step(campaign_lead_id, step_id):
                     )
                     logger.info(f"Gmail SENT to {clead.lead.email} | msg_id={message_id}")
                 elif account.provider == 'CUSTOM':
+                    # Generate signed Message-ID for webhook tracking (RFC 5322 compliant)
+                    signer = Signer()
+                    signed_payload = signer.sign(f"{clead.id}:{clead.organization_id}")
+                    # Encode to make it Message-ID safe (remove : and other invalid characters)
+                    encoded_payload = base64.urlsafe_b64encode(signed_payload.encode()).decode().rstrip('=')
+                    domain = account.email_address.split('@', 1)[-1] if '@' in account.email_address else 'leadorbit.com'
+                    custom_mid = f"<{encoded_payload}@{domain}>"
+                    
                     message_id = send_smtp_email(
                         account,
                         clead.lead.email,
                         subject,
                         body,
                         unsubscribe_url=build_unsubscribe_url(clead.lead),
+                        message_id=custom_mid,
                     )
                     logger.info(f"SMTP SENT to {clead.lead.email} | msg_id={message_id}")
                 else:
@@ -862,3 +870,4 @@ def check_imap_bounces():
                     )
 
     return f"Processed {scanned_messages} bounce emails and marked {total_bounced} campaign leads as BOUNCED."
+
