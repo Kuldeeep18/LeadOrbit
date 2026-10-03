@@ -130,6 +130,20 @@
                     </div>
                 </div>
 
+                <!-- Benchmark Insights & Recommendations Panel -->
+                <div class="glass-card p-3 mb-4 d-none" id="benchmark-insights-section">
+                    <div class="d-flex align-items-center gap-2 mb-3">
+                        <i class="bi bi-lightbulb-fill text-warning fs-4" aria-hidden="true"></i>
+                        <div>
+                            <div class="section-title mb-0">Performance Insights & Recommendations</div>
+                            <div class="title-meta">Comparison against industry standards</div>
+                        </div>
+                    </div>
+                    <div class="row g-3" id="benchmark-recommendations-list">
+                        <!-- Recommendations dynamically generated here -->
+                    </div>
+                </div>
+
                 <div class="glass-card p-3 mb-4 campaign-inspector">
                     <div class="d-flex flex-wrap align-items-center justify-content-between gap-3">
                         <div>
@@ -237,6 +251,7 @@
                     total_leads: 0, active_campaigns: 0,
                     emails_sent: 0, opened: 0, replied: 0, clicked: 0, bounced: 0,
                     open_rate: 0, reply_rate: 0, click_rate: 0, bounce_rate: 0,
+                    benchmarks: { open_rate: 20.0, reply_rate: 5.0 },
                     time_series: { labels: [], sent: [], opened: [], replied: [] },
                     campaign_stats: [], recent_activity: [],
                 };
@@ -259,7 +274,107 @@
                 document.getElementById('kpi-reply-rate').textContent = `${data.reply_rate || 0}% reply rate`;
                 document.getElementById('kpi-bounce-rate').textContent = `${data.bounce_rate || 0}% bounce rate`;
             };
+
+            // ── Benchmark Insights and Recommendations ──
+            const updateBenchmarkInsights = () => {
+                const openBenchmark = data.benchmarks ? data.benchmarks.open_rate : 20.0;
+                const replyBenchmark = data.benchmarks ? data.benchmarks.reply_rate : 5.0;
+                const openRate = data.open_rate || 0;
+                const replyRate = data.reply_rate || 0;
+
+                const insightsSection = document.getElementById('benchmark-insights-section');
+                const listEl = document.getElementById('benchmark-recommendations-list');
+                if (!insightsSection || !listEl) return;
+
+                if (!data.emails_sent || data.emails_sent === 0) {
+                    insightsSection.classList.add('d-none');
+                    return;
+                }
+
+                insightsSection.classList.remove('d-none');
+
+                let openHTML = '';
+                let replyHTML = '';
+
+                // Open Rate Recommendation
+                if (openRate < openBenchmark) {
+                    const diff = (openBenchmark - openRate).toFixed(1);
+                    openHTML = `
+                        <div class="col-md-6">
+                            <div class="p-3 rounded-3 h-100 d-flex gap-3 align-items-start" style="background: var(--panel-muted); border: 1px solid var(--line); border-left: 4px solid var(--paused-fg) !important;">
+                                <div class="d-flex align-items-center justify-content-center rounded-circle flex-shrink-0" style="width: 36px; height: 36px; background: var(--paused-bg); color: var(--paused-fg); font-size: 1.1rem;">
+                                    <i class="bi bi-arrow-down-right"></i>
+                                </div>
+                                <div>
+                                    <div class="fw-bold" style="color: var(--paused-fg);">Open Rate below benchmark (${openRate}% vs ${openBenchmark}%)</div>
+                                    <p class="small mb-0 mt-1" style="color: var(--ink-700);">
+                                        Your open rate is <strong>${diff}% below</strong> the standard benchmark.
+                                        <strong>Try this:</strong> Try improving your subject lines! Personalize them with dynamic tags (e.g. <code>{{first_name}}</code>) or try shortening them to keep them concise.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    openHTML = `
+                        <div class="col-md-6">
+                            <div class="p-3 rounded-3 h-100 d-flex gap-3 align-items-start" style="background: var(--panel-muted); border: 1px solid var(--line); border-left: 4px solid var(--active-fg) !important;">
+                                <div class="d-flex align-items-center justify-content-center rounded-circle flex-shrink-0" style="width: 36px; height: 36px; background: var(--active-bg); color: var(--active-fg); font-size: 1.1rem;">
+                                    <i class="bi bi-arrow-up-right"></i>
+                                </div>
+                                <div>
+                                    <div class="fw-bold" style="color: var(--active-fg);">Open Rate meets benchmark (${openRate}% vs ${openBenchmark}%)</div>
+                                    <p class="small mb-0 mt-1" style="color: var(--ink-700);">
+                                        Excellent! Your open rate is performing at or above the industry standard of ${openBenchmark}%. Your subject lines are engaging.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                // Reply Rate Recommendation
+                if (replyRate < replyBenchmark) {
+                    const diff = (replyBenchmark - replyRate).toFixed(1);
+                    replyHTML = `
+                        <div class="col-md-6">
+                            <div class="p-3 rounded-3 h-100 d-flex gap-3 align-items-start" style="background: var(--panel-muted); border: 1px solid var(--line); border-left: 4px solid var(--paused-fg) !important;">
+                                <div class="d-flex align-items-center justify-content-center rounded-circle flex-shrink-0" style="width: 36px; height: 36px; background: var(--paused-bg); color: var(--paused-fg); font-size: 1.1rem;">
+                                    <i class="bi bi-arrow-down-right"></i>
+                                </div>
+                                <div>
+                                    <div class="fw-bold" style="color: var(--paused-fg);">Reply Rate below benchmark (${replyRate}% vs ${replyBenchmark}%)</div>
+                                    <p class="small mb-0 mt-1" style="color: var(--ink-700);">
+                                        Your reply rate is <strong>${diff}% below</strong> the standard benchmark.
+                                        <strong>Try this:</strong> Try improving your sequence copy! Use a clearer Call-to-Action (CTA), shorten your email content, and end with a simple question.
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                } else {
+                    replyHTML = `
+                        <div class="col-md-6">
+                            <div class="p-3 rounded-3 h-100 d-flex gap-3 align-items-start" style="background: var(--panel-muted); border: 1px solid var(--line); border-left: 4px solid var(--active-fg) !important;">
+                                <div class="d-flex align-items-center justify-content-center rounded-circle flex-shrink-0" style="width: 36px; height: 36px; background: var(--active-bg); color: var(--active-fg); font-size: 1.1rem;">
+                                    <i class="bi bi-arrow-up-right"></i>
+                                </div>
+                                <div>
+                                    <div class="fw-bold" style="color: var(--active-fg);">Reply Rate meets benchmark (${replyRate}% vs ${replyBenchmark}%)</div>
+                                    <p class="small mb-0 mt-1" style="color: var(--ink-700);">
+                                        Outstanding engagement! Your reply rate is at or above the industry standard of ${replyBenchmark}%. Keep it up!
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                }
+
+                listEl.innerHTML = openHTML + replyHTML;
+            };
+
             updateKPIs();
+            updateBenchmarkInsights();
 
             // ── Activity chart from real time-series ──
             const renderActivityChart = () => {
@@ -330,25 +445,95 @@
             const renderCampaignPerformanceChart = () => {
                 const stats = (data.campaign_stats || []).slice(0, 6);
                 const labels = stats.length ? stats.map(c => c.name) : ['No campaigns yet'];
-                const sentVals = stats.length ? stats.map(c => c.sent || 0) : [0];
-                const openedVals = stats.length ? stats.map(c => c.opened || 0) : [0];
-                const repliedVals = stats.length ? stats.map(c => c.replied || 0) : [0];
+                
+                const openRates = stats.length 
+                    ? stats.map(c => c.sent > 0 ? Number(((c.opened / c.sent) * 100).toFixed(1)) : 0) 
+                    : [0];
+                const replyRates = stats.length 
+                    ? stats.map(c => c.sent > 0 ? Number(((c.replied / c.sent) * 100).toFixed(1)) : 0) 
+                    : [0];
+
+                const openBenchmarkVal = data.benchmarks ? data.benchmarks.open_rate : 20.0;
+                const replyBenchmarkVal = data.benchmarks ? data.benchmarks.reply_rate : 5.0;
 
                 if (campaignChart) campaignChart.destroy();
                 campaignChart = new Chart(document.getElementById('campaignChart'), {
-                    type: 'bar',
                     data: {
                         labels,
                         datasets: [
-                            { label: 'Sent', data: sentVals, backgroundColor: '#0d6efd' },
-                            { label: 'Opened', data: openedVals, backgroundColor: '#10b981' },
-                            { label: 'Replied', data: repliedVals, backgroundColor: '#f59e0b' },
+                            { 
+                                type: 'bar',
+                                label: 'Open Rate (%)', 
+                                data: openRates, 
+                                backgroundColor: '#10b981',
+                                borderRadius: 4,
+                                order: 2
+                            },
+                            { 
+                                type: 'bar',
+                                label: 'Reply Rate (%)', 
+                                data: replyRates, 
+                                backgroundColor: '#f59e0b',
+                                borderRadius: 4,
+                                order: 2
+                            },
+                            {
+                                type: 'line',
+                                label: `Open Rate Benchmark (${openBenchmarkVal}%)`,
+                                data: Array(labels.length).fill(openBenchmarkVal),
+                                borderColor: '#ef4444',
+                                borderDash: [5, 5],
+                                borderWidth: 2,
+                                pointRadius: 0,
+                                fill: false,
+                                order: 1
+                            },
+                            {
+                                type: 'line',
+                                label: `Reply Rate Benchmark (${replyBenchmarkVal}%)`,
+                                data: Array(labels.length).fill(replyBenchmarkVal),
+                                borderColor: '#a855f7',
+                                borderDash: [5, 5],
+                                borderWidth: 2,
+                                pointRadius: 0,
+                                fill: false,
+                                order: 1
+                            }
                         ],
                     },
                     options: {
                         responsive: true,
-                        plugins: { legend: { position: 'bottom' } },
-                        scales: { y: { beginAtZero: true } },
+                        plugins: { 
+                            legend: { position: 'bottom' },
+                            tooltip: {
+                                callbacks: {
+                                    label: function(context) {
+                                        let label = context.dataset.label || '';
+                                        if (label) {
+                                            label += ': ';
+                                        }
+                                        if (context.parsed.y !== null) {
+                                            label += context.parsed.y + '%';
+                                        }
+                                        return label;
+                                    }
+                                }
+                            }
+                        },
+                        scales: { 
+                            y: { 
+                                beginAtZero: true,
+                                title: {
+                                    display: true,
+                                    text: 'Percentage (%)'
+                                },
+                                ticks: {
+                                    callback: function(value) {
+                                        return value + '%';
+                                    }
+                                }
+                            } 
+                        },
                     },
                 });
             };
@@ -504,6 +689,7 @@
                 const days = Number(timeRangeSelect.value || 30);
                 data = await loadAnalytics(days);
                 updateKPIs();
+                updateBenchmarkInsights();
                 renderActivityChart();
                 renderCampaignPerformanceChart();
             });
