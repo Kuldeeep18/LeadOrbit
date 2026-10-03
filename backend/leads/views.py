@@ -1,4 +1,4 @@
-from django.db.models import Q
+from django.db.models import F, Max, Q
 from rest_framework import viewsets, parsers, status
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action
@@ -41,8 +41,12 @@ class LeadViewSet(viewsets.ModelViewSet):
           ?created_before=YYYY-MM-DD — leads created on or before this date
           ?status=active|unsubscribed — filter by subscription status
           ?search=<text>            — filter by name / email / company
+          ?ordering=last_contacted_at | -last_contacted_at — sort by most recent
+                                        contact time (never-contacted leads last)
         """
-        qs = Lead.objects.filter(organization=self.request.user.organization)
+        qs = Lead.objects.filter(organization=self.request.user.organization).annotate(
+            last_contacted_at=Max('campaigns__last_sent_at')
+        )
         params = self.request.query_params
 
         # ── Tag filter ──────────────────────────────────────────────────────
@@ -77,6 +81,13 @@ class LeadViewSet(viewsets.ModelViewSet):
                 | Q(email__icontains=search)
                 | Q(company__icontains=search)
             )
+
+        # ── Ordering ────────────────────────────────────────────────────────
+        ordering = params.get('ordering', '').strip()
+        if ordering == 'last_contacted_at':
+            qs = qs.order_by(F('last_contacted_at').asc(nulls_last=True))
+        elif ordering == '-last_contacted_at':
+            qs = qs.order_by(F('last_contacted_at').desc(nulls_last=True))
 
         return qs.distinct()
 
