@@ -1,7 +1,7 @@
 import logging
 
 
-import urllib.parse
+import json
 from django.core.signing import Signer, BadSignature
 from django.http import HttpResponseRedirect, HttpResponseBadRequest
 # ------------------------------------------
@@ -782,17 +782,20 @@ class ClickTrackingView(APIView):
 
     def get(self, request, *args, **kwargs):
         signed_token = request.GET.get('t')
-        dest_url = request.GET.get('dest')
 
-        if not signed_token or not dest_url:
+        if not signed_token:
             return HttpResponseBadRequest("Missing tracking parameters.")
 
         signer = Signer()
         try:
             # Decode and verify the token signature
             unsigned_payload = signer.unsign(signed_token)
-            campaign_lead_id, step_id = unsigned_payload.split(':')
-        except (BadSignature, ValueError):
+            payload = json.loads(unsigned_payload)
+            campaign_lead_id = payload['campaign_lead_id']
+            dest_url = payload['dest']
+            if not dest_url:
+                raise ValueError
+        except (BadSignature, KeyError, TypeError, ValueError, json.JSONDecodeError):
             return HttpResponseBadRequest("Invalid or tampered tracking token.")
 
         # Analytics ko update karna
@@ -809,7 +812,5 @@ class ClickTrackingView(APIView):
         except CampaignLead.DoesNotExist:
             pass # Failsafe: Continue to redirect even if the lead was deleted
 
-        # Original Destination par redirect karna
-        decoded_dest = urllib.parse.unquote(dest_url)
-        return HttpResponseRedirect(decoded_dest)
+        return HttpResponseRedirect(dest_url)
 # ------------------------------------------

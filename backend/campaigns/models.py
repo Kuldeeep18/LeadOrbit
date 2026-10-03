@@ -105,6 +105,23 @@ class SequenceStep(TenantModel):
     def __str__(self):
         return f"{self.campaign.name} - Step {self.step_order} ({self.channel_type})"
 
+
+class EmailVariant(TenantModel):
+    id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
+    step = models.ForeignKey(SequenceStep, on_delete=models.CASCADE, related_name='variants')
+    variant_label = models.CharField(max_length=10)
+    subject = models.TextField()
+    body = models.TextField()
+    weight = models.PositiveIntegerField(default=50)
+
+    class Meta:
+        ordering = ['variant_label']
+        unique_together = ('step', 'variant_label')
+
+    def __str__(self):
+        return f"{self.step} - Variant {self.variant_label}"
+
+
 class EmailTemplate(TenantModel):
     name = models.CharField(max_length=255)
     subject = models.TextField()
@@ -132,6 +149,13 @@ class CampaignLead(TenantModel):
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='ENROLLED')
     next_execution_time = models.DateTimeField(null=True, blank=True)
     last_sent_message_id = models.CharField(max_length=255, null=True, blank=True)
+    last_email_variant = models.ForeignKey(
+        EmailVariant,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='sent_campaign_leads',
+    )
     last_opened_at = models.DateTimeField(null=True, blank=True)
     last_clicked_at = models.DateTimeField(null=True, blank=True)
     last_replied_at = models.DateTimeField(null=True, blank=True)

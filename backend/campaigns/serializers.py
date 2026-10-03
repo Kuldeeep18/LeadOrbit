@@ -1,7 +1,7 @@
 from rest_framework import serializers
 from django.db.models import Q
 
-from .models import Campaign, CampaignLead, ConnectedEmailAccount, SequenceStep, EmailTemplate
+from .models import Campaign, CampaignLead, ConnectedEmailAccount, EmailVariant, SequenceStep, EmailTemplate
 
 DELAY_UNIT_TO_MINUTES = {
     'minutes': 1,
@@ -17,10 +17,18 @@ CONDITION_TIME_TO_MINUTES = {
 }
 
 
+class EmailVariantSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = EmailVariant
+        fields = ['id', 'variant_label', 'subject', 'body', 'weight']
+
+
 class SequenceStepSerializer(serializers.ModelSerializer):
+    variants = EmailVariantSerializer(many=True, required=False)
+
     class Meta:
         model = SequenceStep
-        fields = ['id', 'step_order', 'channel_type', 'delay_minutes', 'template_subject', 'template_body']
+        fields = ['id', 'step_order', 'channel_type', 'delay_minutes', 'template_subject', 'template_body', 'variants']
 
 
 class CampaignSerializer(serializers.ModelSerializer):
@@ -81,6 +89,13 @@ class CampaignSerializer(serializers.ModelSerializer):
         if not exists:
             raise serializers.ValidationError("Connected account not found for the current user.")
         return value
+
+    def validate(self, attrs):
+        steps_payload = self._extract_steps_payload()
+        if steps_payload is not None:
+            for index, raw_step in enumerate(steps_payload):
+                self._normalize_step(raw_step, index)
+        return attrs
 
     def create(self, validated_data):
         connected_account_id = validated_data.pop('connected_account_id', None)
@@ -146,25 +161,42 @@ class CampaignSerializer(serializers.ModelSerializer):
         return value
 
     def _sync_sequence_steps(self, campaign, raw_steps):
-        SequenceStep.objects.filter(campaign=campaign).delete()
+        existing_steps = {
+            step.step_order: step
+            for step in SequenceStep.objects.filter(campaign=campaign)
+        }
+        seen_orders = []
 
-        step_objects = []
         for index, raw_step in enumerate(raw_steps):
             normalized = self._normalize_step(raw_step, index)
-            step_objects.append(
-                SequenceStep(
+            step_order = index + 1
+            seen_orders.append(step_order)
+            step = existing_steps.get(step_order)
+
+            if step is None:
+                step = SequenceStep.objects.create(
                     organization=campaign.organization,
                     campaign=campaign,
-                    step_order=index + 1,
+                    step_order=step_order,
                     channel_type=normalized['channel_type'],
                     delay_minutes=normalized['delay_minutes'],
                     template_subject=normalized['template_subject'],
                     template_body=normalized['template_body'],
                 )
-            )
+            else:
+                step.channel_type = normalized['channel_type']
+                step.delay_minutes = normalized['delay_minutes']
+                step.template_subject = normalized['template_subject']
+                step.template_body = normalized['template_body']
+                step.save(update_fields=[
+                    'channel_type',
+                    'delay_minutes',
+                    'template_subject',
+                    'template_body',
+                ])
+            self._sync_email_variants(step, normalized['variants'])
 
-        if step_objects:
-            SequenceStep.objects.bulk_create(step_objects)
+        SequenceStep.objects.filter(campaign=campaign).exclude(step_order__in=seen_orders).delete()
 
     def _normalize_step(self, raw_step, index):
         if not isinstance(raw_step, dict):
@@ -195,7 +227,61 @@ class CampaignSerializer(serializers.ModelSerializer):
             'delay_minutes': delay_minutes,
             'template_subject': template_subject,
             'template_body': template_body,
+            'variants': self._normalize_variants(raw_step, channel_type, template_subject, template_body),
         }
+
+    def _sync_email_variants(self, step, variants):
+        if not variants:
+            step.variants.all().delete()
+            return
+
+        seen_labels = []
+        for variant in variants:
+            seen_labels.append(variant['variant_label'])
+            EmailVariant.objects.update_or_create(
+                step=step,
+                variant_label=variant['variant_label'],
+                defaults={
+                    'organization': step.organization,
+                    'subject': variant['subject'],
+                    'body': variant['body'],
+                    'weight': variant['weight'],
+                },
+            )
+
+        step.variants.exclude(variant_label__in=seen_labels).delete()
+
+    def _normalize_variants(self, raw_step, channel_type, default_subject, default_body):
+        raw_variants = raw_step.get('variants')
+        if channel_type != 'EMAIL' or not isinstance(raw_variants, list):
+            return []
+
+        variants = []
+        seen_labels = set()
+        for index, raw_variant in enumerate(raw_variants):
+            if not isinstance(raw_variant, dict):
+                continue
+
+            label = str(
+                raw_variant.get('variant_label')
+                or raw_variant.get('label')
+                or chr(65 + index)
+            ).strip()[:10]
+            label = label or chr(65 + index)
+            if label in seen_labels:
+                raise serializers.ValidationError({
+                    'steps': f"Duplicate email variant label '{label}' in step {raw_step.get('step_order') or 1}."
+                })
+            seen_labels.add(label)
+            weight = self._coerce_int(raw_variant.get('weight'))
+            variants.append({
+                'variant_label': label,
+                'subject': raw_variant.get('subject') or default_subject or '',
+                'body': raw_variant.get('body') or default_body or '',
+                'weight': max(weight if weight is not None else 50, 0),
+            })
+
+        return variants
 
     def _extract_delay_minutes(self, raw_step, channel_type):
         delay_minutes = self._coerce_int(raw_step.get('delay_minutes'))
