@@ -131,6 +131,16 @@
                                 <input class="form-check-input" type="checkbox" id="enable-ai-personalization" checked>
                                 <label class="form-check-label small text-muted fw-semibold" for="enable-ai-personalization">Enable AI Personalization</label>
                             </div>
+                            <div class="mb-3">
+    <label class="form-label small text-muted fw-semibold">Webhook URL</label>
+    <div class="input-group">
+        <input type="text" class="form-control" id="webhook-url" disabled>
+        <button class="btn btn-outline-secondary" id="copy-webhook-url-btn" aria-label="Copy webhook URL">
+            <i class="bi bi-clipboard" aria-hidden="true"></i>
+        </button>
+    </div>
+    <div class="form-text">Paste this into your email provider (e.g. SendGrid, Mailgun) to receive open/click/bounce events.</div>
+</div>
                         </div>
                     </div>
 
@@ -436,6 +446,14 @@
                 const orgId = document.getElementById('org-id').value;
                 copyToClipboard(orgId, copyOrgBtn);
             });
+            const webhookUrlInput = document.getElementById('webhook-url');
+if (webhookUrlInput) {
+    webhookUrlInput.value = `${oauthHost}/api/v1/webhooks/email/`;
+}
+const copyWebhookBtn = document.getElementById('copy-webhook-url-btn');
+copyWebhookBtn?.addEventListener('click', () => {
+    copyToClipboard(webhookUrlInput.value, copyWebhookBtn);
+});
 
             const saveBtn = document.getElementById('save-profile-btn');
             if (saveBtn) {
