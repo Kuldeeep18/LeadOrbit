@@ -1,3 +1,8 @@
+import logging
+from django.conf import settings
+from django.core.cache import cache
+from django.core.mail import send_mail
+from django.utils.crypto import get_random_string
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -9,7 +14,10 @@ from .permissions import IsOrgAdmin
 from .serializers import UserSerializer, RegisterSerializer
 from rest_framework_simplejwt.tokens import RefreshToken
 
+logger = logging.getLogger(__name__)
+
 class AuthViewSet(viewsets.GenericViewSet):
+    
     @action(detail=False, methods=['post'], permission_classes=[AllowAny])
     def register(self, request):
         serializer = RegisterSerializer(data=request.data)
@@ -68,14 +76,42 @@ class AuthViewSet(viewsets.GenericViewSet):
                 request.user.organization.save(update_fields=['enable_ai_personalization'])
                 updates_made = True
 
+            # ─── CRITICAL SECURITY FIX: Password change requires current password ───
             if new_password:
+                # Require current password for security
+                current_password = payload.get('current_password')
+                if not current_password:
+                    return Response(
+                        {'error': 'Current password is required to change password.'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                if not request.user.check_password(current_password):
+                    return Response(
+                        {'error': 'Current password is incorrect.'},
+                        status=status.HTTP_400_BAD_REQUEST
+                    )
+                
+                # Rate limiting for password changes (3 attempts per hour)
+                ip = request.META.get('REMOTE_ADDR')
+                rate_limit_key = f"password_change_{ip}_{request.user.id}"
+                attempt_count = cache.get(rate_limit_key, 0)
+                if attempt_count >= 3:
+                    return Response(
+                        {'error': 'Too many password change attempts. Please try again later.'},
+                        status=status.HTTP_429_TOO_MANY_REQUESTS
+                    )
+                
                 try:
                     validate_password(new_password, request.user)
                 except DjangoValidationError as exc:
                     return Response({'new_password': list(exc.messages)}, status=status.HTTP_400_BAD_REQUEST)
+                
                 request.user.set_password(new_password)
                 request.user.save(update_fields=['password'])
                 updates_made = True
+                
+                # Increment rate limit counter
+                cache.set(rate_limit_key, attempt_count + 1, timeout=3600)
 
             if not updates_made:
                 return Response({'detail': 'No changes submitted.'}, status=status.HTTP_400_BAD_REQUEST)
@@ -90,3 +126,5 @@ class AuthViewSet(viewsets.GenericViewSet):
             {'message': 'Organization successfully deleted.'},
             status=status.HTTP_200_OK,
         )
+
+        
