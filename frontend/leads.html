@@ -135,6 +135,79 @@
         [data-theme='dark'] input[type='date'] {
             color-scheme: dark;
         }
+
+        /* ── Pipeline quick-filter bar ── */
+        .pipeline-filter-bar {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 0.45rem;
+            margin-bottom: 1rem;
+        }
+
+        .pipeline-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            border: 1.5px solid var(--line);
+            background: var(--panel);
+            color: var(--ink-700);
+            border-radius: 999px;
+            padding: 0.35rem 0.8rem;
+            font-size: 0.8rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            white-space: nowrap;
+            user-select: none;
+        }
+
+        .pipeline-chip:hover {
+            border-color: var(--focus-ring);
+            color: var(--ink-900);
+        }
+
+        .pipeline-chip.active {
+            background: linear-gradient(135deg, var(--primary), var(--primary-hover));
+            border-color: transparent;
+            color: #fff;
+        }
+
+        .pipeline-chip .chip-count {
+            background: rgba(255,255,255,0.25);
+            border-radius: 999px;
+            padding: 0 0.4rem;
+            font-size: 0.72rem;
+            min-width: 1.4rem;
+            text-align: center;
+        }
+
+        .pipeline-chip:not(.active) .chip-count {
+            background: var(--panel-muted);
+            color: var(--ink-500);
+        }
+
+        /* ── Pipeline status badge in table ── */
+        .pipeline-badge {
+            border-radius: 999px;
+            padding: 0.2rem 0.55rem;
+            font-size: 0.72rem;
+            font-weight: 700;
+            white-space: nowrap;
+        }
+
+        .pipeline-badge.new        { background: #e0f2fe; color: #0369a1; }
+        .pipeline-badge.contacted  { background: #ede9fe; color: #6d28d9; }
+        .pipeline-badge.interested { background: #fef9c3; color: #854d0e; }
+        .pipeline-badge.replied    { background: #dcfce7; color: #166534; }
+        .pipeline-badge.converted  { background: #d1fae5; color: #065f46; }
+        .pipeline-badge.closed     { background: #f1f5f9; color: #475569; }
+
+        [data-theme='dark'] .pipeline-badge.new        { background: rgba(14,165,210,0.18); color: #7dd3fc; }
+        [data-theme='dark'] .pipeline-badge.contacted  { background: rgba(139,92,246,0.18); color: #c4b5fd; }
+        [data-theme='dark'] .pipeline-badge.interested { background: rgba(234,179,8,0.18);  color: #fde047; }
+        [data-theme='dark'] .pipeline-badge.replied    { background: rgba(34,197,94,0.18);  color: #86efac; }
+        [data-theme='dark'] .pipeline-badge.converted  { background: rgba(16,185,129,0.18); color: #6ee7b7; }
+        [data-theme='dark'] .pipeline-badge.closed     { background: rgba(148,163,184,0.18);color: #94a3b8; }
     </style>
 </head>
 
@@ -202,6 +275,9 @@
                         </button>
                         <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#uploadModal">
                             <i class="bi bi-upload me-1" aria-hidden="true"></i> Import CSV
+                        </button>
+                        <button id="header-theme-toggle" class="btn btn-sm btn-logout" aria-label="Toggle dark mode" title="Toggle dark mode (Ctrl+T)">
+                            <i class="bi bi-moon-stars" aria-hidden="true"></i>
                         </button>
                         <button id="logout-btn" class="btn btn-sm btn-logout" aria-label="Log out">Logout</button>
                     </div>
@@ -354,6 +430,39 @@
                 </div>
 
                 <div class="table-shell">
+                    <!-- ─── Pipeline Quick Filters ──────────────────────────────── -->
+                    <div class="px-3 pt-3 pb-0">
+                        <div class="pipeline-filter-bar" id="pipeline-filter-bar" role="group" aria-label="Filter leads by pipeline status">
+                            <button class="pipeline-chip active" data-status="all" aria-pressed="true">
+                                All <span class="chip-count" id="pcount-all">0</span>
+                            </button>
+                            <button class="pipeline-chip" data-status="new" aria-pressed="false">
+                                <i class="bi bi-star" aria-hidden="true"></i> New
+                                <span class="chip-count" id="pcount-new">0</span>
+                            </button>
+                            <button class="pipeline-chip" data-status="contacted" aria-pressed="false">
+                                <i class="bi bi-envelope" aria-hidden="true"></i> Contacted
+                                <span class="chip-count" id="pcount-contacted">0</span>
+                            </button>
+                            <button class="pipeline-chip" data-status="interested" aria-pressed="false">
+                                <i class="bi bi-hand-thumbs-up" aria-hidden="true"></i> Interested
+                                <span class="chip-count" id="pcount-interested">0</span>
+                            </button>
+                            <button class="pipeline-chip" data-status="replied" aria-pressed="false">
+                                <i class="bi bi-reply" aria-hidden="true"></i> Replied
+                                <span class="chip-count" id="pcount-replied">0</span>
+                            </button>
+                            <button class="pipeline-chip" data-status="converted" aria-pressed="false">
+                                <i class="bi bi-check2-circle" aria-hidden="true"></i> Converted
+                                <span class="chip-count" id="pcount-converted">0</span>
+                            </button>
+                            <button class="pipeline-chip" data-status="closed" aria-pressed="false">
+                                <i class="bi bi-x-circle" aria-hidden="true"></i> Closed
+                                <span class="chip-count" id="pcount-closed">0</span>
+                            </button>
+                        </div>
+                    </div>
+                    <!-- ──────────────────────────────────────────────────────────── -->
                     <div class="table-responsive">
                         <table class="table table-hover mb-0 align-middle">
                             <thead class="table-light">
@@ -364,12 +473,17 @@
                                     <th>Company</th>
                                     <th>Tags</th>
                                     <th>Score</th>
+                                    <th>Pipeline</th>
                                     <th>Status</th>
                                 </tr>
                             </thead>
                             <tbody id="leads-table-body">
                                 <tr>
+<<<<<<< HEAD
                                     <td colspan="7" class="text-center py-4 text-muted">
+=======
+                                    <td colspan="9" class="text-center py-4 text-muted">
+>>>>>>> d1274af ( Add Quick Filters for Lead Status)
                                         <div class="spinner-border spinner-border-sm text-primary me-2" role="status" aria-label="Loading leads"></div>
                                         Loading leads...
                                     </td>
@@ -455,6 +569,7 @@
         let allImportJobs = [];      // import job history
         let selectedTagIds = new Set(); // tags selected in the filter panel
         let activeFilters = {};      // last applied filter state
+        let activePipelineFilter = 'all'; // active quick-filter chip
 
         // ─── Utilities ──────────────────────────────────────────────────────
 
@@ -543,12 +658,60 @@
             bootstrap.Modal.getOrCreateInstance(document.getElementById('importErrorsModal')).show();
         }
 
+        /** Render a colored pill for a lead's pipeline status. */
+        function renderPipelineBadge(status) {
+            const labels = {
+                new:        'New',
+                contacted:  'Contacted',
+                interested: 'Interested',
+                replied:    'Replied',
+                converted:  'Converted',
+                closed:     'Closed',
+            };
+            const s = (status || 'new').toLowerCase();
+            const label = labels[s] || s.charAt(0).toUpperCase() + s.slice(1);
+            return `<span class="pipeline-badge ${s}">${label}</span>`;
+        }
+
+        /** Update the count badges on every pipeline chip from the full leads array. */
+        function updatePipelineCounts(leads) {
+            const counts = { all: leads.length, new: 0, contacted: 0, interested: 0, replied: 0, converted: 0, closed: 0 };
+            leads.forEach(l => {
+                const s = (l.pipeline_status || 'new').toLowerCase();
+                if (s in counts) counts[s]++;
+            });
+            Object.entries(counts).forEach(([key, n]) => {
+                const el = document.getElementById(`pcount-${key}`);
+                if (el) el.textContent = n;
+            });
+        }
+
+        /** Apply the active pipeline filter on top of allLeads, then run text search. */
+        function getVisibleLeads() {
+            const q = (document.getElementById('lead-search').value || '').trim().toLowerCase();
+            let leads = activePipelineFilter === 'all'
+                ? allLeads
+                : allLeads.filter(l => (l.pipeline_status || 'new').toLowerCase() === activePipelineFilter);
+            if (q) {
+                leads = leads.filter(lead => {
+                    const row = `${lead.first_name || ''} ${lead.last_name || ''} ${lead.email || ''} ${lead.company || ''}`.toLowerCase();
+                    const tagNames = (lead.tags || []).map(t => t.name.toLowerCase()).join(' ');
+                    return row.includes(q) || tagNames.includes(q);
+                });
+            }
+            return leads;
+        }
+
         function renderLeadRows(leads) {
             const tbody = document.getElementById('leads-table-body');
             if (leads.length === 0) {
                 tbody.innerHTML = `
 <tr>
+<<<<<<< HEAD
     <td colspan="7" class="text-center py-5">
+=======
+    <td colspan="9" class="text-center py-5">
+>>>>>>> d1274af ( Add Quick Filters for Lead Status)
         <div class="empty-state">
             <i class="bi bi-people display-4 text-secondary" aria-hidden="true"></i>
             <h5 class="mt-3 mb-2">No leads found</h5>
@@ -578,6 +741,7 @@
                     <td>${escapeHtml(lead.company) || '<span class="text-muted">-</span>'}</td>
                     <td>${renderTagBadges(lead.tags)}</td>
                     <td><span class="chip" style="background:#e0f2fe;color:#0369a1;">${lead.score}</span></td>
+                    <td>${renderPipelineBadge(lead.pipeline_status)}</td>
                     <td>${lead.global_unsubscribe
                         ? '<span class="chip" style="background:#fee2e2;color:#b91c1c;">Unsubscribed</span>'
                         : '<span class="chip" style="background:#dcfce7;color:#166534;">Active</span>'}</td>
@@ -633,6 +797,8 @@
                 ? (leads.reduce((sum, l) => sum + Number(l.score || 0), 0) / leads.length).toFixed(1)
                 : '0.0';
             document.getElementById('avg-score').textContent = avgScore;
+            // Keep pipeline chip counts in sync with the full (unfiltered) lead list
+            updatePipelineCounts(leads);
         }
 
         // ─── Filter Panel ────────────────────────────────────────────────────
@@ -762,7 +928,7 @@
                 const leads = await fetchLeadsWithFilters(params);
                 allLeads = leads;
                 renderStats(leads);
-                renderLeadRows(leads);
+                renderLeadRows(getVisibleLeads());
             } catch (e) {
                 console.error('Error applying filters:', e);
             }
@@ -785,7 +951,7 @@
             if (!res.ok) return;
             allLeads = await res.json();
             renderStats(allLeads);
-            renderLeadRows(allLeads);
+            renderLeadRows(getVisibleLeads());
         }
 
         async function loadImportHistory() {
@@ -799,17 +965,7 @@
         // ─── Text search (client-side, applied on top of server results) ────
 
         function applySearch() {
-            const q = (document.getElementById('lead-search').value || '').trim().toLowerCase();
-            if (!q) {
-                renderLeadRows(allLeads);
-                return;
-            }
-            const filtered = allLeads.filter(lead => {
-                const row = `${lead.first_name || ''} ${lead.last_name || ''} ${lead.email || ''} ${lead.company || ''}`.toLowerCase();
-                const tagNames = (lead.tags || []).map(t => t.name.toLowerCase()).join(' ');
-                return row.includes(q) || tagNames.includes(q);
-            });
-            renderLeadRows(filtered);
+            renderLeadRows(getVisibleLeads());
         }
 
         // ─── Bootstrap ──────────────────────────────────────────────────────
@@ -827,6 +983,40 @@
             document.getElementById('lead-search').addEventListener('input', applySearch);
             document.getElementById('refresh-history-btn').addEventListener('click', loadImportHistory);
 
+<<<<<<< HEAD
+=======
+            // ── Pipeline quick-filter chips ──────────────────────────────────
+            document.querySelectorAll('#pipeline-filter-bar .pipeline-chip').forEach(chip => {
+                chip.addEventListener('click', () => {
+                    activePipelineFilter = chip.dataset.status;
+
+                    // Update aria-pressed and active class on all chips
+                    document.querySelectorAll('#pipeline-filter-bar .pipeline-chip').forEach(c => {
+                        const isActive = c.dataset.status === activePipelineFilter;
+                        c.classList.toggle('active', isActive);
+                        c.setAttribute('aria-pressed', String(isActive));
+                    });
+
+                    renderLeadRows(getVisibleLeads());
+                });
+            });
+
+            // Refresh relative "Last Activity" timestamps every 60 seconds
+            setInterval(() => {
+                document.querySelectorAll('.time-ago-cell[data-ts]').forEach(el => {
+                    const ts = el.getAttribute('data-ts');
+                    const rendered = timeAgo(ts);
+                    // timeAgo returns an HTML string; extract just the label text
+                    const tmp = document.createElement('span');
+                    tmp.innerHTML = rendered;
+                    const newLabel = tmp.querySelector('.time-ago-cell')?.textContent ?? '';
+                    if (newLabel && el.textContent !== newLabel) {
+                        el.textContent = newLabel;
+                    }
+                });
+            }, 60_000);
+
+>>>>>>> d1274af ( Add Quick Filters for Lead Status)
             const filterPanel = document.getElementById('filter-panel');
             document.getElementById('filter-toggle-btn').addEventListener('click', () => {
                 const isHidden = filterPanel.style.display === 'none';
@@ -840,7 +1030,7 @@
                     const leads = await fetchLeadsWithFilters({});
                     allLeads = leads;
                     renderStats(leads);
-                    renderLeadRows(leads);
+                    renderLeadRows(getVisibleLeads());
                 } catch (e) {
                     console.error('Error clearing filters:', e);
                 }
