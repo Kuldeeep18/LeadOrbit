@@ -76,6 +76,9 @@ class LeadTag(TenantModel):
 
     class Meta:
         unique_together = ('lead', 'tag')
+        constraints = [
+            models.UniqueConstraint(fields=['lead', 'tag'], name='unique_lead_tag'),
+        ]
 
 class BlockedDomain(TenantModel):
     domain = models.CharField(max_length=255)

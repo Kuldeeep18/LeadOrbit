@@ -144,9 +144,18 @@ class LeadViewSet(viewsets.ModelViewSet):
         existing_tag_ids = set(
             LeadTag.objects.filter(lead=lead).values_list('tag_id', flat=True)
         )
+        duplicate_ids = [str(tag.id) for tag in tags if tag.id in existing_tag_ids]
+        if duplicate_ids:
+            duplicate_names = list(
+                Tag.objects.filter(id__in=duplicate_ids, organization=org).values_list('name', flat=True)
+            )
+            return Response(
+                {"error": "Tag already assigned to this lead", "duplicates": duplicate_names},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         for tag in tags:
-            if tag.id not in existing_tag_ids:
-                LeadTag.objects.create(lead=lead, tag=tag, organization=org)
+            LeadTag.objects.create(lead=lead, tag=tag, organization=org)
 
         # Return the updated tag list
         updated_tags = Tag.objects.filter(tagged_leads__lead=lead)

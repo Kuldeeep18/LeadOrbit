@@ -71,6 +71,12 @@
             flex-shrink: 0;
         }
 
+        .tag-filter-chip.disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
         .tag-filter-chip.selected {
             outline: 2px solid var(--focus-ring);
             outline-offset: 1px;
@@ -648,7 +654,10 @@
             }
         }
 
-        function renderTagFilterChips() {
+        let assignedTagIds = new Set();
+
+        function renderTagFilterChips(assignedIds) {
+            if (assignedIds) assignedTagIds = new Set(assignedIds);
             const container = document.getElementById('tag-filter-chips');
             if (!allTags.length) {
                 container.innerHTML = '<span class="text-muted small">No tags yet. Create tags in Settings.</span>';
@@ -658,20 +667,21 @@
                 const bg = tag.color || '#6366f1';
                 const fg = contrastColor(bg);
                 const isSelected = selectedTagIds.has(tag.id);
+                const isAssigned = assignedTagIds.has(tag.id);
                 return `
                 <button
-                    class="tag-filter-chip${isSelected ? ' selected' : ''}"
+                    class="tag-filter-chip${isSelected ? ' selected' : ''}${isAssigned ? ' disabled' : ''}"
                     data-tag-id="${tag.id}"
                     style="background:${bg};color:${fg};border-color:${isSelected ? 'var(--focus-ring)' : bg};"
                     type="button"
                     aria-pressed="${isSelected}"
-                    title="Filter by ${escapeHtml(tag.name)}">
+                    ${isAssigned ? 'disabled title="Already assigned to this lead"' : `title="Filter by ${escapeHtml(tag.name)}"`}>
                     <span class="tag-dot" style="background:${fg};opacity:0.6;"></span>
                     ${escapeHtml(tag.name)}
                 </button>`;
-            }).join('');
+            });
 
-            container.querySelectorAll('.tag-filter-chip').forEach(chip => {
+            container.querySelectorAll('.tag-filter-chip:not(.disabled)').forEach(chip => {
                 chip.addEventListener('click', () => {
                     const id = chip.dataset.tagId;
                     if (selectedTagIds.has(id)) {
