@@ -68,6 +68,12 @@ class LeadViewSet(viewsets.ModelViewSet):
         elif status_param == 'unsubscribed':
             qs = qs.filter(global_unsubscribe=True)
 
+        # ── Pipeline status ─────────────────────────────────────────────────
+        pipeline_status = params.get('pipeline_status', '').strip().lower()
+        valid_pipeline_statuses = {'new', 'contacted', 'interested', 'replied', 'converted', 'closed'}
+        if pipeline_status in valid_pipeline_statuses:
+            qs = qs.filter(pipeline_status=pipeline_status)
+
         # ── Text search ──────────────────────────────────────────────────────
         search = params.get('search', '').strip()
         if search:
