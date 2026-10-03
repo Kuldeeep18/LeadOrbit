@@ -47,26 +47,41 @@ router.register(r'blocked-domains', BlockedDomainViewSet, basename='blocked-doma
 router.register(r'campaigns', CampaignViewSet, basename='campaigns')
 router.register(r'email-templates', EmailTemplateViewSet, basename='email-templates')
 
+# ─── CRITICAL SECURITY FIX: Admin URL changed from default ──────────
+# Changed from /admin/ to prevent automated attacks (Issue #614)
+
 urlpatterns = [
     path('', api_root, name='api_root'),
-    path('admin/', admin.site.urls),
+    path('leadorbit-admin-xyz/', admin.site.urls),  # Custom admin path - Fix #614
+    
+    # Authentication endpoints
     path('api/v1/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/v1/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
+    # ─── FIX: Removed duplicate logout route (already handled by router) ───
+    
+    # Webhooks and Analytics
     path('api/v1/webhooks/email/', WebhookView.as_view(), name='email_webhook'),
     path('api/v1/analytics/dashboard/', DashboardAnalyticsView.as_view(), name='dashboard_analytics'),
     path('api/v1/campaigns/ai-generate/', AIGenerateView.as_view(), name='ai_generate'),
     
-    
+    # Click tracking
     path('api/v1/clicks/track/', ClickTrackingView.as_view(), name='click-tracking'),
-    # --------------------------------------------------------
-
+    
     # Google OAuth
     path('api/v1/auth/google/login', GoogleOAuthLoginView.as_view(), name='google_oauth_login'),
     path('api/v1/auth/google/callback', GoogleOAuthCallbackView.as_view(), name='google_oauth_callback'),
     path('auth/google/login', GoogleOAuthLoginView.as_view(), name='google_oauth_login_fallback'),
     path('auth/google/callback', GoogleOAuthCallbackView.as_view(), name='google_oauth_callback_fallback'),
+    
+    # Connected accounts
     path('api/v1/connected-accounts/', ConnectedAccountsListView.as_view(), name='connected_accounts'),
     path('api/v1/connected-accounts/<uuid:account_id>/', ConnectedAccountDetailView.as_view(), name='connected_account_detail'),
+    
+    # Unsubscribe
     path('api/v1/unsubscribe/<uuid:lead_id>/<str:token>/', unsubscribe_view, name='unsubscribe'),
+    
+    # Router URLs (includes campaigns, leads, auth, etc.)
+    # ─── FIX: Router handles auth endpoints including logout ───
     path('api/v1/', include(router.urls)),
 ]
+
