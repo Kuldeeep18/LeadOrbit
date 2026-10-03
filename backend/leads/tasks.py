@@ -167,6 +167,8 @@ def import_leads_from_csv(file_contents, organization_id, job_id=None):
     if job:
         job.total_rows = total_rows
         job.imported_count = leads_created + leads_updated
+        job.created_count = leads_created
+        job.updated_count = leads_updated
         job.failed_count = failed_count
         job.error_log = error_log
         job.save()

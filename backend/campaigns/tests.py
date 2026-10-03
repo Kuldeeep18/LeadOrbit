@@ -17,6 +17,7 @@ from campaigns.tasks import (
     _execute_condition_event_step,
     check_imap_bounces,
     _get_campaign_steps,
+    _check_and_auto_pause_campaign,
     poll_gmail_for_replies,
     process_active_leads,
     process_active_leads_once,
@@ -1961,3 +1962,179 @@ class GoogleOAuthStateTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_302_FOUND)
         self.assertIn('google_auth=error', response['Location'])
         self.assertIn('reason=no_user', response['Location'])
+
+
+class BounceRateAutoPauseTests(APITestCase):
+    """
+    Tests for the auto-pause safety circuit-breaker (issue #480).
+
+    When a campaign's bounce rate exceeds 10% after at least 50 emails
+    have been sent, the campaign must be automatically paused and the
+    organization notified.
+    """
+
+    def setUp(self):
+        self.organization = Organization.objects.create(name='Acme Auto-Pause')
+        self.user = User.objects.create_user(
+            email='owner@acme-autopause.test',
+            password='StrongPass123!',
+            organization=self.organization,
+            role='ADMIN',
+        )
+        self.client.force_authenticate(self.user)
+
+    def _make_campaign(self, sent=0, bounced=0, status='ACTIVE'):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Auto-pause test campaign',
+            status=status,
+            sent_count=sent,
+            bounced_count=bounced,
+        )
+        return campaign
+
+    # ── 1. Below minimum sent threshold — no pause ───────────────────────
+
+    def test_no_pause_when_sent_below_threshold(self):
+        """
+        With only 49 emails sent (< 50 minimum), the check must NOT fire
+        even if every single one bounced.
+        """
+        campaign = self._make_campaign(sent=49, bounced=49)
+
+        with patch('campaigns.tasks.notify_campaign_auto_paused') as mock_notify:
+            _check_and_auto_pause_campaign(campaign)
+
+        campaign.refresh_from_db()
+        self.assertEqual(campaign.status, 'ACTIVE')
+        mock_notify.assert_not_called()
+
+    # ── 2. At threshold: exactly 50 sent, 5 bounced (10%) — no pause ────
+
+    def test_no_pause_at_exactly_10_percent_bounce_rate(self):
+        """
+        10% bounce rate is the limit — only rates *above* 10% trigger a pause.
+        Exactly 10% must leave the campaign running.
+        """
+        campaign = self._make_campaign(sent=50, bounced=5)  # exactly 10%
+
+        with patch('campaigns.tasks.notify_campaign_auto_paused') as mock_notify:
+            _check_and_auto_pause_campaign(campaign)
+
+        campaign.refresh_from_db()
+        self.assertEqual(campaign.status, 'ACTIVE')
+        mock_notify.assert_not_called()
+
+    # ── 3. Above threshold: 50 sent, 6 bounced (12%) — pause ────────────
+
+    def test_auto_pause_when_bounce_rate_exceeds_threshold(self):
+        """
+        12% bounce rate with 50 sent emails must pause the campaign and
+        send a notification.
+        """
+        campaign = self._make_campaign(sent=50, bounced=6)  # 12%
+
+        with patch('campaigns.tasks.notify_campaign_auto_paused') as mock_notify:
+            _check_and_auto_pause_campaign(campaign)
+
+        campaign.refresh_from_db()
+        self.assertEqual(campaign.status, 'PAUSED')
+        mock_notify.assert_called_once_with(
+            self.organization.id,
+            campaign.name,
+            12.0,
+        )
+
+    # ── 4. High bounce rate, large volume ────────────────────────────────
+
+    def test_auto_pause_with_large_send_volume(self):
+        """
+        1000 emails sent, 150 bounced (15%) must trigger a pause.
+        """
+        campaign = self._make_campaign(sent=1000, bounced=150)
+
+        with patch('campaigns.tasks.notify_campaign_auto_paused') as mock_notify:
+            _check_and_auto_pause_campaign(campaign)
+
+        campaign.refresh_from_db()
+        self.assertEqual(campaign.status, 'PAUSED')
+        mock_notify.assert_called_once()
+        _org_id, _name, pct = mock_notify.call_args.args
+        self.assertAlmostEqual(pct, 15.0, places=1)
+
+    # ── 5. Already paused — idempotent, no second notification ──────────
+
+    def test_no_duplicate_pause_when_already_paused(self):
+        """
+        If the campaign is already PAUSED, calling the check again must
+        be a no-op and must NOT fire a second notification.
+        """
+        campaign = self._make_campaign(sent=50, bounced=10, status='PAUSED')
+
+        with patch('campaigns.tasks.notify_campaign_auto_paused') as mock_notify:
+            _check_and_auto_pause_campaign(campaign)
+
+        campaign.refresh_from_db()
+        self.assertEqual(campaign.status, 'PAUSED')
+        mock_notify.assert_not_called()
+
+    # ── 6. Campaign not ACTIVE (COMPLETED / DRAFT) ───────────────────────
+
+    def test_no_pause_for_non_active_campaign(self):
+        """
+        COMPLETED and DRAFT campaigns must never be touched by the check,
+        regardless of counters.
+        """
+        for initial_status in ('COMPLETED', 'DRAFT'):
+            campaign = self._make_campaign(sent=100, bounced=50, status=initial_status)
+
+            with patch('campaigns.tasks.notify_campaign_auto_paused') as mock_notify:
+                _check_and_auto_pause_campaign(campaign)
+
+            campaign.refresh_from_db()
+            self.assertEqual(
+                campaign.status,
+                initial_status,
+                msg=f"Expected status to remain {initial_status!r}",
+            )
+            mock_notify.assert_not_called()
+
+    # ── 7. End-to-end: bounce via _mark_campaign_lead_bounced ────────────
+
+    def test_auto_pause_triggered_via_mark_campaign_lead_bounced(self):
+        """
+        When the 6th lead is marked bounced in a campaign that already has
+        50 sent emails, the circuit-breaker must fire through the normal
+        bounce processing path.
+        """
+        from campaigns.tasks import _mark_campaign_lead_bounced
+
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='End-to-end auto-pause',
+            status='ACTIVE',
+            sent_count=50,
+            bounced_count=5,   # 10% — one more bounce makes it 6/50 = 12%
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='trigger@acme-autopause.test',
+        )
+        clead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            status='ACTIVE',
+        )
+
+        with patch('campaigns.tasks.notify_email_bounced'):
+            with patch('campaigns.tasks.notify_campaign_auto_paused') as mock_notify:
+                # Simulate the signal updating the counter before our check runs
+                campaign.bounced_count = 6
+                campaign.save(update_fields=['bounced_count'])
+
+                _mark_campaign_lead_bounced(clead)
+
+        campaign.refresh_from_db()
+        self.assertEqual(campaign.status, 'PAUSED')
+        mock_notify.assert_called_once()

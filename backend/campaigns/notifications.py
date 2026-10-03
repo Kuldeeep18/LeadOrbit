@@ -86,3 +86,14 @@ def notify_reply_received(organization_id, lead_email):
         'message': f'Reply received from {lead_email}',
         'email': lead_email
     })
+
+def notify_campaign_auto_paused(organization_id, campaign_name, bounce_rate_pct):
+    send_notification(organization_id, 'campaign_auto_paused', {
+        'message': (
+            f'Campaign "{campaign_name}" was automatically paused. '
+            f'Bounce rate ({bounce_rate_pct:.1f}%) exceeded the 10% safety threshold. '
+            'Please verify your contact list before resuming.'
+        ),
+        'campaign': campaign_name,
+        'bounce_rate': bounce_rate_pct,
+    })
