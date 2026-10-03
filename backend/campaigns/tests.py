@@ -1442,6 +1442,41 @@ class CampaignWorkflowTests(APITestCase):
         campaign.refresh_from_db()
         self.assertEqual(campaign.status, 'ACTIVE')
 
+
+    def test_campaign_detail_includes_status_breakdown(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Status overview',
+            status='ACTIVE',
+        )
+        replied_lead = Lead.objects.create(
+            organization=self.organization,
+            email='replied-status@acme.test',
+        )
+        bounced_lead = Lead.objects.create(
+            organization=self.organization,
+            email='bounced-status@acme.test',
+        )
+        CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=replied_lead,
+            status='REPLIED',
+        )
+        CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=bounced_lead,
+            status='BOUNCED',
+        )
+
+        response = self.client.get(f'/api/v1/campaigns/{campaign.id}/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data['status_breakdown']['REPLIED'], 1)
+        self.assertEqual(response.data['status_breakdown']['BOUNCED'], 1)
+        self.assertEqual(response.data['status_breakdown']['ENROLLED'], 0)
+
     def test_condition_time_is_mapped_to_delay_minutes(self):
         payload = {
             'name': 'Condition delay mapping',
