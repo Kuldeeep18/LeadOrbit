@@ -49,8 +49,18 @@ def _normalize_google_redirect_uri(raw_uri: str, backend_base_url: str) -> str:
     # Canonicalize callback path so Google/login/token-exchange always match.
     return f'{scheme}://{host}/api/v1/auth/google/callback'
 
+<<<<<<< HEAD
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-fallback-key-change-me')
 DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes')
+=======
+# ─── CRITICAL SECURITY FIX: SECRET_KEY must be set in environment ───
+SECRET_KEY = os.getenv('SECRET_KEY')
+if not SECRET_KEY:
+    raise ValueError("SECRET_KEY environment variable is not set. Please set it in your .env file or environment.")
+
+# ─── CRITICAL SECURITY FIX: DEBUG defaults to False (fail-safe) ───
+DEBUG = os.getenv('DEBUG', 'False').lower() in ('true', '1', 'yes')
+>>>>>>> e39e24d (Fix CodeRabbit review comments for settings.py)
 TESTING = 'test' in sys.argv
 MAILBOX_CREDENTIALS_ENCRYPTION_KEY = os.getenv(
     'MAILBOX_CREDENTIALS_ENCRYPTION_KEY',
@@ -61,6 +71,24 @@ CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
 ]
+
+# ─── REGISTRATION SECURITY SETTINGS ──────────────────
+# Restrict registration to specific email domains (empty = no restriction)
+ALLOWED_REGISTRATION_DOMAINS = os.getenv(
+    'ALLOWED_REGISTRATION_DOMAINS',
+    ''
+).split(',')
+# Remove empty strings
+ALLOWED_REGISTRATION_DOMAINS = [d.strip() for d in ALLOWED_REGISTRATION_DOMAINS if d.strip()]
+
+# Rate limiting for registration (5 per hour per IP)
+REGISTRATION_RATE_LIMIT = int(os.getenv('REGISTRATION_RATE_LIMIT', '5'))
+REGISTRATION_RATE_LIMIT_WINDOW = int(os.getenv('REGISTRATION_RATE_LIMIT_WINDOW', '3600'))  # 1 hour in seconds
+
+# Email verification token expiry (24 hours)
+VERIFICATION_TOKEN_EXPIRY = int(os.getenv('VERIFICATION_TOKEN_EXPIRY', '86400'))
+
+# ─── END REGISTRATION SECURITY SETTINGS ─────────────
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -236,3 +264,23 @@ GOOGLE_SCOPES = [
 TWILIO_ACCOUNT_SID = os.getenv('TWILIO_ACCOUNT_SID', _read_local_env_value('TWILIO_ACCOUNT_SID', ''))
 TWILIO_AUTH_TOKEN = os.getenv('TWILIO_AUTH_TOKEN', _read_local_env_value('TWILIO_AUTH_TOKEN', ''))
 TWILIO_PHONE_NUMBER = os.getenv('TWILIO_PHONE_NUMBER', _read_local_env_value('TWILIO_PHONE_NUMBER', ''))
+
+# ─── Cache Configuration (for rate limiting) ────────
+CACHES = {
+    'default': {
+        'BACKEND': 'django_redis.cache.RedisCache',
+        'LOCATION': os.getenv('REDIS_URL', 'redis://localhost:6379/1'),
+        'OPTIONS': {
+            'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+            'PARSER_CLASS': 'redis.connection.HiredisParser',
+            'CONNECTION_POOL_CLASS': 'redis.BlockingConnectionPool',
+            'CONNECTION_POOL_CLASS_KWARGS': {
+                'max_connections': 50,
+                'timeout': 20,
+            },
+            'MAX_CONNECTIONS': 1000,
+            'PICKLE_VERSION': -1,
+        },
+    }
+}
+
