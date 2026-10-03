@@ -1,6 +1,7 @@
 import logging
 import urllib.parse
-from datetime import timedelta
+from datetime import datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from bs4 import BeautifulSoup
 from celery import shared_task
@@ -102,6 +103,59 @@ def _campaign_has_condition_reply_yes_branch(campaign):
         if _find_branch_step_order(raw_steps, index + 1, 'yes'):
             return True
     return False
+
+
+def _parse_sending_window_time(value):
+    if value in (None, ''):
+        return None
+    if isinstance(value, time):
+        return value
+    if isinstance(value, datetime):
+        return value.time()
+
+    text = str(value).strip()
+    if not text:
+        return None
+
+    try:
+        return datetime.strptime(text, '%H:%M').time()
+    except ValueError:
+        try:
+            return datetime.strptime(text, '%H:%M:%S').time()
+        except ValueError:
+            return None
+
+
+def _get_campaign_sending_window(campaign):
+    settings_data = campaign.settings if isinstance(campaign.settings, dict) else {}
+    start_time = _parse_sending_window_time(settings_data.get('sending_window_start'))
+    end_time = _parse_sending_window_time(settings_data.get('sending_window_end'))
+
+    if start_time is None:
+        start_time = time(9, 0)
+    if end_time is None:
+        end_time = time(17, 0)
+
+    return start_time, end_time
+
+
+def _is_within_sending_window(clead, now):
+    campaign = clead.campaign
+    start_time, end_time = _get_campaign_sending_window(campaign)
+    if start_time is None or end_time is None:
+        return True
+
+    try:
+        tz_name = clead.lead.get_timezone_name()
+        local_dt = now.astimezone(ZoneInfo(tz_name))
+    except Exception as exc:
+        logger.warning(f"Invalid timezone '{tz_name}' for lead {clead.lead.email}: {exc}")
+        return True
+
+    local_time = local_dt.time()
+    if start_time <= end_time:
+        return start_time <= local_time <= end_time
+    return local_time >= start_time or local_time <= end_time
 
 
 def _activate_step(clead, step, now=None):
@@ -686,6 +740,12 @@ def process_active_leads_once(now=None):
                 break
 
             if clead.current_step.channel_type == 'EMAIL':
+                if not _is_within_sending_window(clead, now):
+                    clead.next_execution_time = now + timedelta(hours=1)
+                    clead.save(update_fields=['next_execution_time'])
+                    lead_processed = True
+                    break
+
                 prev_step_id = clead.current_step_id
                 prev_next_time = clead.next_execution_time
                 send_email_step.delay(clead.id, clead.current_step.id)

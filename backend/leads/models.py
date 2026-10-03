@@ -1,3 +1,4 @@
+from django.conf import settings as django_settings
 from django.db import models
 from django.core.exceptions import ValidationError
 from tenants.models import TenantModel
@@ -34,9 +35,18 @@ class Lead(TenantModel):
     custom_variables = models.JSONField(default=dict, blank=True)
     global_unsubscribe = models.BooleanField(default=False)
     score = models.IntegerField(default=0)
+    timezone = models.CharField(
+        max_length=63,
+        blank=True,
+        null=True,
+        help_text='IANA timezone name such as America/New_York',
+    )
 
     class Meta:
         unique_together = ('organization', 'email')
+
+    def get_timezone_name(self):
+        return (self.timezone or getattr(self.organization, 'timezone', None) or getattr(django_settings, 'TIME_ZONE', 'UTC') or 'UTC').strip()
 
     def __str__(self):
         return f"{self.first_name} {self.last_name} ({self.email})"
@@ -45,6 +55,8 @@ class LeadImportJob(TenantModel):
     filename = models.CharField(max_length=255)
     total_rows = models.IntegerField(default=0)
     imported_count = models.IntegerField(default=0)
+    created_count = models.IntegerField(default=0, help_text="New leads created")
+    updated_count = models.IntegerField(default=0, help_text="Existing leads updated")
     failed_count = models.IntegerField(default=0)
     error_log = models.JSONField(default=list, blank=True)
 

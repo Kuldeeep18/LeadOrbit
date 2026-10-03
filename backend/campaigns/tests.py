@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone as dt_timezone
 from unittest.mock import patch
 from urllib.parse import parse_qs, urlparse
 
@@ -236,6 +236,133 @@ class CampaignWorkflowTests(APITestCase):
 
         self.assertEqual(subject, 'Hello Casey from SaaS')
         self.assertEqual(body, 'Can we talk at 10:30 AM?')
+
+    def test_process_active_leads_reschedules_email_outside_sending_window(self):
+        now = datetime(2024, 1, 10, 16, 0, tzinfo=dt_timezone.utc)
+
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Windowed campaign',
+            status='ACTIVE',
+            settings={
+                'sending_window_start': '09:00',
+                'sending_window_end': '17:00',
+            },
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='window-out@acme.test',
+            first_name='Wally',
+            timezone='America/Los_Angeles',
+        )
+        step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Hello',
+            template_body='Body',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=step,
+            status='ACTIVE',
+            next_execution_time=now - timedelta(minutes=1),
+        )
+        with patch('campaigns.tasks.send_email_step.delay') as delay_mock:
+            processed = process_active_leads_once(now=now)
+
+        self.assertEqual(processed, 1)
+        delay_mock.assert_not_called()
+        campaign_lead.refresh_from_db()
+        self.assertEqual(campaign_lead.next_execution_time, now + timedelta(hours=1))
+
+    def test_process_active_leads_uses_organization_timezone_when_lead_timezone_is_missing(self):
+        self.organization.timezone = 'America/New_York'
+        self.organization.save(update_fields=['timezone'])
+
+        now = datetime(2024, 1, 10, 15, 0, tzinfo=dt_timezone.utc)
+
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Windowed campaign fallback',
+            status='ACTIVE',
+            settings={
+                'sending_window_start': '09:00',
+                'sending_window_end': '17:00',
+            },
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='window-fallback@acme.test',
+            first_name='Wes',
+        )
+        step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Hello',
+            template_body='Body',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=step,
+            status='ACTIVE',
+            next_execution_time=now - timedelta(minutes=1),
+        )
+        with patch('campaigns.tasks.send_email_step.delay') as delay_mock:
+            processed = process_active_leads_once(now=now)
+
+        self.assertEqual(processed, 1)
+        delay_mock.assert_called_once_with(campaign_lead.id, step.id)
+
+    def test_process_active_leads_dispatches_email_inside_sending_window(self):
+        now = datetime(2024, 1, 10, 17, 30, tzinfo=dt_timezone.utc)
+
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Windowed campaign inside',
+            status='ACTIVE',
+            settings={
+                'sending_window_start': '09:00',
+                'sending_window_end': '17:00',
+            },
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='window-in@acme.test',
+            first_name='Winnie',
+            timezone='America/Los_Angeles',
+        )
+        step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='EMAIL',
+            delay_minutes=0,
+            template_subject='Hello',
+            template_body='Body',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=step,
+            status='ACTIVE',
+            next_execution_time=now - timedelta(minutes=1),
+        )
+        with patch('campaigns.tasks.send_email_step.delay') as delay_mock:
+            processed = process_active_leads_once(now=now)
+
+        self.assertEqual(processed, 1)
+        delay_mock.assert_called_once_with(campaign_lead.id, step.id)
 
     def test_process_active_leads_advances_all_non_email_step_types(self):
         campaign = Campaign.objects.create(
