@@ -6,8 +6,12 @@ from rest_framework_simplejwt.views import TokenRefreshView
 from rest_framework_simplejwt.views import TokenObtainPairView as BaseTokenObtainPairView
 from users.jwt import CustomTokenObtainSerializer
 
+from django.conf import settings
+from users.throttling import LoginRateThrottle
+
 class CustomTokenObtainPairView(BaseTokenObtainPairView):
     serializer_class = CustomTokenObtainSerializer
+    throttle_classes = [LoginRateThrottle]
 
 from users.views import AuthViewSet
 from leads.views import BlockedDomainViewSet, LeadImportJobViewSet, LeadViewSet, TagViewSet
@@ -49,7 +53,7 @@ router.register(r'email-templates', EmailTemplateViewSet, basename='email-templa
 
 urlpatterns = [
     path('', api_root, name='api_root'),
-    path('admin/', admin.site.urls),
+    path(f'{settings.ADMIN_PATH}/', admin.site.urls),
     path('api/v1/token/', CustomTokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/v1/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/v1/webhooks/email/', WebhookView.as_view(), name='email_webhook'),
