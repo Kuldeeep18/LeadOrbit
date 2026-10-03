@@ -1,3 +1,4 @@
+import os
 from django.db.models import Q
 from rest_framework import viewsets, parsers, status
 from rest_framework.pagination import PageNumberPagination
@@ -97,6 +98,32 @@ class LeadViewSet(viewsets.ModelViewSet):
         if not file_obj:
             return Response({"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST)
 
+        # ─── CRITICAL SECURITY FIX: File validation ───
+        # 1. Check file extension
+        ALLOWED_EXTENSIONS = ['.csv']
+        file_extension = os.path.splitext(file_obj.name)[1].lower()
+        if file_extension not in ALLOWED_EXTENSIONS:
+            return Response(
+                {'error': f'Only CSV files are allowed. Received: {file_extension}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 2. Check MIME type
+        ALLOWED_MIME_TYPES = ['text/csv', 'application/vnd.ms-excel']
+        if file_obj.content_type not in ALLOWED_MIME_TYPES:
+            return Response(
+                {'error': f'Invalid file type. Expected CSV, got: {file_obj.content_type}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # 3. Check file size (10MB limit)
+        MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+        if file_obj.size > MAX_FILE_SIZE:
+            return Response(
+                {'error': f'File size exceeds {MAX_FILE_SIZE // (1024*1024)}MB limit'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+
         job = LeadImportJob.objects.create(
             organization=request.user.organization,
             filename=file_obj.name or 'lead-import.csv',
@@ -161,6 +188,7 @@ class LeadImportJobViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         return LeadImportJob.objects.filter(organization=self.request.user.organization).order_by('-created_at')
 
+
 class TagViewSet(viewsets.ModelViewSet):
     serializer_class = TagSerializer
     queryset = Tag.objects.all()
@@ -183,8 +211,16 @@ class BlockedDomainViewSet(viewsets.ModelViewSet):
     serializer_class = BlockedDomainSerializer
     queryset = BlockedDomain.objects.all()
 
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.action in self.manager_actions:
+            permissions.append(IsOrgManager())
+        return permissions
+
     def get_queryset(self):
         return BlockedDomain.objects.filter(organization=self.request.user.organization)
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization)
+
+        
