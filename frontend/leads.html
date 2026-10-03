@@ -365,11 +365,12 @@
                                     <th>Tags</th>
                                     <th>Score</th>
                                     <th>Status</th>
+                                    <th>Last Activity</th>
                                 </tr>
                             </thead>
                             <tbody id="leads-table-body">
                                 <tr>
-                                    <td colspan="7" class="text-center py-4 text-muted">
+                                    <td colspan="8" class="text-center py-4 text-muted">
                                         <div class="spinner-border spinner-border-sm text-primary me-2" role="status" aria-label="Loading leads"></div>
                                         Loading leads...
                                     </td>
@@ -501,6 +502,35 @@
             return date.toLocaleString();
         }
 
+        /**
+         * Convert an ISO timestamp into a human-readable relative string.
+         * e.g. "Just now", "5 minutes ago", "Yesterday", "3 days ago"
+         */
+        function timeAgo(value) {
+            if (!value) return '<span class="text-muted">No activity yet</span>';
+            const date = new Date(value);
+            if (Number.isNaN(date.getTime())) return '<span class="text-muted">No activity yet</span>';
+
+            const now = Date.now();
+            const diffMs = now - date.getTime();
+            const diffSec = Math.floor(diffMs / 1000);
+            const diffMin = Math.floor(diffSec / 60);
+            const diffHr  = Math.floor(diffMin / 60);
+            const diffDay = Math.floor(diffHr  / 24);
+
+            let label;
+            if (diffSec < 60)        label = 'Just now';
+            else if (diffMin < 60)   label = `${diffMin} minute${diffMin === 1 ? '' : 's'} ago`;
+            else if (diffHr  < 24)   label = `${diffHr} hour${diffHr === 1 ? '' : 's'} ago`;
+            else if (diffDay === 1)  label = 'Yesterday';
+            else if (diffDay < 30)   label = `${diffDay} days ago`;
+            else if (diffDay < 365)  label = `${Math.floor(diffDay / 30)} month${Math.floor(diffDay / 30) === 1 ? '' : 's'} ago`;
+            else                     label = `${Math.floor(diffDay / 365)} year${Math.floor(diffDay / 365) === 1 ? '' : 's'} ago`;
+
+            // Store the ISO timestamp in a data attribute so the interval can refresh it
+            return `<span class="time-ago-cell text-muted small" data-ts="${escapeHtml(value)}" title="${date.toLocaleString()}">${label}</span>`;
+        }
+
         function copyToClipboard(text, button) {
             navigator.clipboard.writeText(text).then(() => {
                 const icon = button.querySelector('i');
@@ -548,7 +578,7 @@
             if (leads.length === 0) {
                 tbody.innerHTML = `
 <tr>
-    <td colspan="7" class="text-center py-5">
+    <td colspan="8" class="text-center py-5">
         <div class="empty-state">
             <i class="bi bi-people display-4 text-secondary" aria-hidden="true"></i>
             <h5 class="mt-3 mb-2">No leads found</h5>
@@ -581,6 +611,7 @@
                     <td>${lead.global_unsubscribe
                         ? '<span class="chip" style="background:#fee2e2;color:#b91c1c;">Unsubscribed</span>'
                         : '<span class="chip" style="background:#dcfce7;color:#166534;">Active</span>'}</td>
+                    <td>${timeAgo(lead.updated_at)}</td>
                 </tr>
             `).join('');
 
@@ -826,6 +857,21 @@
 
             document.getElementById('lead-search').addEventListener('input', applySearch);
             document.getElementById('refresh-history-btn').addEventListener('click', loadImportHistory);
+
+            // Refresh relative "Last Activity" timestamps every 60 seconds
+            setInterval(() => {
+                document.querySelectorAll('.time-ago-cell[data-ts]').forEach(el => {
+                    const ts = el.getAttribute('data-ts');
+                    const rendered = timeAgo(ts);
+                    // timeAgo returns an HTML string; extract just the label text
+                    const tmp = document.createElement('span');
+                    tmp.innerHTML = rendered;
+                    const newLabel = tmp.querySelector('.time-ago-cell')?.textContent ?? '';
+                    if (newLabel && el.textContent !== newLabel) {
+                        el.textContent = newLabel;
+                    }
+                });
+            }, 60_000);
 
             const filterPanel = document.getElementById('filter-panel');
             document.getElementById('filter-toggle-btn').addEventListener('click', () => {
