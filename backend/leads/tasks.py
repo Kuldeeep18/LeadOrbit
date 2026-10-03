@@ -83,7 +83,8 @@ def import_leads_from_csv(file_contents, organization_id, job_id=None):
     except csv.Error:
         dialect = csv.excel
     reader = csv.DictReader(stream, dialect=dialect)
-
+    if reader.fieldnames:
+        reader.fieldnames = [name.strip() for name in reader.fieldnames]
     leads_created = 0
     leads_updated = 0
     failed_count = 0
