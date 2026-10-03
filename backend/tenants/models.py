@@ -6,6 +6,12 @@ class Organization(models.Model):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     name = models.CharField(max_length=255)
     billing_plan = models.CharField(max_length=50, default='FREE')
+    custom_tracking_domain = models.CharField(
+        max_length=253,
+        blank=True,
+        null=True,
+        help_text='Optional branded tracking domain, e.g. track.company.com',
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     gemini_api_key = models.CharField(max_length=255, blank=True, null=True)
     enable_ai_personalization = models.BooleanField(default=True)
