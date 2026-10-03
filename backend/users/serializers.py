@@ -9,16 +9,27 @@ class OrganizationSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     organization = OrganizationSerializer(read_only=True)
+
     class Meta:
         model = User
-        fields = ['id', 'email', 'role', 'organization', 'is_active']
+        fields = [
+            'id',
+            'email',
+            'first_name',
+            'last_name',
+            'avatar_url',
+            'role',
+            'organization',
+            'is_active',
+        ]
 
 class RegisterSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
     organization_name = serializers.CharField()
-    first_name = serializers.CharField(required=False)
-    last_name = serializers.CharField(required=False)
+    first_name = serializers.CharField(required=False, allow_blank=True)
+    last_name = serializers.CharField(required=False, allow_blank=True)
+    avatar_url = serializers.URLField(required=False, allow_blank=True)
 
     def validate_email(self, value):
         if User.objects.filter(email__iexact=value).exists():
@@ -32,5 +43,8 @@ class RegisterSerializer(serializers.Serializer):
             password=validated_data['password'],
             organization=org,
             role='ADMIN',  # First user in org is admin
+            first_name=validated_data.get('first_name', '').strip() or None,
+            last_name=validated_data.get('last_name', '').strip() or None,
+            avatar_url=validated_data.get('avatar_url', '').strip() or None,
         )
         return user

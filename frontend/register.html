@@ -116,6 +116,19 @@
                             </div>
 
                             <div class="mb-3">
+
+                                <label for="avatarUrl" class="form-label text-muted small fw-semibold">Avatar URL
+                                </label>
+                                <input type="url" class="form-control form-control-lg fs-6" id="avatarUrl"
+                                    placeholder="https://example.com/avatar.png">
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="emailAddress" class="form-label text-muted small fw-semibold">Email
+                                    Address</label>
+                                <input type="email" class="form-control form-control-lg fs-6" id="emailAddress"
+                                    placeholder="name@example.com" required>
+
                                 <label for="emailAddress" class="form-label text-white-50 small fw-semibold">Email Address</label>
                                 <div class="input-group">
                                     <span class="input-group-text input-group-text-custom"><i class="bi bi-envelope" aria-hidden="true"></i></span>
@@ -181,6 +194,7 @@
                     const email = document.getElementById('emailAddress').value;
                     const password = document.getElementById('password').value;
 
+                    const avatar_url = document.getElementById('avatarUrl').value.trim();
                     const organization_name = first_name + "'s Organization";
 
                     try {
@@ -189,7 +203,12 @@
                         btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Signing up...';
 
                         await register({
-                            first_name, last_name, email, password, organization_name
+                            first_name,
+                            last_name,
+                            email,
+                            password,
+                            organization_name,
+                            avatar_url: avatar_url || undefined,
                         });
 
                         window.location.href = '/dashboard.html';
