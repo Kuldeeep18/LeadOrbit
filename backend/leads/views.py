@@ -36,11 +36,11 @@ class LeadViewSet(viewsets.ModelViewSet):
         Returns leads scoped to the current user's organization.
 
         Supported query parameters (Issue #244):
-          ?tags=uuid1,uuid2         — leads that have ALL of the given tags
-          ?created_after=YYYY-MM-DD — leads created on or after this date
-          ?created_before=YYYY-MM-DD — leads created on or before this date
-          ?status=active|unsubscribed — filter by subscription status
-          ?search=<text>            — filter by name / email / company
+          ?tags=uuid1,uuid2             — leads that have ALL of the given tags
+          ?created_after=YYYY-MM-DD     — leads created on or after this date
+          ?created_before=YYYY-MM-DD    — leads created on or before this date
+          ?status=active|unsubscribed   — filter by subscription status
+          ?search=<text>                — filter by name / email / company
         """
         qs = Lead.objects.filter(organization=self.request.user.organization)
         params = self.request.query_params
@@ -161,6 +161,7 @@ class LeadImportJobViewSet(viewsets.ReadOnlyModelViewSet):
     def get_queryset(self):
         return LeadImportJob.objects.filter(organization=self.request.user.organization).order_by('-created_at')
 
+
 class TagViewSet(viewsets.ModelViewSet):
     serializer_class = TagSerializer
     queryset = Tag.objects.all()
@@ -182,9 +183,18 @@ class TagViewSet(viewsets.ModelViewSet):
 class BlockedDomainViewSet(viewsets.ModelViewSet):
     serializer_class = BlockedDomainSerializer
     queryset = BlockedDomain.objects.all()
+    manager_actions = frozenset({'create', 'update', 'partial_update', 'destroy'})
+
+    def get_permissions(self):
+        permissions = super().get_permissions()
+        if self.action in self.manager_actions:
+            permissions.append(IsOrgManager())
+        return permissions
 
     def get_queryset(self):
         return BlockedDomain.objects.filter(organization=self.request.user.organization)
 
     def perform_create(self, serializer):
         serializer.save(organization=self.request.user.organization)
+
+        
