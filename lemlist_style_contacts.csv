@@ -1,7 +1,7 @@
 email,firstName,lastName,companyName,linkedinUrl
-kanaveeru@gmail.com,CAPLER452B,,CAPLER452B,
-kanojignesh7@gmail.com,Kuldeep,Goklani,Personal,
-k69622103@gmail.com,Kuldeep,1234,Personal,
-smartlinkintelligence@gmail.com,SMART_LINK_INTELLIGENCE,,SMART_LINK_INTELLIGENCE,
-n8160975@gmail.com,Nishi,,Personal,
-24002171210051@mail.jku.edu.in,Kuldeep,,JKU,
+test-user-1@example.com,Test,User,Example Corp,https://www.linkedin.com/in/test-user-1
+test-user-2@example.com,Sample,Lead,Example Labs,https://www.linkedin.com/in/test-user-2
+test-user-3@example.com,Demo,Contact,Example Studio,https://www.linkedin.com/in/test-user-3
+test-user-4@example.com,Placeholder,Prospect,Example Group,https://www.linkedin.com/in/test-user-4
+test-user-5@example.com,Synthetic,Person,Example Network,https://www.linkedin.com/in/test-user-5
+test-user-6@example.com,Example,Contact,Example Ventures,https://www.linkedin.com/in/test-user-6
