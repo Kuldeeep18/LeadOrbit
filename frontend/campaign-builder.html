@@ -1204,7 +1204,7 @@
             WAIT: { icon: 'bi-clock-fill', cls: 'wait', label: 'Delay', meta: 'Wait before next step' },
             LINKEDIN: { icon: 'bi-linkedin', cls: 'linkedin', label: 'LinkedIn', meta: 'LinkedIn action' },
             MANUAL: { icon: 'bi-hand-index-fill', cls: 'manual', label: 'Manual Task', meta: 'Manual action' },
-            SMS: { icon: 'bi-chat-dots-fill', cls: 'sms', label: 'SMS', meta: 'Send a text message' },
+            SMS: { icon: 'bi-chat-dots-fill', cls: 'sms', label: 'SMS', meta: 'Reminder to send a text' },
             CALL: { icon: 'bi-telephone-fill', cls: 'call', label: 'Phone Call', meta: 'Call the lead' },
             CONDITION_OPEN: { icon: 'bi-envelope-open-fill', cls: 'condition', label: 'Opened email', meta: '' },
             CONDITION_REPLY: { icon: 'bi-reply-fill', cls: 'condition', label: 'Replied', meta: '' },
@@ -2317,7 +2317,7 @@ ${rows || `
                     </div>
                 </div>
                 <div class="alert alert-light border small mb-0">
-                    <i class="bi bi-info-circle me-1"></i> SMS requires a phone number on the lead. Leads without a phone number will be skipped.
+                    <i class="bi bi-info-circle me-1"></i> LeadOrbit does not send texts. This step is a reminder to message the lead yourself; the sequence moves on automatically.
                 </div>
             `;
             const bodyEl = document.getElementById('ep-sms-body');
@@ -2358,7 +2358,7 @@ ${rows || `
                     <textarea class="ep-textarea" id="ep-call-desc" placeholder="e.g. Introduce yourself, mention the email you sent, and ask about their needs..." style="min-height:140px;">${step.description || ''}</textarea>
                 </div>
                 <div class="alert alert-light border small mb-0">
-                    <i class="bi bi-telephone-outbound me-1"></i> When Twilio is configured, this step initiates an automated call reading your script. Otherwise, it acts as a manual reminder.
+                    <i class="bi bi-telephone-outbound me-1"></i> LeadOrbit does not place calls. This step is a reminder to call the lead yourself; the sequence moves on automatically.
                 </div>
             `;
             document.getElementById('ep-call-desc').addEventListener('input', e => {

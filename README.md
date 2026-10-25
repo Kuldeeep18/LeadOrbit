@@ -41,7 +41,7 @@ This project adheres to the Contributor Covenant [Code of Conduct](CODE_OF_CONDU
 - CSV lead import with flexible column aliases and background task support
 - Campaign builder with sequence editing, lead selection, sender selection, and launch flow
 - Email sending through Gmail API when a Google account is connected
-- SMS and call execution through Twilio when credentials are configured
+- SMS, call, LinkedIn and WhatsApp steps as manual task reminders in a sequence
 - Open/reply/click/bounce tracking through the webhook endpoint
 - Optional send-time AI personalization through a self-hosted Ollama model (no API key) or Gemini. Off by default; emails then go out as written with merge tags filled in
 - Per-lead merge tag replacement
@@ -59,7 +59,7 @@ Execution status by step type:
 - Frontend: static HTML pages, ES modules, Bootstrap 5, Chart.js
 - Database: SQLite by default at `backend/db.sqlite3`
 - AI (optional): Ollama (self-hosted) or Gemini, for send-time personalization
-- Integrations: Google OAuth/Gmail API, Twilio
+- Integrations: Google OAuth/Gmail API, custom SMTP/IMAP mailboxes
 - Python target: `3.11.9` via [`runtime.txt`](runtime.txt)
 
 ## Repo Layout
@@ -68,7 +68,7 @@ Execution status by step type:
 backend/
   manage.py
   backend/              # active Django project package used by manage.py
-  campaigns/            # campaign models, serializers, tasks, Gmail/Twilio/AI integrations
+  campaigns/            # campaign models, serializers, tasks, Gmail/SMTP/AI integrations
   leads/                # lead models, CSV import task, lead/tag API
   tenants/              # organizations, tenant middleware, security middleware
   users/                # custom user model, registration, profile/JWT auth
@@ -126,10 +126,6 @@ GEMINI_API_KEY=
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 GOOGLE_REDIRECT_URI=http://127.0.0.1:8000/api/v1/auth/google/callback
-
-TWILIO_ACCOUNT_SID=
-TWILIO_AUTH_TOKEN=
-TWILIO_PHONE_NUMBER=
 ```
 
 ### 3. (Optional) Run a local AI model
@@ -305,7 +301,7 @@ Current repo state: `27` backend tests pass. The suite covers auth/profile updat
 ## Current Caveats
 
 - Some older root planning documents still mention the original `Lime` name, but the active README, backend, and frontend runtime paths use `LeadOrbit`.
-- A `backend/.env.example` file exists but currently only documents `DEBUG` and `SECRET_KEY`. It is missing the Google 0Auth, Twilio, Celery and gemini variables that `backend/backend/settings.py` reads
+- A `backend/.env.example` file exists but currently only documents `DEBUG` and `SECRET_KEY`. It is missing the Google OAuth, Celery and Gemini variables that `backend/backend/settings.py` reads
 - [`frontend/src`](frontend/src) and [`backend/config`](backend/config) look like leftover scaffold code and are not part of the main runtime path.
 - Some endpoints are still MVP-grade and should be hardened before a production multi-tenant deployment; a few utility endpoints are intentionally permissive.
 - The root markdown docs describe product intent and planning. The codebase is the source of truth for current behavior.
@@ -313,7 +309,7 @@ Current repo state: `27` backend tests pass. The suite covers auth/profile updat
 ## Integration Notes
 
 - Gmail sending requires valid Google OAuth client credentials and a connected account from the Settings page.
-- SMS and call steps require Twilio credentials and leads with phone numbers.
+- LeadOrbit does not send texts or place calls. SMS, call, LinkedIn and WhatsApp steps are reminders: the scheduler logs them and moves the lead to the next step.
 - If no AI credentials are configured, the campaign builder AI composer still returns a deterministic fallback draft instead of failing hard.
 
 

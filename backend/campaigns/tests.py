@@ -20,7 +20,6 @@ from campaigns.ai import personalize_email
 from campaigns.email_rendering import html_to_text, plain_text_to_html
 from campaigns.gmail_service import check_for_replies, send_gmail
 from campaigns.mailbox_service import find_imap_bounce_candidates, send_smtp_email
-from campaigns.sms_service import initiate_call
 from campaigns.tasks import (
     _execute_condition_event_step,
     check_imap_bounces,
@@ -420,6 +419,51 @@ class CampaignWorkflowTests(APITestCase):
         self.assertEqual(campaign_lead.status, 'ACTIVE')
         self.assertGreaterEqual(campaign_lead.next_execution_time, now + timedelta(minutes=5))
         mocked_delay.assert_not_called()
+
+    def test_sms_and_call_steps_are_reminders_for_leads_with_phone(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='SMS and call reminders',
+            status='ACTIVE',
+        )
+        call_step = SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=1,
+            channel_type='CALL',
+            delay_minutes=0,
+            template_body='Call {{first_name}}',
+        )
+        SequenceStep.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            step_order=2,
+            channel_type='SMS',
+            delay_minutes=0,
+            template_body='Hi {{first_name}}',
+        )
+        lead = Lead.objects.create(
+            organization=self.organization,
+            email='phone@acme.test',
+            first_name='Pat',
+            phone='+15550100',
+        )
+        campaign_lead = CampaignLead.objects.create(
+            organization=self.organization,
+            campaign=campaign,
+            lead=lead,
+            current_step=call_step,
+            status='ACTIVE',
+            next_execution_time=timezone.now() - timedelta(minutes=1),
+        )
+
+        process_active_leads_once(now=timezone.now())
+
+        campaign_lead.refresh_from_db()
+        campaign.refresh_from_db()
+        self.assertEqual(campaign_lead.status, 'FINISHED')
+        self.assertIsNone(campaign_lead.current_step_id)
+        self.assertEqual(campaign.status, 'COMPLETED')
 
     def test_launch_processing_uses_fresh_steps_after_sequence_resync(self):
         campaign = Campaign.objects.create(

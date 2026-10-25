@@ -43,7 +43,7 @@ Copy the example environment file and fill in your values:
 cp backend/.env.example backend/.env
 ```
 
-Then edit `backend/.env` and add the required values (Google OAuth, Twilio, Celery, Gemini API, etc.) as described in the file comments.
+Then edit `backend/.env` and add the required values (Google OAuth, Celery, Gemini API, etc.) as described in the file comments.
 
 ### 6. Run Database Migrations
 
