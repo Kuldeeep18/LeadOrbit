@@ -1,0 +1,53 @@
+# Render Blueprint: LeadOrbit backend on Render's free web service.
+# Render dashboard > New > Blueprint > pick this repo. You'll be asked for the
+# `sync: false` values below. The database lives outside Render (free Postgres
+# from Neon, Supabase, ...) so data survives restarts and redeploys.
+services:
+  - type: web
+    name: leadorbit
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt && python backend/manage.py collectstatic --noinput
+    startCommand: cd backend && python manage.py migrate --noinput && gunicorn backend.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 120
+    healthCheckPath: /
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.11.9
+      - key: DEBUG
+        value: "False"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: MAILBOX_CREDENTIALS_ENCRYPTION_KEY
+        generateValue: true
+      # Shared with the GitHub Actions scheduler (.github/workflows/cron-tick.yml).
+      - key: CRON_SECRET
+        generateValue: true
+      # Required by POST /api/v1/webhooks/email/ (open/reply/bounce events);
+      # give it to your email provider as the X-Webhook-Secret header or ?token=.
+      - key: WEBHOOK_SECRET
+        generateValue: true
+      # postgres://user:password@host/dbname?sslmode=require (from your Postgres provider)
+      - key: DATABASE_URL
+        sync: false
+      - key: ALLOWED_HOSTS
+        value: .onrender.com
+      # Your frontend URL, e.g. https://leadorbit.netlify.app
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      - key: FRONTEND_BASE_URL
+        sync: false
+      # This service's own URL, e.g. https://leadorbit.onrender.com (tracking/unsubscribe links)
+      - key: BACKEND_BASE_URL
+        sync: false
+      # No Redis/worker on the free plan: run tasks inside the web process and
+      # let the cron endpoint drive scheduled sends.
+      - key: CELERY_TASK_ALWAYS_EAGER
+        value: "true"
+      - key: LAUNCH_IMMEDIATE_PASSES
+        value: "1"
+      - key: AI_PROVIDER
+        value: none
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false

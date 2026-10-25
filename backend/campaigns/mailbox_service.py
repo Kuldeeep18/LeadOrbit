@@ -7,9 +7,11 @@ from email.mime.text import MIMEText
 from email.parser import BytesParser
 from email.utils import formataddr, make_msgid
 
+from .email_rendering import build_email_bodies
 from .gmail_service import _extract_failed_recipients
 
 logger = logging.getLogger(__name__)
+IMAP_TIMEOUT_SECONDS = 20
 
 BOUNCE_SUBJECT_KEYWORDS = (
     'undelivered mail returned to sender',
@@ -69,16 +71,12 @@ def send_smtp_email(account, to_email, subject, body_html, unsubscribe_url=None)
 
     if unsubscribe_url:
         message['List-Unsubscribe'] = f"<{unsubscribe_url}>"
-        body_html = (
-            f"{body_html}"
-            '<div style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e7eb;'
-            'font-size:0.9em;color:#6b7280;line-height:1.5;">'
-            "If you'd like to stop receiving these emails, "
-            f'<a href="{unsubscribe_url}" style="color:#1d4ed8;text-decoration:none;">unsubscribe here</a>.'
-            '</div>'
-        )
+        # RFC 8058 one-click unsubscribe, which Gmail and Yahoo require from bulk senders.
+        message['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click'
 
-    message.attach(MIMEText(body_html, 'html'))
+    html_body, text_body = build_email_bodies(body_html, unsubscribe_url)
+    message.attach(MIMEText(text_body, 'plain'))
+    message.attach(MIMEText(html_body, 'html'))
 
     client = _connect_smtp(account)
     try:
@@ -96,9 +94,9 @@ def send_smtp_email(account, to_email, subject, body_html, unsubscribe_url=None)
 def _connect_imap(account):
     """Open and authenticate an IMAP client using the account settings."""
     if account.imap_use_ssl:
-        client = imaplib.IMAP4_SSL(account.imap_host, account.imap_port)
+        client = imaplib.IMAP4_SSL(account.imap_host, account.imap_port, timeout=IMAP_TIMEOUT_SECONDS)
     else:
-        client = imaplib.IMAP4(account.imap_host, account.imap_port)
+        client = imaplib.IMAP4(account.imap_host, account.imap_port, timeout=IMAP_TIMEOUT_SECONDS)
 
     username, password = _imap_login_parts(account)
     client.login(username, password)
@@ -139,7 +137,9 @@ def find_imap_bounce_candidates(account, max_results=25):
         message_ids = [item.decode('utf-8') for item in (data[0] or b'').split() if item]
         candidates = []
         for message_id in message_ids[-max_results:]:
-            status, fetch_data = client.uid('fetch', message_id, '(RFC822)')
+            # BODY.PEEK leaves the \Seen flag alone; fetching RFC822 would mark every
+            # unread message in the user's inbox as read, bounce or not.
+            status, fetch_data = client.uid('fetch', message_id, '(BODY.PEEK[])')
             if status != 'OK':
                 continue
 

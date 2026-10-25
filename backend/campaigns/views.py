@@ -1,10 +1,11 @@
+import hmac
 import logging
-
-
 import urllib.parse
-from django.core.signing import Signer, BadSignature
+from html import escape
+
+from django.core.exceptions import ValidationError
 from django.http import HttpResponseRedirect, HttpResponseBadRequest
-# ------------------------------------------
+from django.views.decorators.csrf import csrf_exempt
 
 from rest_framework import status, viewsets
 from rest_framework.decorators import action
@@ -18,6 +19,14 @@ from .models import Campaign, CampaignLead, SequenceStep, EmailTemplate
 from .serializers import CampaignSerializer, SequenceStepSerializer, EmailTemplateSerializer
 
 logger = logging.getLogger(__name__)
+
+
+def _secret_matches(expected, provided):
+    """Constant-time comparison of a configured shared secret; an empty secret never matches."""
+    expected = (expected or '').strip()
+    provided = (provided or '').strip()
+    return bool(expected) and hmac.compare_digest(expected.encode('utf-8'), provided.encode('utf-8'))
+
 
 class CampaignViewSet(viewsets.ModelViewSet):
     serializer_class = CampaignSerializer
@@ -269,10 +278,13 @@ class CampaignViewSet(viewsets.ModelViewSet):
         """Get paginated list of enrolled leads with metrics."""
         campaign = self.get_object()
         status_filter = request.query_params.get('status')
-        limit = int(request.query_params.get('limit', 50))
-        offset = int(request.query_params.get('offset', 0))
+        try:
+            limit = min(max(int(request.query_params.get('limit', 50)), 1), 200)
+            offset = max(int(request.query_params.get('offset', 0)), 0)
+        except (TypeError, ValueError):
+            return Response({'error': 'limit and offset must be integers.'}, status=status.HTTP_400_BAD_REQUEST)
 
-        leads_qs = campaign.enrolled_leads.select_related('lead').order_by('-updated_at')
+        leads_qs = campaign.enrolled_leads.select_related('lead', 'current_step').order_by('-updated_at')
 
         if status_filter:
             leads_qs = leads_qs.filter(status=status_filter)
@@ -286,7 +298,7 @@ class CampaignViewSet(viewsets.ModelViewSet):
                 'email': cl.lead.email,
                 'status': cl.status,
                 'current_step': cl.current_step.step_order if cl.current_step else None,
-                'last_sent_at': cl.last_sent_message_id,
+                'last_sent_message_id': cl.last_sent_message_id,
                 'last_opened_at': cl.last_opened_at.isoformat() if cl.last_opened_at else None,
                 'last_clicked_at': cl.last_clicked_at.isoformat() if cl.last_clicked_at else None,
                 'last_replied_at': cl.last_replied_at.isoformat() if cl.last_replied_at else None,
@@ -368,8 +380,14 @@ class WebhookView(APIView):
     """
     Receives webhooks from email service provider (e.g. SendGrid/Mailgun)
     to track opens, clicks, bounces.
+
+    The caller proves it is our provider with the WEBHOOK_SECRET, sent as the
+    X-Webhook-Secret header or a ?token= query parameter (for providers that
+    only let you configure a URL). Without it anyone could mark any lead as
+    bounced or replied, in every organization.
     """
-    permission_classes = [AllowAny] # Webhooks need to be publicly accessible
+    permission_classes = [AllowAny]
+    authentication_classes = []
 
     @staticmethod
     def _extract_bounce_details(payload):
@@ -408,6 +426,10 @@ class WebhookView(APIView):
         }
     
     def post(self, request, *args, **kwargs):
+        provided = request.headers.get('X-Webhook-Secret') or request.query_params.get('token')
+        if not _secret_matches(getattr(django_settings, 'WEBHOOK_SECRET', ''), provided):
+            return Response({'detail': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
+
         event_type = (request.data.get('event') or '').strip().lower()
         lead_email = request.data.get('email')
         message_id = request.data.get('message_id') or request.data.get('messageId')
@@ -630,87 +652,41 @@ class DashboardAnalyticsView(APIView):
         })
 
 
-class AIGenerateView(APIView):
+class CronTickView(APIView):
     """
-    POST /api/v1/campaigns/ai-generate/
-    Generate email content using the configured LLM provider for the campaign builder.
+    POST /api/v1/cron/tick/
+    Runs the campaign scheduler once: sends due sequence steps, then polls for
+    replies and bounces. Replaces Celery worker/beat on hosts that only run a
+    web process (e.g. Render free); call it every few minutes from a free cron
+    (GitHub Actions, cron-job.org). Requires the X-Cron-Secret header.
     """
-    permission_classes = [IsAuthenticated]
+    permission_classes = [AllowAny]
+    authentication_classes = []
 
     def post(self, request, *args, **kwargs):
-        prompt = (request.data.get('prompt') or '').strip()
-        current_subject = request.data.get('subject', '')
-        current_body = request.data.get('body', '')
-        messages = request.data.get('messages', [])
+        from .tasks import check_imap_bounces, poll_gmail_for_replies, process_active_leads_once
 
-        if not prompt and not messages:
-            return Response({'error': 'prompt is required'}, status=status.HTTP_400_BAD_REQUEST)
+        if not _secret_matches(getattr(django_settings, 'CRON_SECRET', ''), request.headers.get('X-Cron-Secret')):
+            return Response({'detail': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
 
-        # Backward-compatible fallback: when Gemini key is missing, return a
-        # deterministic local draft regardless of external provider env state.
-        if not (getattr(django_settings, 'GEMINI_API_KEY', '') or '').strip():
-            generated = self._build_fallback_content(request)
-            return Response(
-                {
-                    'assistant_message': 'Using fallback draft because AI API key is not configured.',
-                    'subject': current_subject or 'Quick idea for {{company}}',
-                    'body': current_body or (
-                        "Hi {{firstName}},\n\n"
-                        "I noticed your work at {{company}} and wanted to share a short idea that might help.\n"
-                        "Would you be open to a quick 10-minute chat this week?\n\n"
-                        "Best,\n"
-                        "Your Name"
-                    ),
-                    'generated': generated,
-                    'provider': 'fallback',
-                    'model': 'template',
-                    'fallback': True,
-                },
-                status=status.HTTP_200_OK,
-            )
+        budget = int(getattr(django_settings, 'CRON_TICK_TIME_BUDGET_SECONDS', 60) or 0)
+        results = {'processed_leads': process_active_leads_once(time_budget_seconds=budget or None)}
+        for name, task in (('replies', poll_gmail_for_replies), ('bounces', check_imap_bounces)):
+            try:
+                results[name] = task()
+            except Exception as exc:
+                logger.exception('Cron tick %s failed', name)
+                results[name] = f'error: {exc}'
+        return Response(results)
 
-        from .ai import generate_email_chat_completion
 
-        try:
-            result = generate_email_chat_completion(
-                prompt=prompt,
-                current_subject=current_subject,
-                current_body=current_body,
-                messages=messages,
-            )
-            generated = f"SUBJECT: {result.get('subject', '')}\nBODY: {result.get('body', '')}"
-            result.setdefault('generated', generated)
-            result.setdefault('fallback', False)
-            return Response(result, status=status.HTTP_200_OK)
-        except ValueError as exc:
-            return Response({'error': str(exc)}, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as exc:
-            return Response(
-                {
-                    'error': 'AI generation failed',
-                    'detail': str(exc),
-                },
-                status=status.HTTP_502_BAD_GATEWAY,
-            )
-
-    def _build_fallback_content(self, request):
-        subject = request.data.get('subject') or 'Quick idea for {{company}}'
-        body = request.data.get('body') or (
-            "Hi {{firstName}},\n\n"
-            "I noticed your work at {{company}} and wanted to share a short idea that might help.\n"
-            "Would you be open to a quick 10-minute chat this week?\n\n"
-            "Best,\n"
-            "Your Name"
-        )
-        return f"SUBJECT: {subject}\nBODY: {body}"
-    
 from django.http import HttpResponse
-from django.middleware.csrf import get_token
 from leads.models import Lead
-from .utils import verify_unsubscribe_token
+from .utils import read_click_token, verify_unsubscribe_token
 
 
-def _unsubscribe_page(title, message, extra_html=''):
+def _simple_page(title, message, extra_html=''):
+    """Minimal standalone page for links opened from emails (title and message are trusted text)."""
     return (
         '<!DOCTYPE html>'
         '<html lang="en">'
@@ -720,8 +696,9 @@ def _unsubscribe_page(title, message, extra_html=''):
         f'<title>{title} | LeadOrbit</title>'
         '<style>body{margin:0;font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Ubuntu,sans-serif;background:#f8fafc;color:#111827;}'
         '.container{max-width:720px;margin:72px auto;padding:32px;background:#ffffff;border:1px solid #e5e7eb;border-radius:24px;box-shadow:0 20px 80px rgba(15,23,42,.08);}'
-        'h1{margin-top:0;font-size:2rem;color:#0f172a;}p{font-size:1rem;line-height:1.7;color:#475569;}'
+        'h1{margin-top:0;font-size:2rem;color:#0f172a;}p{font-size:1rem;line-height:1.7;color:#475569;overflow-wrap:anywhere;}'
         'button{margin-top:12px;border:0;border-radius:999px;background:#1d4ed8;color:#fff;font-weight:700;padding:12px 20px;cursor:pointer;}'
+        'a{color:#1d4ed8;}'
         '</style>'
         '</head>'
         f'<body><div class="container"><h1>{title}</h1><p>{message}</p>{extra_html}</div></body>'
@@ -729,8 +706,15 @@ def _unsubscribe_page(title, message, extra_html=''):
     )
 
 
+@csrf_exempt
 def unsubscribe_view(request, lead_id, token):
-    """Public unsubscribe endpoint for GDPR/CAN-SPAM compliance."""
+    """
+    Public unsubscribe endpoint for GDPR/CAN-SPAM compliance.
+
+    The signed token in the URL is what authorizes the request, so the view is
+    CSRF-exempt: mail providers send RFC 8058 one-click unsubscribes as a bare
+    POST, without a CSRF token.
+    """
     verified = verify_unsubscribe_token(token)
 
     if not verified or str(verified) != str(lead_id):
@@ -748,14 +732,12 @@ def unsubscribe_view(request, lead_id, token):
         )
 
     if request.method != 'POST':
-        csrf_token = get_token(request)
         form = (
-            f'<form method="post" action="{request.path}">'
-            f'<input type="hidden" name="csrfmiddlewaretoken" value="{csrf_token}">'
+            f'<form method="post" action="{escape(request.path)}">'
             '<button type="submit">Confirm unsubscribe</button>'
             '</form>'
         )
-        html = _unsubscribe_page(
+        html = _simple_page(
             'Confirm unsubscribe',
             'Please confirm that you want to unsubscribe from future emails sent through LeadOrbit.',
             form,
@@ -765,7 +747,7 @@ def unsubscribe_view(request, lead_id, token):
     lead.global_unsubscribe = True
     lead.save(update_fields=["global_unsubscribe"])
 
-    html = _unsubscribe_page(
+    html = _simple_page(
         'Unsubscribed',
         'You have been unsubscribed from all future emails sent through LeadOrbit.',
         '<p>If you received this link by mistake, no further action is needed.</p>',
@@ -773,43 +755,49 @@ def unsubscribe_view(request, lead_id, token):
 
     return HttpResponse(html, content_type='text/html')
 
-# --- New ClickTrackingView (Issue #259) ---
 class ClickTrackingView(APIView):
     """
-    Unauthenticated endpoint to track email link clicks and redirect to the destination.
+    Unauthenticated endpoint that records an email link click and sends the
+    reader on to the link's destination (Issue #259).
     """
     permission_classes = [AllowAny]
+    authentication_classes = []
 
     def get(self, request, *args, **kwargs):
         signed_token = request.GET.get('t')
-        dest_url = request.GET.get('dest')
+        dest_url = (request.GET.get('dest') or '').strip()
 
         if not signed_token or not dest_url:
             return HttpResponseBadRequest("Missing tracking parameters.")
+        if urllib.parse.urlsplit(dest_url).scheme.lower() not in ('http', 'https'):
+            return HttpResponseBadRequest("Unsupported link destination.")
 
-        signer = Signer()
-        try:
-            # Decode and verify the token signature
-            unsigned_payload = signer.unsign(signed_token)
-            campaign_lead_id, step_id = unsigned_payload.split(':')
-        except (BadSignature, ValueError):
+        token = read_click_token(signed_token, dest_url)
+        if token is None:
             return HttpResponseBadRequest("Invalid or tampered tracking token.")
+        campaign_lead_id, _step_id, destination_verified = token
 
-        # Analytics ko update karna
         try:
-            lead = CampaignLead.objects.get(id=campaign_lead_id)
+            lead = CampaignLead.objects.select_related('current_step').get(id=campaign_lead_id)
             lead.last_clicked_at = timezone.now()
             lead.save(update_fields=['last_clicked_at'])
 
-            # Optional: Agar conditionally aage badhana hai sequence ko
             if lead.current_step and lead.current_step.channel_type == 'CONDITION_CLICK':
                 from .tasks import _execute_condition_click_step
                 _execute_condition_click_step(lead, lead.current_step, now=timezone.now())
+        except (CampaignLead.DoesNotExist, ValidationError):
+            pass  # Still send the reader on even if the lead was deleted.
 
-        except CampaignLead.DoesNotExist:
-            pass # Failsafe: Continue to redirect even if the lead was deleted
+        if destination_verified:
+            return HttpResponseRedirect(dest_url)
 
-        # Original Destination par redirect karna
-        decoded_dest = urllib.parse.unquote(dest_url)
-        return HttpResponseRedirect(decoded_dest)
-# ------------------------------------------
+        # Links in emails sent before destinations were signed can't prove where
+        # they lead. Show the destination instead of redirecting blindly, so the
+        # endpoint can't be used to dress up phishing links.
+        safe_url = escape(dest_url)
+        html = _simple_page(
+            'Continue to link',
+            'This link goes to the address below. Continue only if you expected it.',
+            f'<p><a href="{safe_url}" rel="noopener noreferrer">{safe_url}</a></p>',
+        )
+        return HttpResponse(html, content_type='text/html')

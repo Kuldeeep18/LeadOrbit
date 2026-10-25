@@ -19,11 +19,12 @@ from campaigns.views import (
     EmailTemplateViewSet,
     WebhookView,
     DashboardAnalyticsView,
-    AIGenerateView,
+    CronTickView,
     unsubscribe_view,
     ClickTrackingView
 )
 from campaigns.google_auth_views import (
+    GoogleOAuthStartView,
     GoogleOAuthLoginView,
     GoogleOAuthCallbackView,
     ConnectedAccountsListView,
@@ -54,13 +55,13 @@ urlpatterns = [
     path('api/v1/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/v1/webhooks/email/', WebhookView.as_view(), name='email_webhook'),
     path('api/v1/analytics/dashboard/', DashboardAnalyticsView.as_view(), name='dashboard_analytics'),
-    path('api/v1/campaigns/ai-generate/', AIGenerateView.as_view(), name='ai_generate'),
+    path('api/v1/cron/tick/', CronTickView.as_view(), name='cron_tick'),
     
     
     path('api/v1/clicks/track/', ClickTrackingView.as_view(), name='click-tracking'),
-    # --------------------------------------------------------
 
     # Google OAuth
+    path('api/v1/auth/google/start/', GoogleOAuthStartView.as_view(), name='google_oauth_start'),
     path('api/v1/auth/google/login', GoogleOAuthLoginView.as_view(), name='google_oauth_login'),
     path('api/v1/auth/google/callback', GoogleOAuthCallbackView.as_view(), name='google_oauth_callback'),
     path('auth/google/login', GoogleOAuthLoginView.as_view(), name='google_oauth_login_fallback'),

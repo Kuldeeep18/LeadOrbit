@@ -1,11 +1,15 @@
+import itertools
+from base64 import urlsafe_b64decode
 from datetime import timedelta
-from unittest.mock import patch
+from email import message_from_bytes, message_from_string
+from unittest.mock import MagicMock, patch
 from urllib.parse import parse_qs, urlparse
 
+from bs4 import BeautifulSoup
 from django.core import signing
 from django.core.exceptions import ImproperlyConfigured
 from django.db import connection
-from django.test import override_settings
+from django.test import Client, override_settings
 from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
@@ -13,6 +17,10 @@ from rest_framework.test import APITestCase
 from campaigns.models import Campaign, CampaignLead, ConnectedEmailAccount, SequenceStep
 from campaigns.fields import decrypt_mailbox_credential, encrypt_mailbox_credential
 from campaigns.ai import personalize_email
+from campaigns.email_rendering import html_to_text, plain_text_to_html
+from campaigns.gmail_service import check_for_replies, send_gmail
+from campaigns.mailbox_service import find_imap_bounce_candidates, send_smtp_email
+from campaigns.sms_service import initiate_call
 from campaigns.tasks import (
     _execute_condition_event_step,
     check_imap_bounces,
@@ -20,9 +28,10 @@ from campaigns.tasks import (
     poll_gmail_for_replies,
     process_active_leads,
     process_active_leads_once,
+    rewrite_email_links,
     send_email_step,
 )
-from campaigns.utils import generate_unsubscribe_token
+from campaigns.utils import generate_click_token, generate_unsubscribe_token
 from leads.models import BlockedDomain, Lead
 from tenants.models import Organization
 from users.models import User
@@ -39,6 +48,15 @@ class CampaignWorkflowTests(APITestCase):
             role='ADMIN',
         )
         self.client.force_authenticate(self.user)
+
+    def _post_webhook(self, payload):
+        with self.settings(WEBHOOK_SECRET='hook-secret'):
+            return self.client.post(
+                '/api/v1/webhooks/email/',
+                payload,
+                format='json',
+                HTTP_X_WEBHOOK_SECRET='hook-secret',
+            )
 
     def test_create_campaign_syncs_sequence_steps_from_builder_payload(self):
         account = ConnectedEmailAccount.objects.create(
@@ -236,6 +254,78 @@ class CampaignWorkflowTests(APITestCase):
 
         self.assertEqual(subject, 'Hello Casey from SaaS')
         self.assertEqual(body, 'Can we talk at 10:30 AM?')
+
+    @override_settings(AI_PROVIDER='ollama', OLLAMA_BASE_URL='http://ollama.test:11434', OLLAMA_MODEL='test-model')
+    def test_personalize_email_uses_ollama_provider(self):
+        lead = Lead.objects.create(organization=self.organization, email='ollama@acme.test',
+                                   first_name='Casey', company='Acme')
+        ollama_reply = {'message': {'content': '{"subject": "Idea for Acme", "body": "Hi {{firstName}}, tailored."}'}}
+
+        with patch('campaigns.ai.requests.post') as post:
+            post.return_value.json.return_value = ollama_reply
+            subject, body = personalize_email('Hello {{firstName}}', 'Generic body', lead)
+
+        self.assertEqual(subject, 'Idea for Acme')
+        self.assertEqual(body, 'Hi Casey, tailored.')
+        self.assertEqual(post.call_args.args[0], 'http://ollama.test:11434/api/chat')
+        self.assertEqual(post.call_args.kwargs['json']['model'], 'test-model')
+
+    @override_settings(AI_PROVIDER='ollama', OLLAMA_BASE_URL='http://ollama.test:11434')
+    def test_personalize_email_rejects_placeholders_and_falls_back(self):
+        lead = Lead.objects.create(organization=self.organization, email='guard@acme.test', first_name='Casey')
+        bad = {'message': {'content': '{"subject": "Hi", "body": "Hi Casey, from [Your Company Name]\\nBest,\\nKuldeep"}'}}
+
+        with patch('campaigns.ai.requests.post') as post:
+            post.return_value.json.return_value = bad
+            subject, body = personalize_email('Hello {{firstName}}', 'Body\nBest,\nKuldeep', lead)
+
+        self.assertEqual(post.call_count, 2)  # one retry
+        self.assertEqual((subject, body), ('Hello Casey', 'Body\nBest,\nKuldeep'))
+
+    @override_settings(AI_PROVIDER='ollama', OLLAMA_BASE_URL='http://ollama.test:11434')
+    def test_personalize_email_rejects_lost_sign_off(self):
+        lead = Lead.objects.create(organization=self.organization, email='signoff@acme.test', first_name='Casey')
+        bad = {'message': {'content': '{"subject": "Hi", "body": "Hi Casey, tailored text."}'}}
+
+        with patch('campaigns.ai.requests.post') as post:
+            post.return_value.json.return_value = bad
+            _, body = personalize_email('Hello', 'Body\nBest,\nKuldeep', lead)
+
+        self.assertEqual(body, 'Body\nBest,\nKuldeep')
+
+    @override_settings(AI_PROVIDER='ollama', OLLAMA_BASE_URL='http://ollama.test:11434')
+    def test_personalize_email_converts_bracket_placeholders_to_merge_tags(self):
+        lead = Lead.objects.create(organization=self.organization, email='brackets@acme.test',
+                                   first_name='Casey', company='Acme')
+        reply = {'message': {'content': '{"subject": "Idea for [Company]", "body": "Hi [FirstName],\\nBest,\\nKuldeep"}'}}
+
+        with patch('campaigns.ai.requests.post') as post:
+            post.return_value.json.return_value = reply
+            subject, body = personalize_email('Hello', 'Body\nBest,\nKuldeep', lead)
+
+        self.assertEqual(subject, 'Idea for Acme')
+        self.assertEqual(body, 'Hi Casey,\nBest,\nKuldeep')
+
+    @override_settings(AI_PROVIDER='ollama', OLLAMA_BASE_URL='http://ollama.test:11434')
+    def test_personalize_email_falls_back_when_ollama_is_down(self):
+        lead = Lead.objects.create(organization=self.organization, email='down@acme.test', first_name='Casey')
+
+        with patch('campaigns.ai.requests.post', side_effect=ConnectionError('refused')):
+            subject, body = personalize_email('Hello {{firstName}}', 'Body for {{firstName}}', lead)
+
+        self.assertEqual((subject, body), ('Hello Casey', 'Body for Casey'))
+
+    @override_settings(AI_PROVIDER='ollama', OLLAMA_BASE_URL='http://ollama.test:11434')
+    def test_personalize_email_respects_org_ai_toggle(self):
+        self.organization.enable_ai_personalization = False
+        self.organization.save()
+        lead = Lead.objects.create(organization=self.organization, email='off@acme.test', first_name='Casey')
+
+        with patch('campaigns.ai.requests.post') as post:
+            subject, _ = personalize_email('Hello {{firstName}}', 'Body', lead)
+
+        post.assert_not_called()
+        self.assertEqual(subject, 'Hello Casey')
 
     def test_process_active_leads_advances_all_non_email_step_types(self):
         campaign = Campaign.objects.create(
@@ -1499,37 +1589,38 @@ class CampaignWorkflowTests(APITestCase):
         campaign.refresh_from_db()
         self.assertEqual(campaign.status, 'DRAFT')
 
-    @override_settings(GEMINI_API_KEY='')
-    def test_ai_generate_returns_fallback_when_key_missing(self):
-        response = self.client.post(
-            '/api/v1/campaigns/ai-generate/',
-            {'prompt': 'Write an outreach email'},
-            format='json',
-        )
-        self.assertEqual(response.status_code, status.HTTP_200_OK)
-        self.assertTrue(response.data.get('fallback'))
-        self.assertIn('SUBJECT:', response.data.get('generated', ''))
-
-    @override_settings(GEMINI_API_KEY='')
-    def test_ai_generate_requires_authentication(self):
+    @override_settings(CRON_SECRET='tick-secret')
+    def test_cron_tick_rejects_missing_or_wrong_secret(self):
         self.client.force_authenticate(user=None)
+        for headers in ({}, {'HTTP_X_CRON_SECRET': 'wrong'}):
+            response = self.client.post('/api/v1/cron/tick/', **headers)
+            self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-        response = self.client.post(
-            '/api/v1/campaigns/ai-generate/',
-            {'prompt': 'Write an outreach email'},
-            format='json',
-        )
+    @override_settings(CRON_SECRET='')
+    def test_cron_tick_disabled_without_configured_secret(self):
+        self.client.force_authenticate(user=None)
+        response = self.client.post('/api/v1/cron/tick/', HTTP_X_CRON_SECRET='')
+        self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
 
-        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+    @override_settings(CRON_SECRET='tick-secret')
+    def test_cron_tick_runs_scheduler_with_valid_secret(self):
+        self.client.force_authenticate(user=None)
+        with patch('campaigns.tasks.process_active_leads_once', return_value=3) as process, \
+                patch('campaigns.tasks.poll_gmail_for_replies', return_value='0 replies') as replies, \
+                patch('campaigns.tasks.check_imap_bounces', side_effect=RuntimeError('imap down')):
+            response = self.client.post('/api/v1/cron/tick/', HTTP_X_CRON_SECRET='tick-secret')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        process.assert_called_once()
+        replies.assert_called_once()
+        self.assertEqual(response.data['processed_leads'], 3)
+        self.assertEqual(response.data['replies'], '0 replies')
+        self.assertIn('imap down', response.data['bounces'])
 
     def test_email_webhook_logs_processing_errors(self):
         with patch('campaigns.views.CampaignLead.objects.filter', side_effect=RuntimeError('boom')):
             with self.assertLogs('campaigns.views', level='ERROR') as logs:
-                response = self.client.post(
-                    '/api/v1/webhooks/email/',
-                    {'event': 'open', 'email': 'lead@acme.test'},
-                    format='json',
-                )
+                response = self._post_webhook({'event': 'open', 'email': 'lead@acme.test'})
 
         self.assertEqual(
             response.status_code, 
@@ -1568,11 +1659,7 @@ class CampaignWorkflowTests(APITestCase):
         )
 
         with patch('campaigns.tasks.notify_email_bounced') as mocked_notify:
-            response = self.client.post(
-                '/api/v1/webhooks/email/',
-                {'event': 'bounce', 'email': 'webhook-bounce@acme.test'},
-                format='json',
-            )
+            response = self._post_webhook({'event': 'bounce', 'email': 'webhook-bounce@acme.test'})
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         campaign_lead.refresh_from_db()
@@ -1599,20 +1686,16 @@ class CampaignWorkflowTests(APITestCase):
             last_sent_message_id='msg-123',
         )
 
-        response = self.client.post(
-            '/api/v1/webhooks/email/',
-            {
-                'event': 'bounce',
-                'email': 'bounce@acme.test',
-                'message_id': 'msg-123',
-                'bounce': {
-                    'type': 'soft',
-                    'code': 'mailbox_full',
-                    'reason': 'Mailbox full',
-                },
+        response = self._post_webhook({
+            'event': 'bounce',
+            'email': 'bounce@acme.test',
+            'message_id': 'msg-123',
+            'bounce': {
+                'type': 'soft',
+                'code': 'mailbox_full',
+                'reason': 'Mailbox full',
             },
-            format='json',
-        )
+        })
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         campaign_lead.refresh_from_db()
@@ -1639,11 +1722,7 @@ class CampaignWorkflowTests(APITestCase):
             last_sent_message_id='finished-mid-2',
         )
 
-        response = self.client.post(
-            '/api/v1/webhooks/email/',
-            {'event': 'bounce', 'email': 'finished-webhook@acme.test'},
-            format='json',
-        )
+        response = self._post_webhook({'event': 'bounce', 'email': 'finished-webhook@acme.test'})
 
         self.assertEqual(response.status_code, status.HTTP_200_OK)
         campaign_lead.refresh_from_db()

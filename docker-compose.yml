@@ -1,0 +1,154 @@
+# LeadOrbit production stack.
+#   cp .env.docker.example .env   # then fill in the secrets
+#   docker compose up -d --build
+# Only the `web` container is reachable from outside (ports 80/443); everything
+# else talks over the private Compose network.
+name: leadorbit
+
+x-backend: &backend
+  build:
+    context: .
+    dockerfile: deploy/backend.Dockerfile
+  image: leadorbit-backend
+  env_file: .env
+  environment:
+    DEBUG: "False"
+    DATABASE_URL: postgres://${POSTGRES_USER:-leadorbit}:${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}@db:5432/${POSTGRES_DB:-leadorbit}
+    CELERY_BROKER_URL: redis://redis:6379/0
+    CELERY_RESULT_BACKEND: redis://redis:6379/1
+    CELERY_TASK_ALWAYS_EAGER: "false"
+    OLLAMA_BASE_URL: http://ollama:11434
+    # A 3B model on CPU writes an email in ~20-30 s; allow queueing behind other sends.
+    OLLAMA_TIMEOUT_SECONDS: ${OLLAMA_TIMEOUT_SECONDS:-150}
+    GUNICORN_TIMEOUT: "180"
+    STATIC_ROOT: /app/staticfiles
+  restart: unless-stopped
+
+services:
+  web:
+    build:
+      context: .
+      dockerfile: deploy/web.Dockerfile
+    image: leadorbit-web
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:80}
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    volumes:
+      - static:/srv/static:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      backend:
+        condition: service_healthy
+    restart: unless-stopped
+
+  backend:
+    <<: *backend
+    command: ["web"]
+    volumes:
+      - static:/app/staticfiles
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      # Any HTTP answer (the API root returns 401 without a token) means gunicorn is up.
+      test: ["CMD", "python", "-c", "import urllib.request,urllib.error\ntry: urllib.request.urlopen('http://127.0.0.1:8000/api/v1/', timeout=5)\nexcept urllib.error.HTTPError: pass"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+
+  worker:
+    <<: *backend
+    command: ["worker"]
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  beat:
+    <<: *backend
+    command: ["beat"]
+    depends_on:
+      backend:
+        condition: service_healthy
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-leadorbit}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-leadorbit}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  # Self-hosted AI. Models live in the `ollama` volume and survive restarts.
+  ollama:
+    image: ollama/ollama:${OLLAMA_IMAGE_TAG:-0.40.0}
+    environment:
+      OLLAMA_KEEP_ALIVE: 30m
+      # One generation at a time: parallel requests on CPU just slow each other down.
+      OLLAMA_NUM_PARALLEL: "1"
+    volumes:
+      - ollama:/root/.ollama
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+    restart: unless-stopped
+
+  # One-shot job: downloads the model on first start (no-op once it is cached).
+  ollama-pull:
+    image: ollama/ollama:${OLLAMA_IMAGE_TAG:-0.40.0}
+    environment:
+      OLLAMA_HOST: ollama:11434
+    entrypoint: ["ollama", "pull", "${OLLAMA_MODEL:-qwen2.5:3b}"]
+    depends_on:
+      ollama:
+        condition: service_healthy
+    restart: "no"
+
+  # Optional: publish the site through a Cloudflare Tunnel instead of opening ports.
+  # Lets you host on your own PC (no VPS, no static IP, no router changes).
+  #   docker compose --profile tunnel up -d
+  # Needs CLOUDFLARE_TUNNEL_TOKEN in .env (Cloudflare dashboard > Zero Trust > Tunnels),
+  # with the tunnel's public hostname pointing at http://web:80.
+  tunnel:
+    image: cloudflare/cloudflared:${CLOUDFLARED_IMAGE_TAG:-2026.10.0}
+    command: ["tunnel", "--no-autoupdate", "run"]
+    environment:
+      TUNNEL_TOKEN: ${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      - web
+    restart: unless-stopped
+    profiles: ["tunnel"]
+
+volumes:
+  pgdata:
+  redisdata:
+  ollama:
+  static:
+  caddy_data:
+  caddy_config:

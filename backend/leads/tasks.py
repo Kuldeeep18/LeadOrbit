@@ -135,19 +135,24 @@ def import_leads_from_csv(file_contents, organization_id, job_id=None):
                 phone = '+' + phone  # best-effort prefix
 
         try:
-            # Create or update Lead for this organization
-            _, created = Lead.objects.update_or_create(
-                organization=org,
-                email=email,
-                defaults={
-                    'first_name': first_name,
-                    'last_name': last_name,
-                    'company': company,
-                    'linkedin_url': linkedin_url or None,
-                    'phone': phone or None,
-                    'custom_variables': custom_variables,
-                }
-            )
+            # Create or update the Lead for this organization. Matching is case-insensitive
+            # so "John@Acme.com" and "john@acme.com" stay one lead and get one email.
+            fields = {
+                'first_name': first_name,
+                'last_name': last_name,
+                'company': company,
+                'linkedin_url': linkedin_url or None,
+                'phone': phone or None,
+                'custom_variables': custom_variables,
+            }
+            lead = Lead.objects.filter(organization=org, email__iexact=email).first()
+            created = lead is None
+            if created:
+                Lead.objects.create(organization=org, email=email, **fields)
+            else:
+                for name, value in fields.items():
+                    setattr(lead, name, value)
+                lead.save()
         except Exception as exc:
             failed_count += 1
             error_log.append({

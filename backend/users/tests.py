@@ -45,6 +45,7 @@ class AuthMeViewTests(APITestCase):
             '/api/v1/auth/me/',
             {
                 'organization_name': 'Org After',
+                'current_password': 'StrongPass123!',
                 'new_password': 'EvenStronger123!',
             },
             format='json',
@@ -73,7 +74,7 @@ class AuthMeViewTests(APITestCase):
 
         response = self.client.patch(
             '/api/v1/auth/me/',
-            {'new_password': 'MemberStrong123!'},
+            {'current_password': 'StrongPass123!', 'new_password': 'MemberStrong123!'},
             format='json',
         )
 
@@ -104,3 +105,89 @@ class AuthMeViewTests(APITestCase):
         self.assertEqual(response.status_code, status.HTTP_403_FORBIDDEN)
         self.assertTrue(Organization.objects.filter(id=self.organization.id).exists())
         self.assertTrue(User.objects.filter(id=self.user.id).exists())
+
+    def test_password_change_requires_current_password_and_changes_nothing_without_it(self):
+        for current_password in (None, 'WrongPass123!'):
+            payload = {'organization_name': 'Should Not Stick', 'new_password': 'EvenStronger123!'}
+            if current_password:
+                payload['current_password'] = current_password
+
+            response = self.client.patch('/api/v1/auth/me/', payload, format='json')
+
+            self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+            self.assertIn('current_password', response.data)
+            self.user.refresh_from_db()
+            self.organization.refresh_from_db()
+            self.assertTrue(self.user.check_password('StrongPass123!'))
+            self.assertEqual(self.organization.name, 'Org Before')
+
+    def test_me_reports_whether_a_gemini_key_is_saved_without_revealing_it(self):
+        self.organization.gemini_api_key = 'AIza-secret-key'
+        self.organization.save(update_fields=['gemini_api_key'])
+
+        response = self.client.get('/api/v1/auth/me/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertTrue(response.data['organization']['has_gemini_api_key'])
+        self.assertNotIn('gemini_api_key', response.data['organization'])
+        self.assertNotIn('AIza-secret-key', response.content.decode('utf-8'))
+
+    def test_admin_can_remove_saved_gemini_key_with_empty_string(self):
+        self.organization.gemini_api_key = 'AIza-secret-key'
+        self.organization.save(update_fields=['gemini_api_key'])
+
+        response = self.client.patch('/api/v1/auth/me/', {'gemini_api_key': ''}, format='json')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertFalse(response.data['organization']['has_gemini_api_key'])
+        self.organization.refresh_from_db()
+        self.assertIsNone(self.organization.gemini_api_key)
+
+
+class RegistrationAndLoginTests(APITestCase):
+    def test_register_rejects_weak_password_without_creating_an_organization(self):
+        response = self.client.post(
+            '/api/v1/auth/register/',
+            {'email': 'new@example.com', 'password': '12345678', 'organization_name': 'Weak Org'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('password', response.data)
+        self.assertFalse(Organization.objects.filter(name='Weak Org').exists())
+        self.assertFalse(User.objects.filter(email='new@example.com').exists())
+
+    def test_login_accepts_email_in_any_case(self):
+        organization = Organization.objects.create(name='Case Org')
+        User.objects.create_user(
+            email='Founder@Example.com',
+            password='StrongPass123!',
+            organization=organization,
+            role=User.ROLE_ADMIN,
+        )
+
+        response = self.client.post(
+            '/api/v1/token/',
+            {'email': 'founder@example.com', 'password': 'StrongPass123!'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertIn('access', response.data)
+
+    def test_login_still_rejects_wrong_password(self):
+        organization = Organization.objects.create(name='Case Org')
+        User.objects.create_user(
+            email='founder@example.com',
+            password='StrongPass123!',
+            organization=organization,
+            role=User.ROLE_ADMIN,
+        )
+
+        response = self.client.post(
+            '/api/v1/token/',
+            {'email': 'FOUNDER@example.com', 'password': 'WrongPass123!'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)

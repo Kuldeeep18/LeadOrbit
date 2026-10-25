@@ -8,14 +8,19 @@ import base64
 import logging
 import re
 from email import policy
+from email.mime.multipart import MIMEMultipart
 from email.mime.text import MIMEText
 from email.parser import BytesParser
+from email.utils import parseaddr
 
 from django.conf import settings
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 
+from .email_rendering import build_email_bodies
+
 logger = logging.getLogger(__name__)
+BOUNCE_SENDER_NAMES = {'mailer-daemon', 'postmaster'}
 
 GMAIL_API_VERSION = 'v1'
 BOUNCE_QUERY = (
@@ -177,27 +182,19 @@ def send_gmail(account, to_email, subject, body_html, unsubscribe_url=None, thre
 
     Returns the Message-ID string of the sent message (for reply tracking).
     """
-    if unsubscribe_url:
-        message_footer = (
-            '<div style="margin-top:24px;padding-top:16px;border-top:1px solid #e5e7eb;'
-            'font-size:0.9em;color:#6b7280;line-height:1.5;">'
-            "If you'd like to stop receiving these emails, "
-            f'<a href="{unsubscribe_url}" style="color:#1d4ed8;text-decoration:none;">unsubscribe here</a>.'
-            '</div>'
-        )
-        body_html = f"{body_html}{message_footer}"
-        message_headers = f"<{unsubscribe_url}>"
-    else:
-        message_headers = None
-
+    html_body, text_body = build_email_bodies(body_html, unsubscribe_url)
     service = _build_service(account)
 
-    message = MIMEText(body_html, 'html')
+    message = MIMEMultipart('alternative')
     message['to'] = to_email
     message['from'] = account.email_address
     message['subject'] = subject
-    if message_headers:
-        message['List-Unsubscribe'] = message_headers
+    if unsubscribe_url:
+        message['List-Unsubscribe'] = f"<{unsubscribe_url}>"
+        # RFC 8058 one-click unsubscribe, which Gmail and Yahoo require from bulk senders.
+        message['List-Unsubscribe-Post'] = 'List-Unsubscribe=One-Click'
+    message.attach(MIMEText(text_body, 'plain'))
+    message.attach(MIMEText(html_body, 'html'))
 
     raw = base64.urlsafe_b64encode(message.as_bytes()).decode()
     body = {'raw': raw}
@@ -232,21 +229,35 @@ def check_for_replies(account, sent_message_ids):
 
             # Get the thread
             thread = service.users().threads().get(
-                userId='me', id=thread_id, format='metadata'
+                userId='me', id=thread_id, format='metadata', metadataHeaders=['From']
             ).execute()
-            messages = thread.get('messages', [])
 
-            # If the thread has more than one message, a reply exists
-            if len(messages) > 1:
-                # The last message in the thread that is NOT the original is the reply
-                for m in reversed(messages):
-                    if m['id'] != msg_id:
-                        replies[msg_id] = m.get('snippet', '(reply detected)')
-                        break
+            # The newest message from someone else in the thread is the reply.
+            for m in reversed(thread.get('messages', [])):
+                if m.get('id') != msg_id and _is_reply_from_recipient(m, account.email_address):
+                    replies[msg_id] = m.get('snippet', '(reply detected)')
+                    break
         except Exception as e:
             logger.warning(f"Error checking reply for {msg_id}: {e}")
 
     return replies
+
+
+def _is_reply_from_recipient(message, account_email):
+    """
+    Gmail threads bounce notices and the sender's own follow-ups with the
+    original message; neither of those is a reply from the lead.
+    """
+    if 'SENT' in (message.get('labelIds') or []):
+        return False
+    headers = (message.get('payload') or {}).get('headers') or []
+    sender = next((h.get('value') or '' for h in headers if (h.get('name') or '').lower() == 'from'), '')
+    address = (parseaddr(sender)[1] or sender).strip().lower()
+    if not address:
+        return True
+    if account_email and address == account_email.strip().lower():
+        return False
+    return address.split('@', 1)[0] not in BOUNCE_SENDER_NAMES
 
 
 def find_gmail_bounce_candidates(account, max_results=25):

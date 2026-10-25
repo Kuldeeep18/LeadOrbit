@@ -138,6 +138,10 @@ function scheduleSessionWarning() {
     const warningDelay = warningTime - now;
     const logoutDelay = expiryTime - now;
 
+    // setTimeout overflows past ~24.8 days and would fire (log out) immediately.
+    const MAX_TIMER_DELAY = 2147483647;
+    if (logoutDelay > MAX_TIMER_DELAY) return;
+
     console.log('Session warning in:', warningDelay);
     console.log('Auto logout in:', logoutDelay);
 
@@ -159,8 +163,7 @@ export function getTheme() {
     if (savedTheme === 'dark' || savedTheme === 'light') {
         return savedTheme;
     }
-    // Check system preference if no saved theme
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    return 'dark';
 }
 
 export function applyTheme(theme) {
@@ -516,7 +519,7 @@ function injectShortcutsModal() {
             const linkHTML = `
                 <div class="mt-2 pt-2 border-top border-secondary border-opacity-25" id="shortcut-link-wrapper">
                     <a href="#" id="shortcut-trigger-btn" class="text-white opacity-50 text-decoration-none small" title="Show Keyboard Shortcuts">
-                        <i class="bi bi-keyboard me-1"></i> Shortcuts <kbd class="bg-dark text-white border-secondary">?</kbd>
+                        <i class="bi bi-keyboard me-1"></i> Shortcuts <kbd>?</kbd>
                     </a>
                 </div>
             `;

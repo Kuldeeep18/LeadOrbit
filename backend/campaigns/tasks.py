@@ -1,15 +1,16 @@
 import logging
+import time
 import urllib.parse
 from datetime import timedelta
 
 from bs4 import BeautifulSoup
 from celery import shared_task
 from django.conf import settings as django_settings
-from django.core.signing import Signer
 from django.db.models import Q
 from django.utils import timezone
 
 from .ai import _apply_merge_tags, personalize_email
+from .email_rendering import plain_text_to_html
 from .gmail_service import (
     build_unsubscribe_url,
     check_for_replies,
@@ -25,9 +26,11 @@ from .mailbox_service import (
 from .notifications import notify_email_bounced
 from .sms_service import initiate_call, send_sms
 from .models import CampaignLead, ConnectedEmailAccount, SequenceStep
+from .utils import generate_click_token
 from leads.models import BlockedDomain, normalize_domain
 
 logger = logging.getLogger(__name__)
+TRACKABLE_LINK_SCHEMES = ('http', 'https')
 
 def _get_campaign_steps(campaign):
     """
@@ -241,7 +244,8 @@ def _detect_reply_for_campaign_lead(clead):
         return False
 
     account = clead.campaign.connected_account
-    if not account:
+    # Reply lookup reads Gmail threads; custom SMTP/IMAP mailboxes rely on the webhook.
+    if not account or account.provider != 'GOOGLE':
         return False
 
     try:
@@ -518,27 +522,26 @@ def rewrite_email_links(html_body, campaign_lead_id, step_id):
         return html_body
 
     soup = BeautifulSoup(html_body, 'html.parser')
-    signer = Signer()
-    
-    token_payload = f"{campaign_lead_id}:{step_id}"
-    signed_token = signer.sign(token_payload)
-    
     base_url = getattr(django_settings, 'BACKEND_BASE_URL', 'http://127.0.0.1:8000').rstrip('/')
     tracking_endpoint = f"{base_url}/api/v1/clicks/track/"
-    
+
     for a_tag in soup.find_all('a', href=True):
-        original_url = a_tag.get('href', '')
-        
-        if not original_url or original_url.startswith(('mailto:', 'tel:')) or tracking_endpoint in original_url:
+        original_url = a_tag.get('href', '').strip()
+
+        # mailto:, tel:, in-page anchors and already-tracked links are left alone.
+        if urllib.parse.urlsplit(original_url).scheme.lower() not in TRACKABLE_LINK_SCHEMES:
             continue
-            
-        encoded_dest = urllib.parse.quote(original_url, safe='')
-        
-        tracking_url = f"{tracking_endpoint}?t={signed_token}&dest={encoded_dest}"
-        a_tag['href'] = tracking_url
-        
+        if tracking_endpoint in original_url:
+            continue
+
+        # The token is bound to this destination, so the endpoint can't be used as an open redirect.
+        query = urllib.parse.urlencode({
+            't': generate_click_token(campaign_lead_id, step_id, original_url),
+            'dest': original_url,
+        })
+        a_tag['href'] = f"{tracking_endpoint}?{query}"
+
     return str(soup)
-# -----------------------------------
 
 
 @shared_task
@@ -582,10 +585,8 @@ def send_email_step(campaign_lead_id, step_id):
             return
 
         subject, body = personalize_email(step.template_subject, step.template_body, clead.lead)
-
-       
-        body = rewrite_email_links(body, campaign_lead_id, step_id)
-        # -------------------------------------------
+        # Builder bodies are plain text; keep their line breaks and make URLs clickable (and tracked).
+        body = rewrite_email_links(plain_text_to_html(body), campaign_lead_id, step_id)
 
         account = clead.campaign.connected_account
         if account:
@@ -636,12 +637,16 @@ def process_active_leads():
     return f"Triggered execution for {processed} campaign leads."
 
 
-def process_active_leads_once(now=None):
+def process_active_leads_once(now=None, time_budget_seconds=None):
     """
     Process currently due campaign leads exactly once.
     Returns the number of leads that were advanced/queued.
+
+    With a time budget, no new lead is started once it is spent; the rest are
+    picked up by the next pass.
     """
     now = now or timezone.now()
+    deadline = time.monotonic() + time_budget_seconds if time_budget_seconds else None
 
     ready_leads = CampaignLead.objects.filter(
         status__in=['ENROLLED', 'ACTIVE'],
@@ -651,6 +656,9 @@ def process_active_leads_once(now=None):
     processed = 0
     eager_mode = bool(getattr(django_settings, 'CELERY_TASK_ALWAYS_EAGER', False))
     for clead in ready_leads:
+        if deadline is not None and time.monotonic() >= deadline:
+            logger.info("Scheduler pass hit its %ss time budget; remaining leads run on the next pass.", time_budget_seconds)
+            break
         if clead.lead.global_unsubscribe:
             logger.info(
                 f"Skipping campaign lead {clead.lead.email} because lead has globally unsubscribed."
@@ -722,7 +730,7 @@ def poll_gmail_for_replies():
     active_leads = CampaignLead.objects.filter(
         status__in=['ACTIVE', 'ENROLLED', 'FINISHED'],
         last_sent_message_id__isnull=False,
-        campaign__connected_account__isnull=False,
+        campaign__connected_account__provider='GOOGLE',
     ).select_related('campaign__connected_account', 'lead')
 
     account_map = {}

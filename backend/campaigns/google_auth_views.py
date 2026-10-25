@@ -122,14 +122,55 @@ class CustomMailboxAccountSerializer(serializers.Serializer):
         return attrs
 
 
+def _google_consent_url(request, user, frontend_origin_candidate=''):
+    """Google consent screen URL whose signed state links the callback back to this user."""
+    frontend_origin = _sanitize_frontend_base(request, frontend_origin_candidate)
+    state_data = signing.dumps({
+        'user_id': str(user.id),
+        'org_id': str(user.organization_id),
+        'frontend_origin': frontend_origin,
+    }, salt=GOOGLE_OAUTH_STATE_SALT)
+
+    params = {
+        'client_id': settings.GOOGLE_CLIENT_ID,
+        'redirect_uri': settings.GOOGLE_REDIRECT_URI,
+        'response_type': 'code',
+        'scope': ' '.join(settings.GOOGLE_SCOPES),
+        'access_type': 'offline',   # gets us a refresh_token
+        'prompt': 'consent',        # always show consent to get refresh_token
+        'state': state_data,
+    }
+    return f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
+
+
+class GoogleOAuthStartView(APIView):
+    """
+    POST /api/v1/auth/google/start/
+    Returns the Google consent URL for the signed-in user. The frontend calls
+    this with its usual Authorization header and then navigates to the URL, so
+    the access token never travels in a URL (where server logs and browser
+    history would keep it).
+    """
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        if not settings.GOOGLE_CLIENT_ID or not settings.GOOGLE_CLIENT_SECRET:
+            return Response(
+                {'detail': 'Google sign-in is not configured on this server (GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET).'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        url = _google_consent_url(request, request.user, request.data.get('frontend_origin', ''))
+        logger.info(f"[OAuth Start] Issued Google consent URL for user {request.user.email}")
+        return Response({'url': url})
+
+
 class GoogleOAuthLoginView(APIView):
     """
     GET /api/v1/auth/google/login?token=<jwt>
     Redirects the user to Google's OAuth2 consent screen.
 
-    The user's JWT is passed as a query parameter since this is a
-    browser navigation (not an XHR), so Authorization headers can't be sent.
-    The JWT is decoded to extract user/org identity for the state parameter.
+    Kept for older frontends: the JWT travels as a query parameter because this
+    is a browser navigation. New code should use GoogleOAuthStartView instead.
     """
     permission_classes = [AllowAny]
 
@@ -159,23 +200,7 @@ class GoogleOAuthLoginView(APIView):
             return _frontend_settings_redirect(request, google_auth='error', reason='not_logged_in')
 
         # Encode user identity in state so callback can link to correct user
-        frontend_origin = _sanitize_frontend_base(request, request.GET.get('frontend_origin', ''))
-        state_data = signing.dumps({
-            'user_id': str(user.id),
-            'org_id': str(user.organization_id),
-            'frontend_origin': frontend_origin,
-        }, salt=GOOGLE_OAUTH_STATE_SALT)
-
-        params = {
-            'client_id': settings.GOOGLE_CLIENT_ID,
-            'redirect_uri': settings.GOOGLE_REDIRECT_URI,
-            'response_type': 'code',
-            'scope': ' '.join(settings.GOOGLE_SCOPES),
-            'access_type': 'offline',   # gets us a refresh_token
-            'prompt': 'consent',        # always show consent to get refresh_token
-            'state': state_data,
-        }
-        url = f"https://accounts.google.com/o/oauth2/v2/auth?{urlencode(params)}"
+        url = _google_consent_url(request, user, request.GET.get('frontend_origin', ''))
         logger.info(f"[OAuth Login] Redirecting user {user.email} to Google consent screen")
         return redirect(url)
 

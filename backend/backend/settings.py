@@ -8,12 +8,17 @@ import sys
 from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+TESTING = 'test' in sys.argv
 # Prefer local project .env values for local development runs.
 # Never override existing environment variables (important in deployment).
-load_dotenv(BASE_DIR / '.env', override=False)
+# Tests ignore .env so they behave the same on every machine and in CI.
+if not TESTING:
+    load_dotenv(BASE_DIR / '.env', override=False)
 
 
 def _read_local_env_value(name: str, default: str = '') -> str:
+    if TESTING:
+        return default
     env_path = BASE_DIR / '.env'
     try:
         if env_path.exists():
@@ -51,12 +56,20 @@ def _normalize_google_redirect_uri(raw_uri: str, backend_base_url: str) -> str:
 
 SECRET_KEY = os.getenv('SECRET_KEY', 'django-insecure-fallback-key-change-me')
 DEBUG = os.getenv('DEBUG', 'True').lower() in ('true', '1', 'yes')
-TESTING = 'test' in sys.argv
 MAILBOX_CREDENTIALS_ENCRYPTION_KEY = os.getenv(
     'MAILBOX_CREDENTIALS_ENCRYPTION_KEY',
     'fallback-insecure-key-for-local-dev-and-testing' if (DEBUG or TESTING) else '',
 )
-ALLOWED_HOSTS = ['*']
+if not DEBUG and not TESTING and SECRET_KEY == 'django-insecure-fallback-key-change-me':
+    from django.core.exceptions import ImproperlyConfigured
+    raise ImproperlyConfigured('SECRET_KEY must be set when DEBUG is off.')
+
+# Comma-separated, e.g. "leadorbit.example.com,localhost". Defaults to any host for local dev.
+ALLOWED_HOSTS = [h.strip() for h in os.getenv('ALLOWED_HOSTS', '*').split(',') if h.strip()]
+# Needed for Django admin / unsubscribe form POSTs behind HTTPS, e.g. "https://leadorbit.example.com".
+CSRF_TRUSTED_ORIGINS = [o.strip() for o in os.getenv('CSRF_TRUSTED_ORIGINS', '').split(',') if o.strip()]
+# The reverse proxy (Caddy) terminates TLS and tells Django the original scheme.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:3000",
     "http://127.0.0.1:3000",
@@ -81,6 +94,7 @@ INSTALLED_APPS = [
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
+    'whitenoise.middleware.WhiteNoiseMiddleware',  # serves admin static files on PaaS hosts
     'corsheaders.middleware.CorsMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -120,6 +134,21 @@ DATABASES = {
     }
 }
 
+# Production (Docker) uses Postgres via DATABASE_URL=postgres://user:pass@host:5432/dbname
+_database_url = os.getenv('DATABASE_URL', '').strip()
+if _database_url:
+    from urllib.parse import unquote, urlparse
+    _db = urlparse(_database_url)
+    DATABASES['default'] = {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': _db.path.lstrip('/'),
+        'USER': unquote(_db.username or ''),
+        'PASSWORD': unquote(_db.password or ''),
+        'HOST': _db.hostname or '',
+        'PORT': str(_db.port or 5432),
+        'CONN_MAX_AGE': 60,
+    }
+
 AUTH_USER_MODEL = 'users.User'
 
 AUTH_PASSWORD_VALIDATORS = [
@@ -134,6 +163,10 @@ TIME_ZONE = 'UTC'
 USE_I18N = True
 USE_TZ = True
 STATIC_URL = 'static/'
+# `collectstatic` target (Django admin assets); served by the reverse proxy in Docker.
+STATIC_ROOT = os.getenv('STATIC_ROOT', str(BASE_DIR / 'staticfiles'))
+# Look files up per request in development instead of indexing STATIC_ROOT at startup.
+WHITENOISE_AUTOREFRESH = DEBUG
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 REST_FRAMEWORK = {
@@ -181,15 +214,43 @@ SIMPLE_JWT = {
     'USER_ID_CLAIM': 'user_id',
 }
 
-# Allow all origins in development
-CORS_ALLOW_ALL_ORIGINS = True
+# Frontend origins allowed to call the API, e.g. "https://leadorbit.netlify.app".
+# Unset (local dev) allows any origin.
+_cors_origins = [o.strip() for o in os.getenv('CORS_ALLOWED_ORIGINS', '').split(',') if o.strip()]
+if _cors_origins:
+    CORS_ALLOWED_ORIGINS = _cors_origins
+    CORS_ALLOW_ALL_ORIGINS = False
+else:
+    CORS_ALLOW_ALL_ORIGINS = True
+
+# AI personalization of outgoing emails: 'none' (default, sends templates as written),
+# 'ollama' (self-hosted model) or 'gemini'. Tests always use 'none' (override_settings to test a provider).
+AI_PROVIDER = 'none' if TESTING else os.getenv('AI_PROVIDER', _read_local_env_value('AI_PROVIDER', 'none'))
+OLLAMA_BASE_URL = os.getenv('OLLAMA_BASE_URL', _read_local_env_value('OLLAMA_BASE_URL', 'http://127.0.0.1:11434'))
+OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', _read_local_env_value('OLLAMA_MODEL', 'qwen2.5:3b'))
+OLLAMA_TIMEOUT_SECONDS = int(os.getenv('OLLAMA_TIMEOUT_SECONDS', _read_local_env_value('OLLAMA_TIMEOUT_SECONDS', '60')))
+# Keep the model in memory between sends so each email doesn't pay the load time.
+OLLAMA_KEEP_ALIVE = os.getenv('OLLAMA_KEEP_ALIVE', _read_local_env_value('OLLAMA_KEEP_ALIVE', '30m'))
 
 # Gemini API Key
 GEMINI_API_KEY = os.getenv('GEMINI_API_KEY', _read_local_env_value('GEMINI_API_KEY', ''))
-OPENROUTER_API_KEY = os.getenv('OPENROUTER_API_KEY', _read_local_env_value('OPENROUTER_API_KEY', ''))
-OPENROUTER_MODEL = os.getenv('OPENROUTER_MODEL', _read_local_env_value('OPENROUTER_MODEL', 'mistralai/mistral-nemo'))
-OPENROUTER_APP_URL = os.getenv('OPENROUTER_APP_URL', _read_local_env_value('OPENROUTER_APP_URL', 'http://localhost:8080'))
-OPENROUTER_APP_NAME = os.getenv('OPENROUTER_APP_NAME', _read_local_env_value('OPENROUTER_APP_NAME', 'LeadOrbit Campaign Builder'))
+GEMINI_MODEL = os.getenv('GEMINI_MODEL', _read_local_env_value('GEMINI_MODEL', 'gemini-3.8-flash'))
+
+# Shared secret for POST /api/v1/cron/tick/ (runs the scheduler on hosts without
+# a Celery worker). Empty disables the endpoint.
+CRON_SECRET = os.getenv('CRON_SECRET', _read_local_env_value('CRON_SECRET', ''))
+# A tick stops starting new sends after this many seconds so the request finishes
+# well inside the gunicorn timeout; leftover leads go out on the next tick.
+CRON_TICK_TIME_BUDGET_SECONDS = int(os.getenv('CRON_TICK_TIME_BUDGET_SECONDS', '60'))
+
+# Shared secret for POST /api/v1/webhooks/email/ (open/click/reply/bounce events
+# from an email provider). Send it as the X-Webhook-Secret header or ?token=.
+# Empty disables the endpoint.
+WEBHOOK_SECRET = os.getenv('WEBHOOK_SECRET', _read_local_env_value('WEBHOOK_SECRET', ''))
+
+# Per-IP request limit for /api/ (per process). 0 disables it; tests disable it
+# so suites don't trip over the shared in-memory counter.
+API_RATE_LIMIT_PER_MINUTE = 0 if TESTING else int(os.getenv('API_RATE_LIMIT_PER_MINUTE', '100'))
 
 # Reply detection toggle (used by Gmail polling task)
 ENABLE_AUTO_REPLY_DETECTION = os.getenv(
@@ -216,6 +277,8 @@ FRONTEND_BASE_URL = os.getenv(
     'FRONTEND_BASE_URL',
     'http://localhost:8080' if DEBUG else '',
 ).rstrip('/')
+# Served over HTTPS in production: keep the admin session and CSRF cookies off plain HTTP.
+SESSION_COOKIE_SECURE = CSRF_COOKIE_SECURE = not DEBUG and BACKEND_BASE_URL.startswith('https://')
 GOOGLE_CLIENT_ID = os.getenv('GOOGLE_CLIENT_ID', '')
 GOOGLE_CLIENT_SECRET = os.getenv('GOOGLE_CLIENT_SECRET', '')
 GOOGLE_REDIRECT_URI = _normalize_google_redirect_uri(

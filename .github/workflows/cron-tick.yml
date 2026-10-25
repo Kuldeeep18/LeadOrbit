@@ -1,0 +1,34 @@
+# Free replacement for the Celery scheduler when the backend runs on a host
+# without background workers (e.g. Render free). Every 10 minutes it asks the
+# backend to send due sequence steps and check replies/bounces. It also keeps a
+# sleeping free instance awake.
+#
+# Setup (repo Settings > Secrets and variables > Actions):
+#   Variable  BACKEND_URL  = https://leadorbit.onrender.com
+#   Secret    CRON_SECRET  = the CRON_SECRET value from your Render service
+name: Campaign scheduler tick
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  tick:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Trigger scheduler
+        env:
+          BACKEND_URL: ${{ vars.BACKEND_URL }}
+          CRON_SECRET: ${{ secrets.CRON_SECRET }}
+        run: |
+          if [ -z "$BACKEND_URL" ] || [ -z "$CRON_SECRET" ]; then
+            echo "BACKEND_URL variable or CRON_SECRET secret not set; skipping."
+            exit 0
+          fi
+          # Retries cover a free instance waking up from sleep (~1 minute).
+          curl -fsS --retry 4 --retry-delay 20 --retry-all-errors --max-time 150 \
+            -X POST -H "X-Cron-Secret: $CRON_SECRET" "$BACKEND_URL/api/v1/cron/tick/"

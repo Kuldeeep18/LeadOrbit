@@ -1,0 +1,51 @@
+{
+	servers {
+		# Trust X-Forwarded-* only from the private Compose network (e.g. the Cloudflare
+		# Tunnel container), so Django knows visitors arrived over HTTPS.
+		trusted_proxies static private_ranges
+	}
+}
+
+# SITE_ADDRESS=":80" serves plain HTTP (local testing, or behind a Cloudflare Tunnel).
+# SITE_ADDRESS="leadorbit.example.com" gets a free Let's Encrypt certificate automatically
+# (the domain's DNS must point at this server and ports 80/443 must be open).
+{$SITE_ADDRESS::80} {
+	encode zstd gzip
+
+	header {
+		-Server
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+
+	# Only Cloudflare (reaching us through the private tunnel container) may say who
+	# the client is; the backend's rate limiter trusts these headers.
+	@direct not remote_ip private_ranges
+	request_header @direct -CF-Connecting-IP
+	request_header @direct -True-Client-IP
+
+	# API, Django admin and the Google OAuth fallback routes go to Django.
+	@backend path /api/* /admin/* /auth/google/*
+	handle @backend {
+		reverse_proxy backend:8000
+	}
+
+	# Django admin assets produced by collectstatic.
+	handle_path /static/* {
+		root * /srv/static
+		file_server
+	}
+
+	handle {
+		root * /srv/frontend
+		try_files {path} {path}.html
+		file_server
+	}
+
+	handle_errors 404 {
+		root * /srv/frontend
+		rewrite * /404.html
+		file_server
+	}
+}

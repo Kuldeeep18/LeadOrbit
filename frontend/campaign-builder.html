@@ -26,19 +26,21 @@
     <style>
         * {
             font-family: 'Inter', sans-serif;
+            box-sizing: border-box;
         }
 
         body {
             margin: 0;
             overflow: hidden;
-            background: #eef3f8;
+            background: #050811;
+            color: #f8fafc;
         }
 
         /* ── Top Bar ─────────────────────── */
         .top-bar {
             height: 56px;
-            background: #fff;
-            border-bottom: 1px solid #e2e8f0;
+            background: #090e1a;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -53,17 +55,19 @@
             width: 280px;
             padding: 4px 8px;
             border-radius: 6px;
+            color: #f8fafc;
         }
 
         .top-bar .campaign-name:focus {
             outline: 2px solid #3b82f6;
-            background: #f8fafc;
+            background: #0f172a;
         }
 
         .tab-pills {
             display: flex;
             gap: 4px;
-            background: #f1f5f9;
+            background: #0f172a;
+            border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 8px;
             padding: 3px;
         }
@@ -74,18 +78,19 @@
             cursor: pointer;
             font-size: 0.85rem;
             font-weight: 500;
-            color: #64748b;
+            color: #94a3b8;
             transition: all .15s;
         }
 
         .tab-pills .tab.active {
-            background: #fff;
-            color: #1e293b;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, .08);
+            background: #1e293b;
+            color: #fff;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, .4);
+            border: 1px solid rgba(255, 255, 255, 0.08);
         }
 
         .tab-pills .tab:hover:not(.active) {
-            color: #1e293b;
+            color: #f8fafc;
         }
 
         .status-toggle {
@@ -99,11 +104,11 @@
         }
 
         .status-toggle.off {
-            background: #cbd5e1;
+            background: #334155;
         }
 
         .status-toggle.on {
-            background: #22c55e;
+            background: #10b981;
         }
 
         .status-toggle::after {
@@ -134,159 +139,169 @@
         .canvas-area {
             flex: 1;
             overflow: auto;
-            padding: 40px 0;
+            padding: 24px;
             display: flex;
             flex-direction: column;
-            align-items: center;
-            background: linear-gradient(135deg, #eef3f8 0%, #e0e8f0 100%);
+            align-items: stretch;
+            background-color: #070b14;
+            background-image: radial-gradient(rgba(255, 255, 255, 0.12) 1.2px, transparent 1.2px);
+            background-size: 24px 24px;
+            position: relative;
         }
 
         .editor-panel {
             width: 480px;
-            background: #fff;
-            border-left: 1px solid #e2e8f0;
+            background: #090e1a;
+            border-left: 1px solid rgba(255, 255, 255, 0.08);
             overflow-y: auto;
             padding: 24px;
             flex-shrink: 0;
+            color: #f8fafc;
         }
 
         .editor-panel.hidden {
             display: none;
         }
 
-        /* ── Flow Nodes ──────────────────── */
-        .flow-node {
-            background: #fff;
-            border: 1.5px solid #e2e8f0;
-            border-radius: 10px;
-            padding: 14px 20px;
-            min-width: 260px;
-            max-width: 320px;
-            cursor: pointer;
-            transition: all .15s;
-            position: relative;
-        }
-
-        .flow-node:hover {
-            border-color: #93c5fd;
-            box-shadow: 0 2px 12px rgba(59, 130, 246, .12);
-        }
-
-        .flow-node.selected {
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, .15);
-        }
-
-        .flow-node.start-node {
-            background: #f8fafc;
-            border-style: dashed;
-        }
-
-        .flow-node .node-icon {
-            width: 32px;
-            height: 32px;
-            border-radius: 8px;
+        /* ── Canvas Toolbar (n8n Floating Bar) ── */
+        .canvas-toolbar {
             display: flex;
             align-items: center;
-            justify-content: center;
-            font-size: .95rem;
+            justify-content: space-between;
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 8px 18px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            width: 100%;
+            max-width: 1200px;
+            color: #f8fafc;
+        }
+
+        .canvas-toolbar .text-dark {
+            color: #f8fafc !important;
+        }
+
+        /* ── Viewport & Zoom Support ────────── */
+        .sequence-viewport {
+            width: 100%;
+            overflow: auto;
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            min-height: 450px;
+        }
+
+        /* ── Sequence Flow Layout Wrapper ── */
+        .sequence-flow-wrapper {
+            display: flex;
+            width: 100%;
+            transition: transform 0.15s ease-out;
+            transform-origin: top left;
+        }
+
+        /* Horizontal Layout (Left to Right) */
+        .sequence-flow-wrapper.horizontal {
+            flex-direction: row;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 40px 30px;
+            min-height: 380px;
+        }
+
+        .sequence-flow-wrapper.horizontal .connector {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
             flex-shrink: 0;
         }
 
-        .flow-node .node-icon.email {
-            background: #dbeafe;
-            color: #2563eb;
+        .sequence-flow-wrapper.horizontal .connector-line {
+            width: 36px;
+            height: 2px;
+            background: #334155;
+            transition: background 0.2s;
         }
 
-        .flow-node .node-icon.wait {
-            background: #fef3c7;
-            color: #d97706;
+        .sequence-flow-wrapper.horizontal .flow-node {
+            min-width: 250px;
+            max-width: 285px;
+            flex-shrink: 0;
         }
 
-        .flow-node .node-icon.linkedin {
-            background: #e0e7ff;
-            color: #4f46e5;
+        .sequence-flow-wrapper.horizontal .branch-container {
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+            position: relative;
+            padding-left: 20px;
+            flex-shrink: 0;
         }
 
-        .flow-node .node-icon.condition {
-            background: #fce7f3;
-            color: #db2777;
+        .sequence-flow-wrapper.horizontal .branch-container::before {
+            content: '';
+            position: absolute;
+            top: 15px;
+            bottom: 15px;
+            left: 0;
+            width: 2px;
+            height: auto;
+            transform: none;
+            background: #334155;
         }
 
-        .flow-node .node-icon.manual {
-            background: #d1fae5;
-            color: #059669;
+        .sequence-flow-wrapper.horizontal .branch-column {
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            gap: 10px;
+            min-width: auto;
         }
 
-        .flow-node .node-icon.sms {
-            background: #dcfce7;
-            color: #16a34a;
+        .sequence-flow-wrapper.horizontal .branch-column::before {
+            content: '';
+            width: 18px;
+            height: 2px;
+            background: #334155;
         }
 
-        .flow-node .node-icon.call {
-            background: #ffedd5;
-            color: #ea580c;
+        .sequence-flow-wrapper.horizontal .branch-label {
+            margin-bottom: 0;
         }
 
-        .flow-node .node-label {
-            font-weight: 600;
-            font-size: 0.85rem;
-            color: #1e293b;
+        /* Vertical Layout (Top to Bottom) */
+        .sequence-flow-wrapper.vertical {
+            flex-direction: column;
+            align-items: center;
+            padding: 20px 0 40px 0;
         }
 
-        .flow-node .node-meta {
-            font-size: 0.75rem;
-            color: #94a3b8;
-        }
-
-        .node-error {
-            color: #ef4444;
-            font-size: 0.75rem;
-            font-weight: 500;
-        }
-
-        /* ── Connectors & Add Buttons ──── */
-        .connector {
+        .sequence-flow-wrapper.vertical .connector {
             display: flex;
             flex-direction: column;
             align-items: center;
         }
 
-        .connector-line {
+        .sequence-flow-wrapper.vertical .connector-line {
             width: 2px;
-            height: 24px;
-            background: #cbd5e1;
-        }
-
-        .add-btn {
-            width: 28px;
             height: 28px;
-            border-radius: 50%;
-            border: 2px dashed #94a3b8;
-            background: #fff;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 0.85rem;
-            color: #64748b;
-            transition: all .15s;
+            background: #334155;
         }
 
-        .add-btn:hover {
-            border-color: #3b82f6;
-            color: #3b82f6;
-            background: #eff6ff;
+        .sequence-flow-wrapper.vertical .flow-node {
+            min-width: 270px;
+            max-width: 320px;
         }
 
-        /* ── Branching ───────────────────── */
-        .branch-container {
+        .sequence-flow-wrapper.vertical .branch-container {
             display: flex;
             gap: 80px;
             position: relative;
         }
 
-        .branch-container::before {
+        .sequence-flow-wrapper.vertical .branch-container::before {
             content: '';
             position: absolute;
             top: 0;
@@ -294,14 +309,161 @@
             transform: translateX(-50%);
             width: calc(100% - 40px);
             height: 2px;
-            background: #cbd5e1;
+            background: #334155;
         }
 
-        .branch-column {
+        .sequence-flow-wrapper.vertical .branch-column {
             display: flex;
             flex-direction: column;
             align-items: center;
             min-width: 140px;
+        }
+
+        /* ── Flow Nodes (n8n Style Cards) ── */
+        .flow-node {
+            background: #0f172a;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 14px 18px;
+            min-width: 250px;
+            max-width: 285px;
+            cursor: pointer;
+            transition: all .2s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
+        }
+
+        .flow-node:hover {
+            border-color: #3b82f6;
+            box-shadow: 0 8px 24px rgba(59, 130, 246, 0.2);
+            transform: translateY(-2px);
+        }
+
+        .flow-node.selected {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.25), 0 8px 24px rgba(59, 130, 246, 0.2);
+        }
+
+        .flow-node.start-node {
+            background: #0f172a;
+            border: 2px dashed rgba(255, 255, 255, 0.2);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+
+        /* n8n Node Connection Ports */
+        .node-port {
+            width: 10px;
+            height: 10px;
+            background: #64748b;
+            border: 2px solid #0f172a;
+            border-radius: 50%;
+            position: absolute;
+            top: 50%;
+            transform: translateY(-50%);
+            box-shadow: 0 1px 3px rgba(0,0,0,0.4);
+            transition: all 0.2s;
+        }
+
+        .flow-node:hover .node-port, .flow-node.selected .node-port {
+            background: #3b82f6;
+        }
+
+        .node-port.input-port {
+            left: -5px;
+        }
+
+        .node-port.output-port {
+            right: -5px;
+        }
+
+        .flow-node .node-icon {
+            width: 34px;
+            height: 34px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1rem;
+            flex-shrink: 0;
+            box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+        }
+
+        .flow-node .node-icon.email {
+            background: rgba(59, 130, 246, 0.2);
+            color: #60a5fa;
+        }
+
+        .flow-node .node-icon.wait {
+            background: rgba(245, 158, 11, 0.2);
+            color: #fbbf24;
+        }
+
+        .flow-node .node-icon.linkedin {
+            background: rgba(99, 102, 241, 0.2);
+            color: #818cf8;
+        }
+
+        .flow-node .node-icon.condition {
+            background: rgba(236, 72, 153, 0.2);
+            color: #f472b6;
+        }
+
+        .flow-node .node-icon.manual {
+            background: rgba(16, 185, 129, 0.2);
+            color: #34d399;
+        }
+
+        .flow-node .node-icon.sms {
+            background: rgba(34, 197, 94, 0.2);
+            color: #4ade80;
+        }
+
+        .flow-node .node-icon.call {
+            background: rgba(249, 115, 22, 0.2);
+            color: #fb923c;
+        }
+
+        .flow-node .node-label {
+            font-weight: 700;
+            font-size: 0.88rem;
+            color: #f8fafc;
+        }
+
+        .flow-node .node-meta {
+            font-size: 0.76rem;
+            color: #94a3b8;
+            margin-top: 2px;
+        }
+
+        .node-error {
+            color: #f87171;
+            font-size: 0.75rem;
+            font-weight: 500;
+        }
+
+        /* ── Connectors & Add Buttons (n8n style) ──── */
+        .add-btn {
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            border: 1.5px solid rgba(255, 255, 255, 0.15);
+            background: #0f172a;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.85rem;
+            color: #cbd5e1;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+            transition: all .2s ease;
+        }
+
+        .add-btn:hover {
+            border-color: #3b82f6;
+            color: #3b82f6;
+            background: #1e293b;
+            transform: scale(1.15);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
         }
 
         .branch-label {
@@ -313,20 +475,23 @@
         }
 
         .branch-label.yes {
-            background: #dcfce7;
-            color: #16a34a;
+            background: rgba(16, 185, 129, 0.2);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
         }
 
         .branch-label.no {
-            background: #fee2e2;
-            color: #ef4444;
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.3);
         }
 
         /* ── Add Step Modal ──────────────── */
         .step-picker {
             position: fixed;
             inset: 0;
-            background: rgba(0, 0, 0, .3);
+            background: rgba(0, 0, 0, .65);
+            backdrop-filter: blur(8px);
             z-index: 100;
             display: flex;
             align-items: center;
@@ -342,19 +507,22 @@
         }
 
         .step-picker-card {
-            background: #fff;
+            background: #090e1a;
+            border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 14px;
             padding: 24px;
             width: 520px;
             max-height: 75vh;
             overflow-y: auto;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, .15);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, .5);
+            color: #f8fafc;
         }
 
         .template-library-modal {
             position: fixed;
             inset: 0;
-            background: rgba(15, 23, 42, 0.5);
+            background: rgba(0, 0, 0, 0.65);
+            backdrop-filter: blur(8px);
             z-index: 110;
             display: flex;
             align-items: center;
@@ -367,18 +535,21 @@
         }
 
         .template-library-card {
-            background: #fff;
+            background: #090e1a;
+            border: 1px solid rgba(255, 255, 255, 0.1);
             border-radius: 18px;
             width: min(960px, 100%);
             max-height: 80vh;
             overflow-y: auto;
-            box-shadow: 0 24px 80px rgba(15, 23, 42, 0.2);
+            box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
             padding: 24px;
+            color: #f8fafc;
         }
 
         .template-library-card h5 {
             margin-bottom: 10px;
             font-weight: 700;
+            color: #f8fafc;
         }
 
         .template-list {
@@ -387,33 +558,36 @@
         }
 
         .template-item {
-            border: 1px solid #e2e8f0;
+            border: 1px solid rgba(255, 255, 255, 0.08);
             border-radius: 12px;
             padding: 16px;
-            background: #f8fafc;
+            background: #0f172a;
+            color: #f8fafc;
         }
 
         .template-item .template-item-name {
             font-weight: 700;
             margin-bottom: 6px;
+            color: #f8fafc;
         }
 
         .template-item .template-item-meta {
             font-size: 0.78rem;
-            color: #64748b;
+            color: #94a3b8;
             margin-bottom: 10px;
         }
 
         .template-item .template-item-body {
             font-size: 0.9rem;
             white-space: pre-wrap;
-            color: #1e293b;
+            color: #cbd5e1;
             margin-bottom: 12px;
         }
 
         .step-picker-card h5 {
             font-weight: 700;
             margin-bottom: 16px;
+            color: #f8fafc;
         }
 
         .step-type {
@@ -423,13 +597,13 @@
             padding: 12px 14px;
             border-radius: 10px;
             cursor: pointer;
-            transition: background .1s;
-            border: 1px solid transparent;
+            transition: all .15s;
+            border: 1px solid rgba(255, 255, 255, 0.04);
         }
 
         .step-type:hover {
-            background: #f1f5f9;
-            border-color: #e2e8f0;
+            background: #0f172a;
+            border-color: rgba(59, 130, 246, 0.3);
         }
 
         .step-type .st-icon {
@@ -445,7 +619,7 @@
         .step-type .st-name {
             font-weight: 600;
             font-size: 0.9rem;
-            color: #1e293b;
+            color: #f8fafc;
         }
 
         .step-type .st-desc {
@@ -465,20 +639,22 @@
             cursor: pointer;
             font-size: .8rem;
             font-weight: 500;
-            color: #64748b;
-            background: #f1f5f9;
+            color: #94a3b8;
+            background: #0f172a;
+            border: 1px solid rgba(255, 255, 255, 0.08);
         }
 
         .picker-tabs .ptab.active {
-            background: #1e293b;
+            background: #3b82f6;
             color: #fff;
+            border-color: #3b82f6;
         }
 
         /* ── Editor Panel Styles ─────────── */
         .ep-title {
             font-weight: 700;
             font-size: 1.1rem;
-            color: #1e293b;
+            color: #f8fafc;
             margin-bottom: 4px;
         }
 
@@ -491,74 +667,62 @@
         .ep-label {
             font-size: 0.78rem;
             font-weight: 600;
-            color: #64748b;
+            color: #94a3b8;
             margin-bottom: 6px;
         }
 
         .ep-input {
             width: 100%;
-            border: 1.5px solid #e2e8f0;
+            background: #0f172a;
+            border: 1.5px solid rgba(255, 255, 255, 0.12);
             border-radius: 8px;
             padding: 10px 12px;
             font-size: 0.9rem;
+            color: #f8fafc;
             transition: border-color .15s;
         }
 
         .ep-input:focus {
             outline: none;
             border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
         }
 
         .ep-textarea {
             width: 100%;
-            border: 1.5px solid #e2e8f0;
+            background: #0f172a;
+            border: 1.5px solid rgba(255, 255, 255, 0.12);
             border-radius: 8px;
             padding: 12px;
             font-size: 0.9rem;
             min-height: 180px;
             resize: vertical;
             line-height: 1.6;
+            color: #f8fafc;
         }
 
         .ep-textarea:focus {
             outline: none;
             border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.2);
         }
 
         .merge-tag {
             display: inline-block;
             padding: 3px 10px;
-            background: #eff6ff;
-            color: #2563eb;
+            background: rgba(59, 130, 246, 0.15);
+            color: #93c5fd;
             border-radius: 6px;
             font-size: 0.75rem;
             cursor: pointer;
             font-weight: 500;
-            transition: background .1s;
-            border: 1px solid #bfdbfe;
+            transition: all .1s;
+            border: 1px solid rgba(59, 130, 246, 0.3);
         }
 
         .merge-tag:hover {
-            background: #dbeafe;
-        }
-
-        .ai-btn {
-            background: linear-gradient(135deg, #8b5cf6, #6366f1);
-            color: #fff;
-            border: none;
-            padding: 8px 16px;
-            border-radius: 8px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            transition: opacity .15s;
-        }
-
-        .ai-btn:hover {
-            opacity: .9;
+            background: rgba(59, 130, 246, 0.25);
+            color: #bfdbfe;
         }
 
         .sender-card {
@@ -566,21 +730,22 @@
             align-items: center;
             gap: 10px;
             padding: 10px 14px;
-            background: #f8fafc;
-            border: 1.5px solid #e2e8f0;
+            background: #0f172a;
+            border: 1.5px solid rgba(255, 255, 255, 0.08);
             border-radius: 10px;
+            color: #f8fafc;
         }
 
         .sender-card .sc-avatar {
             width: 36px;
             height: 36px;
             border-radius: 50%;
-            background: #e0e7ff;
+            background: rgba(99, 102, 241, 0.2);
             display: flex;
             align-items: center;
             justify-content: center;
             font-weight: 700;
-            color: #4f46e5;
+            color: #818cf8;
             font-size: 0.85rem;
         }
 
@@ -589,21 +754,22 @@
             align-items: center;
             gap: 4px;
             padding: 4px 12px;
-            background: #fef3c7;
-            color: #92400e;
+            background: rgba(245, 158, 11, 0.2);
+            color: #fbbf24;
             border-radius: 99px;
             font-size: 0.75rem;
             font-weight: 600;
+            border: 1px solid rgba(245, 158, 11, 0.3);
         }
 
         .template-strip {
-            width: min(980px, calc(100% - 40px));
-            background: rgba(255, 255, 255, 0.82);
-            border: 1px solid #dbe4ef;
-            border-radius: 14px;
-            box-shadow: 0 12px 28px rgba(15, 23, 42, 0.08);
+            width: 100%;
+            max-width: 1200px;
+            background: rgba(15, 23, 42, 0.85);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
             padding: 14px;
-            margin-bottom: 24px;
+            margin-bottom: 20px;
         }
 
         .template-strip-head {
@@ -617,250 +783,49 @@
         .template-strip-title {
             font-size: 0.88rem;
             font-weight: 700;
-            color: #1e293b;
+            color: #f8fafc;
         }
 
         .template-strip-subtitle {
             font-size: 0.75rem;
-            color: #64748b;
+            color: #94a3b8;
         }
 
         .template-grid {
             display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
+            grid-template-columns: repeat(4, minmax(0, 1fr));
             gap: 10px;
         }
 
         .template-card {
-            border: 1px solid #dbe4ef;
-            background: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            background: #090e1a;
             border-radius: 10px;
             padding: 10px;
-        }
-
-        .ai-composer {
-            position: fixed;
-            inset: 0;
-            background: rgba(15, 23, 42, 0.46);
-            backdrop-filter: blur(8px);
-            z-index: 120;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            padding: 24px;
-        }
-
-        .ai-composer.hidden {
-            display: none;
-        }
-
-        .ai-composer-card {
-            width: min(960px, 100%);
-            height: min(82vh, 760px);
-            background: linear-gradient(180deg, #f8fbff 0%, #eef4fb 100%);
-            border: 1px solid rgba(148, 163, 184, 0.28);
-            border-radius: 24px;
-            box-shadow: 0 28px 80px rgba(15, 23, 42, 0.28);
-            display: flex;
-            overflow: hidden;
-        }
-
-        .ai-composer-sidebar {
-            width: 260px;
-            background: linear-gradient(180deg, #0f172a 0%, #172554 100%);
-            color: #e2e8f0;
-            padding: 24px 20px;
             display: flex;
             flex-direction: column;
-            gap: 18px;
         }
 
-        .ai-composer-sidebar h4 {
-            font-size: 1.1rem;
-            font-weight: 700;
-            margin: 0;
+        .template-card .template-meta {
+            margin-top: auto;
         }
 
-        .ai-composer-sidebar p {
-            margin: 0;
-            font-size: 0.82rem;
-            line-height: 1.55;
-            color: #cbd5e1;
-        }
-
-        .ai-composer-chip-list {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 8px;
-        }
-
-        .ai-composer-chip {
-            border: 1px solid rgba(191, 219, 254, 0.22);
-            border-radius: 999px;
-            padding: 8px 12px;
-            background: rgba(255, 255, 255, 0.08);
-            color: #eff6ff;
-            font-size: 0.76rem;
-            cursor: pointer;
-        }
-
-        .ai-composer-main {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            min-width: 0;
-        }
-
-        .ai-composer-head {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 16px;
-            padding: 20px 22px;
-            border-bottom: 1px solid #dbe4ef;
-            background: rgba(255, 255, 255, 0.72);
-        }
-
-        .ai-composer-headline {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        .ai-composer-headline strong {
-            font-size: 0.96rem;
-            color: #0f172a;
-        }
-
-        .ai-composer-headline span {
-            font-size: 0.78rem;
-            color: #64748b;
-        }
-
-        .ai-chat-log {
-            flex: 1;
-            overflow-y: auto;
-            padding: 22px;
-            display: flex;
-            flex-direction: column;
-            gap: 14px;
-        }
-
-        .ai-chat-message {
-            max-width: 82%;
-            border-radius: 18px;
-            padding: 14px 16px;
-            box-shadow: 0 12px 24px rgba(15, 23, 42, 0.08);
-            white-space: pre-wrap;
-            line-height: 1.55;
-        }
-
-        .ai-chat-message.user {
-            align-self: flex-end;
-            background: linear-gradient(135deg, #2563eb, #1d4ed8);
-            color: #eff6ff;
-        }
-
-        .ai-chat-message.assistant {
-            align-self: flex-start;
-            background: #ffffff;
-            color: #0f172a;
-            border: 1px solid #dbe4ef;
-        }
-
-        .ai-chat-draft {
-            margin-top: 10px;
-            padding-top: 10px;
-            border-top: 1px solid #e2e8f0;
-        }
-
-        .ai-chat-draft-label {
-            font-size: 0.7rem;
-            font-weight: 700;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            color: #64748b;
-            margin-bottom: 6px;
-        }
-
-        .ai-chat-subject {
-            font-weight: 700;
-            color: #0f172a;
-            margin-bottom: 6px;
-        }
-
-        .ai-composer-footer {
-            border-top: 1px solid #dbe4ef;
-            padding: 18px 22px 22px;
-            background: rgba(255, 255, 255, 0.88);
-        }
-
-        .ai-composer-prompt {
-            width: 100%;
-            border: 1.5px solid #cbd5e1;
-            border-radius: 18px;
-            min-height: 110px;
-            padding: 14px 16px;
-            resize: none;
-            font-size: 0.93rem;
-            line-height: 1.55;
-            background: #fff;
-        }
-
-        .ai-composer-prompt:focus {
-            outline: none;
-            border-color: #2563eb;
-            box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
-        }
-
-        .ai-composer-actions {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            margin-top: 14px;
-        }
-
-        .ai-composer-status {
-            font-size: 0.78rem;
-            color: #64748b;
-        }
-
-        .ai-draft-toolbar {
-            display: flex;
-            gap: 10px;
-            margin-top: 10px;
-        }
-
-        @media (max-width: 992px) {
-            .ai-composer {
-                padding: 12px;
-            }
-
-            .ai-composer-card {
-                flex-direction: column;
-                height: min(90vh, 880px);
-            }
-
-            .ai-composer-sidebar {
-                width: 100%;
-            }
-
-            .ai-chat-message {
-                max-width: 100%;
+        @media (max-width: 1240px) {
+            .template-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
             }
         }
 
         .template-title {
             font-weight: 700;
             font-size: 0.82rem;
-            color: #1e293b;
+            color: #f8fafc;
             margin-bottom: 2px;
         }
 
         .template-desc {
             font-size: 0.73rem;
-            color: #64748b;
+            color: #94a3b8;
             margin-bottom: 8px;
             line-height: 1.4;
             min-height: 30px;
@@ -879,10 +844,11 @@
             gap: 4px;
             padding: 2px 8px;
             border-radius: 99px;
-            background: #eef2ff;
-            color: #4338ca;
+            background: rgba(99, 102, 241, 0.2);
+            color: #a5b4fc;
             font-size: 0.68rem;
             font-weight: 700;
+            border: 1px solid rgba(99, 102, 241, 0.3);
         }
 
         @media (max-width: 1240px) {
@@ -909,7 +875,7 @@
             .editor-panel {
                 width: 100%;
                 border-left: none;
-                border-top: 1px solid #e2e8f0;
+                border-top: 1px solid rgba(255, 255, 255, 0.08);
             }
 
             .template-grid {
@@ -943,29 +909,45 @@
             .editor-panel {
                 width: 100% !important;
                 border-left: none;
-                border-top: 1px solid #e2e8f0;
+                border-top: 1px solid rgba(255, 255, 255, 0.08);
             }
 
             .canvas-area {
                 min-height: 50vh;
+                min-width: 0;
+                padding: 12px;
+            }
+
+            body {
+                overflow-x: hidden;
+            }
+
+            .tab-pills .tab,
+            #next-step-btn {
+                white-space: nowrap;
+            }
+
+            .top-bar > div:last-child {
+                flex-wrap: wrap;
+                gap: 8px !important;
+            }
+
+            .canvas-toolbar,
+            .canvas-toolbar > div {
+                flex-wrap: wrap;
+                gap: 8px !important;
+            }
+
+            .canvas-toolbar {
+                padding: 8px 12px;
+            }
+
+            .canvas-toolbar .vr {
+                display: none;
             }
         }
     </style>
-<script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
-<style>
-    #flowchart-container { display: none; padding: 15px; border: 1px solid #ccc; margin-top: 10px; }
-    .mermaid { text-align: center; }
-    .node rect, .node circle, .node polygon { cursor: pointer; }
-</style>
 </head>
-<!-- Breadcrumb Navigation -->
-<nav aria-label="breadcrumb" class="container mt-3">
-    <ol class="breadcrumb">
-        <li class="breadcrumb-item"><a href="/dashboard.html">Home</a></li>
-        <li class="breadcrumb-item"><a href="/campaigns.html">Campaigns</a></li>
-        <li class="breadcrumb-item active" aria-current="page">Builder</li>
-    </ol>
-</nav>
 <body class="builder-page">
     <!-- ─── Top Bar ─────────────────────────── -->
     <div class="top-bar">
@@ -988,20 +970,6 @@
             </button>
         </div>
     </div>
-
-    <nav aria-label="breadcrumb" class="mt-2 px-3">
-        <ol class="breadcrumb small">
-            <li class="breadcrumb-item">
-                <a href="dashboard.html">Dashboard</a>
-            </li>
-            <li class="breadcrumb-item">
-                <a href="campaigns.html">Campaigns</a>
-            </li>
-            <li class="breadcrumb-item active" aria-current="page">
-                Campaign Builder
-            </li>
-        </ol>
-    </nav>
 
     <!-- â”€â”€â”€ Main Layout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
     <!-- ─── Main Layout ─────────────────────── -->
@@ -1125,46 +1093,6 @@
         </div>
     </div>
 
-    <div class="ai-composer hidden" id="ai-composer">
-        <div class="ai-composer-card">
-            <div class="ai-composer-sidebar">
-                <div>
-                    <h4>AI Email Studio</h4>
-                    <p>Describe the email you want in plain language. Ask for tone, goal, audience, offer, CTA, or follow-up angle.</p>
-                </div>
-                <div>
-                    <div class="ep-label text-white mb-2">Prompt ideas</div>
-                    <div class="ai-composer-chip-list" id="ai-prompt-chips">
-                        <button class="ai-composer-chip" data-prompt="Write a concise cold outreach email for a SaaS founder introducing our product to {{company}} and asking for a short call.">Cold outreach</button>
-                        <button class="ai-composer-chip" data-prompt="Create a polite follow-up email referencing a previous message and asking if {{firstName}} is the right person to speak with.">Follow-up</button>
-                        <button class="ai-composer-chip" data-prompt="Draft a warm introduction email that explains our value proposition and includes one specific reason this might matter for {{company}}.">Introduction</button>
-                        <button class="ai-composer-chip" data-prompt="Write a re-engagement email for a prospect who has not replied yet. Keep it short and low-pressure.">Re-engagement</button>
-                    </div>
-                </div>
-            </div>
-            <div class="ai-composer-main">
-                <div class="ai-composer-head">
-                    <div class="ai-composer-headline">
-                        <strong>Chat with LeadOrbit AI</strong>
-                        <span>Generate a subject and body, iterate on it, then insert it into the step.</span>
-                    </div>
-                    <button class="btn btn-sm btn-outline-secondary" id="ai-composer-close">Close</button>
-                </div>
-                <div class="ai-chat-log" id="ai-chat-log"></div>
-                <div class="ai-composer-footer">
-                    <textarea class="ai-composer-prompt" id="ai-prompt-input" placeholder="Example: Write a sales outreach email for CFOs at B2B SaaS companies. Mention cost control, keep it direct, and end with a low-friction CTA."></textarea>
-                    <div class="ai-composer-actions">
-                        <div class="ai-composer-status" id="ai-composer-status">Drafts stay local until you click Insert into email.</div>
-                        <div class="d-flex gap-2">
-                            <button class="btn btn-outline-secondary" id="ai-clear-chat">Clear chat</button>
-                            <button class="btn btn-primary" id="ai-send-prompt"><i class="bi bi-stars me-1"></i> Generate draft</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <script type="module" src="./main.js"></script>
     <!-- Campaign Settings Modal -->
 <div class="modal fade" id="campaignSettingsModal" tabindex="-1">
@@ -1243,9 +1171,22 @@
         let activeTab = 'sequence';
         let availableLeads = [];
         let selectedLeadIds = new Set();
-        let aiComposerStep = null;
-        let aiConversation = [];
-        let aiLatestDraft = null;
+        let canvasOrientation = localStorage.getItem('leadorbit_canvas_orientation') || 'horizontal';
+        let savedZoom = parseFloat(localStorage.getItem('leadorbit_canvas_zoom'));
+        let canvasZoom = (savedZoom && savedZoom >= 0.75) ? savedZoom : 1.0;
+
+        function applyZoom(newZoom) {
+            canvasZoom = Math.min(2.0, Math.max(0.4, Math.round(newZoom * 100) / 100));
+            localStorage.setItem('leadorbit_canvas_zoom', canvasZoom.toString());
+            const wrapper = document.getElementById('flow-wrapper');
+            const zoomResetBtn = document.getElementById('btn-zoom-reset');
+            if (wrapper) {
+                wrapper.style.transform = `scale(${canvasZoom})`;
+            }
+            if (zoomResetBtn) {
+                zoomResetBtn.textContent = `${Math.round(canvasZoom * 100)}%`;
+            }
+        }
 
         // Steps are stored as an array of objects
         let steps = [
@@ -1292,6 +1233,16 @@
 
         function createCallStep(description = '') {
             return { type: 'CALL', description, delay_minutes: 0 };
+        }
+
+        // Branch steps point at their condition by array index, so keep those
+        // indexes in sync when steps are inserted or removed above the condition.
+        function shiftBranchParents(fromIndex, delta) {
+            steps.forEach(s => {
+                if (Number.isInteger(s.condition_parent_index) && s.condition_parent_index >= fromIndex) {
+                    s.condition_parent_index += delta;
+                }
+            });
         }
 
         function cloneStepList(source) {
@@ -1761,6 +1712,43 @@ ${rows || `
             const canvas = document.getElementById('canvas');
             let html = '';
 
+            // Canvas Toolbar with Orientation Toggle and Zoom Controls (n8n Style)
+            html += `<div class="canvas-toolbar">
+                <div class="d-flex align-items-center gap-2">
+                    <i class="bi bi-diagram-3-fill text-primary"></i>
+                    <span class="fw-bold text-dark small">Sequence Flowchart</span>
+                    <span class="badge bg-light text-secondary border ms-1">${steps.length} steps</span>
+                </div>
+                <div class="d-flex align-items-center gap-3">
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="text-muted extra-small me-1">Flow Direction:</span>
+                        <div class="btn-group btn-group-sm" role="group" aria-label="Layout orientation">
+                            <button type="button" class="btn btn-sm ${canvasOrientation === 'horizontal' ? 'btn-primary active' : 'btn-outline-secondary'}" id="toggle-horizontal" title="Horizontal Left-to-Right Flow">
+                                <i class="bi bi-arrow-right me-1"></i> Horizontal
+                            </button>
+                            <button type="button" class="btn btn-sm ${canvasOrientation === 'vertical' ? 'btn-primary active' : 'btn-outline-secondary'}" id="toggle-vertical" title="Vertical Top-to-Bottom Flow">
+                                <i class="bi bi-arrow-down me-1"></i> Vertical
+                            </button>
+                        </div>
+                    </div>
+                    <div class="vr" style="height: 18px; align-self: center;"></div>
+                    <div class="d-flex align-items-center gap-2">
+                        <span class="text-muted extra-small me-1">Zoom:</span>
+                        <div class="btn-group btn-group-sm" role="group" aria-label="Zoom controls">
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-zoom-out" title="Zoom Out (-)">
+                                <i class="bi bi-dash-lg"></i>
+                            </button>
+                            <button type="button" class="btn btn-sm btn-light border fw-semibold px-2" id="btn-zoom-reset" title="Reset Zoom (100%)">
+                                ${Math.round(canvasZoom * 100)}%
+                            </button>
+                            <button type="button" class="btn btn-sm btn-outline-secondary" id="btn-zoom-in" title="Zoom In (+)">
+                                <i class="bi bi-plus-lg"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>`;
+
             const templateCards = SEQUENCE_TEMPLATES.map(template => `
                 <div class="template-card">
                     <div class="template-title">${template.name}</div>
@@ -1786,15 +1774,19 @@ ${rows || `
                         <div class="template-strip-title">Quick-start sequence templates</div>
                         <div class="template-strip-subtitle">Use a ready flow, or append one to expand your campaign.</div>
                     </div>
-                    <span class="badge text-bg-light border">Current: ${steps.length} steps</span>
                 </div>
                 <div class="template-grid">${templateCards}</div>
             </div>`;
 
+            // Sequence Viewport & Flow Wrapper
+            html += `<div class="sequence-viewport" id="sequence-viewport">
+                <div class="sequence-flow-wrapper ${canvasOrientation}" id="flow-wrapper" style="transform: scale(${canvasZoom}); transform-origin: top left;">`;
+
             // Sequence start node
             html += `<div class="flow-node start-node" style="text-align:center;">
+                <div class="node-port output-port"></div>
                 <div class="d-flex align-items-center gap-2 justify-content-center">
-                    <i class="bi bi-flag-fill" style="color:#94a3b8;"></i>
+                    <i class="bi bi-flag-fill text-primary"></i>
                     <span class="node-label">Sequence start</span>
                 </div>
             </div>`;
@@ -1817,11 +1809,14 @@ ${rows || `
                     const timeLabel = step.condition_time || '1 day';
 
                     html += `<div class="flow-node ${selectedNodeIndex === i ? 'selected' : ''}" data-index="${i}">
+                        <div class="node-port input-port"></div>
+                        <div class="node-port output-port"></div>
                         <div class="d-flex align-items-center gap-3">
                             <div class="node-icon ${info.cls}"><i class="bi ${info.icon}"></i></div>
-                            <div>
+                            <div class="flex-grow-1">
                                 <div class="node-label">${condLabel} within ${timeLabel}</div>
                             </div>
+                            <button class="btn btn-sm text-secondary p-0 ms-1" data-delete="${i}" title="Delete step"><i class="bi bi-x-lg"></i></button>
                         </div>
                     </div>`;
 
@@ -1873,13 +1868,15 @@ ${rows || `
                             : '');
 
                     html += `<div class="flow-node ${selectedNodeIndex === i ? 'selected' : ''}" data-index="${i}">
+                        <div class="node-port input-port"></div>
+                        <div class="node-port output-port"></div>
                         <div class="d-flex align-items-center gap-3">
                             <div class="node-icon ${info.cls}"><i class="bi ${info.icon}"></i></div>
                             <div class="flex-grow-1">
                                 <div class="node-label">${info.label}</div>
                                 <div class="node-meta">${branchMeta}${meta}</div>
                             </div>
-                            <button class="btn btn-sm" style="color:#94a3b8;" data-delete="${i}" title="Delete step"><i class="bi bi-three-dots"></i></button>
+                            <button class="btn btn-sm text-secondary p-0 ms-1" data-delete="${i}" title="Delete step"><i class="bi bi-x-lg"></i></button>
                         </div>
                     </div>`;
                 }
@@ -1894,7 +1891,45 @@ ${rows || `
                 <div class="connector-line"></div>
             </div>`;
 
+            html += `</div></div>`; // End sequence-flow-wrapper and sequence-viewport
+
             canvas.innerHTML = html;
+
+            const toggleH = document.getElementById('toggle-horizontal');
+            const toggleV = document.getElementById('toggle-vertical');
+            if (toggleH) {
+                toggleH.addEventListener('click', () => {
+                    canvasOrientation = 'horizontal';
+                    localStorage.setItem('leadorbit_canvas_orientation', 'horizontal');
+                    renderCanvas();
+                });
+            }
+            if (toggleV) {
+                toggleV.addEventListener('click', () => {
+                    canvasOrientation = 'vertical';
+                    localStorage.setItem('leadorbit_canvas_orientation', 'vertical');
+                    renderCanvas();
+                });
+            }
+
+            const zoomInBtn = document.getElementById('btn-zoom-in');
+            const zoomOutBtn = document.getElementById('btn-zoom-out');
+            const zoomResetBtn = document.getElementById('btn-zoom-reset');
+            const viewport = document.getElementById('sequence-viewport');
+
+            if (zoomInBtn) zoomInBtn.addEventListener('click', () => applyZoom(canvasZoom + 0.15));
+            if (zoomOutBtn) zoomOutBtn.addEventListener('click', () => applyZoom(canvasZoom - 0.15));
+            if (zoomResetBtn) zoomResetBtn.addEventListener('click', () => applyZoom(1.0));
+
+            if (viewport) {
+                viewport.addEventListener('wheel', (e) => {
+                    if (e.ctrlKey || e.metaKey) {
+                        e.preventDefault();
+                        const delta = e.deltaY < 0 ? 0.08 : -0.08;
+                        applyZoom(canvasZoom + delta);
+                    }
+                }, { passive: false });
+            }
 
             canvas.querySelectorAll('[data-template-apply]').forEach(btn => {
                 btn.addEventListener('click', () => {
@@ -1950,6 +1985,14 @@ ${rows || `
                     const idx = parseInt(btn.dataset.delete);
                     if (confirm('Delete this step?')) {
                         steps.splice(idx, 1);
+                        // Branch steps of a deleted condition become regular steps.
+                        steps.forEach(s => {
+                            if (s.condition_parent_index === idx) {
+                                delete s.condition_branch;
+                                delete s.condition_parent_index;
+                            }
+                        });
+                        shiftBranchParents(idx + 1, -1);
                         if (selectedNodeIndex === idx) selectedNodeIndex = null;
                         else if (selectedNodeIndex > idx) selectedNodeIndex--;
                         renderCanvas();
@@ -2034,9 +2077,6 @@ ${rows || `
                         <div class="d-flex gap-2">
                             <button class="btn btn-sm btn-outline-secondary" id="open-template-library-btn"><i class="bi bi-card-text me-1"></i> Templates</button>
                             <button class="btn btn-sm btn-outline-secondary" id="save-template-btn"><i class="bi bi-save me-1"></i> Save as Template</button>
-                            <button class="ai-btn" id="ai-generate-btn">
-                                <i class="bi bi-stars"></i> Ask AI
-                            </button>
                         </div>
                     </div>
                 </div>
@@ -2068,18 +2108,6 @@ ${rows || `
                         <span class="merge-tag" data-tag="{{email}}">{{email}}</span>
                         <span class="merge-tag" data-tag="{{company}}">{{company}}</span>
                         <span class="merge-tag" data-tag="{{icebreaker}}"><i class="bi bi-stars me-1"></i>{{icebreaker}}</span>
-                    </div>
-                </div>
-
-                <!-- AI Generation Result -->
-                <div id="ai-result" class="d-none mb-3">
-                    <div class="ep-label">AI Suggestion</div>
-                    <div class="p-3 rounded-3 ai-result-box">
-                        <p id="ai-result-text" class="mb-2 small" style="white-space:pre-wrap;"></p>
-                        <div class="d-flex gap-2">
-                            <button class="btn btn-sm btn-primary" id="ai-use-btn">Use this</button>
-                            <button class="btn btn-sm btn-outline-secondary" id="ai-regenerate-btn">Regenerate</button>
-                        </div>
                     </div>
                 </div>
             `;
@@ -2153,7 +2181,6 @@ ${rows || `
             document.getElementById('save-template-btn').addEventListener('click', () => saveCurrentStepAsTemplate(step));
 
             // AI Generate button
-            document.getElementById('ai-generate-btn').addEventListener('click', () => openAIComposer(step));
         }
 
         function renderWaitEditor(panel, step) {
@@ -2339,36 +2366,6 @@ ${rows || `
                 renderCanvas();
             });
         }
-        // ─── AI CONTENT GENERATION ──────────
-        function openAIComposer(step) {
-            aiComposerStep = step;
-            aiConversation = [];
-            aiLatestDraft = step.subject || step.body ? {
-                subject: step.subject || '',
-                body: step.body || '',
-                assistant_message: 'Current draft loaded. You can ask for a rewrite, different tone, or a new email angle.',
-            } : null;
-            document.getElementById('ai-composer').classList.remove('hidden');
-            document.getElementById('ai-prompt-input').value = '';
-            setAIComposerStatus('Describe the email you want, then generate a draft.');
-            renderAIConversation();
-            document.getElementById('ai-prompt-input').focus();
-        }
-
-        function closeAIComposer() {
-            document.getElementById('ai-composer').classList.add('hidden');
-            aiComposerStep = null;
-            aiConversation = [];
-            aiLatestDraft = null;
-        }
-
-        function setAIComposerStatus(text) {
-            const statusEl = document.getElementById('ai-composer-status');
-            if (statusEl) {
-                statusEl.textContent = text;
-            }
-        }
-
         function escapeHtml(value) {
             return (value || '')
                 .replaceAll('&', '&amp;')
@@ -2376,140 +2373,6 @@ ${rows || `
                 .replaceAll('>', '&gt;')
                 .replaceAll('"', '&quot;')
                 .replaceAll("'", '&#39;');
-        }
-
-        function renderAIConversation() {
-            const log = document.getElementById('ai-chat-log');
-            if (!log) return;
-
-            const messages = [];
-            if (aiConversation.length === 0 && !aiLatestDraft) {
-                messages.push(`
-                    <div class="ai-chat-message assistant">
-                        Start with a prompt like: "Write a short sales outreach email for marketing leaders at {{company}} and use a friendly tone."
-                    </div>
-                `);
-            }
-
-            aiConversation.forEach((message, index) => {
-                if (message.role === 'user') {
-                    messages.push(`<div class="ai-chat-message user">${escapeHtml(message.content)}</div>`);
-                    return;
-                }
-
-                const draftHtml = message.subject || message.body ? `
-                    <div class="ai-chat-draft">
-                        <div class="ai-chat-draft-label">Draft</div>
-                        <div class="ai-chat-subject">Subject: ${escapeHtml(message.subject || '(empty)')}</div>
-                        <div>${escapeHtml(message.body || '')}</div>
-                        <div class="ai-draft-toolbar">
-                            <button class="btn btn-sm btn-primary" data-ai-use="${index}">Insert into email</button>
-                        </div>
-                    </div>
-                ` : '';
-
-                messages.push(`
-                    <div class="ai-chat-message assistant">
-                        <div>${escapeHtml(message.content)}</div>
-                        ${draftHtml}
-                    </div>
-                `);
-            });
-
-            if (aiConversation.length === 0 && aiLatestDraft) {
-                messages.push(`
-                    <div class="ai-chat-message assistant">
-                        <div>${escapeHtml(aiLatestDraft.assistant_message || 'Current draft loaded for iteration.')}</div>
-                        <div class="ai-chat-draft">
-                            <div class="ai-chat-draft-label">Current draft</div>
-                            <div class="ai-chat-subject">Subject: ${escapeHtml(aiLatestDraft.subject || '(empty)')}</div>
-                            <div>${escapeHtml(aiLatestDraft.body || '')}</div>
-                        </div>
-                    </div>
-                `);
-            }
-
-            log.innerHTML = messages.join('');
-            log.querySelectorAll('[data-ai-use]').forEach(button => {
-                button.addEventListener('click', () => {
-                    const index = Number(button.dataset.aiUse);
-                    const message = aiConversation[index];
-                    if (!message || !aiComposerStep) return;
-                    applyAIDraftToStep(message.subject, message.body);
-                });
-            });
-            log.scrollTop = log.scrollHeight;
-        }
-
-        function applyAIDraftToStep(subject, body) {
-            if (!aiComposerStep) return;
-            aiComposerStep.subject = subject || '';
-            aiComposerStep.body = body || '';
-
-            const subjectInput = document.getElementById('ep-subject');
-            const bodyInput = document.getElementById('ep-body');
-            if (subjectInput) subjectInput.value = aiComposerStep.subject;
-            if (bodyInput) bodyInput.value = aiComposerStep.body;
-
-            renderCanvas();
-            closeAIComposer();
-        }
-
-        async function submitAIPrompt() {
-            if (!aiComposerStep) return;
-            const promptInput = document.getElementById('ai-prompt-input');
-            const sendBtn = document.getElementById('ai-send-prompt');
-            const prompt = promptInput.value.trim();
-            if (!prompt) {
-                setAIComposerStatus('Enter a prompt first.');
-                promptInput.focus();
-                return;
-            }
-
-            aiConversation.push({ role: 'user', content: prompt });
-            renderAIConversation();
-            promptInput.value = '';
-            sendBtn.disabled = true;
-            sendBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span> Generating...';
-            setAIComposerStatus('Generating a draft from the AI provider...');
-
-            try {
-                const res = await fetchWithAuth('/campaigns/ai-generate/', {
-                    method: 'POST',
-                    body: JSON.stringify({
-                        prompt,
-                        subject: aiComposerStep.subject || '',
-                        body: aiComposerStep.body || '',
-                        messages: aiConversation,
-                    }),
-                    timeoutMs: 120000,
-                });
-
-                const data = await res.json().catch(() => ({}));
-                if (!res.ok) {
-                    throw new Error(data.error || data.detail || 'AI generation failed.');
-                }
-
-                aiLatestDraft = {
-                    assistant_message: data.assistant_message || 'I generated a draft you can insert into the email step.',
-                    subject: data.subject || '',
-                    body: data.body || '',
-                };
-                aiConversation.push({
-                    role: 'assistant',
-                    content: aiLatestDraft.assistant_message,
-                    subject: aiLatestDraft.subject,
-                    body: aiLatestDraft.body,
-                });
-                renderAIConversation();
-                setAIComposerStatus(`Draft ready from ${data.provider || 'AI provider'}${data.model ? ` using ${data.model}` : ''}.`);
-            } catch (error) {
-                console.error(error);
-                setAIComposerStatus(error.message || 'Could not reach the AI endpoint.');
-            } finally {
-                sendBtn.disabled = false;
-                sendBtn.innerHTML = '<i class="bi bi-stars me-1"></i> Generate draft';
-            }
         }
 
         // ─── STEP PICKER ────────────────────
@@ -2531,6 +2394,7 @@ ${rows || `
                     newStep.condition_parent_index = addBranchTarget.parentIndex;
                 }
 
+                shiftBranchParents(addInsertIndex, 1);
                 steps.splice(addInsertIndex, 0, newStep);
                 selectedNodeIndex = addInsertIndex;
                 addBranchTarget = null;
@@ -2543,37 +2407,6 @@ ${rows || `
         document.getElementById('close-picker').addEventListener('click', () => {
             addBranchTarget = null;
             document.getElementById('step-picker').classList.add('hidden');
-        });
-
-        document.getElementById('ai-composer-close').addEventListener('click', closeAIComposer);
-        document.getElementById('ai-clear-chat').addEventListener('click', () => {
-            aiConversation = [];
-            aiLatestDraft = aiComposerStep && (aiComposerStep.subject || aiComposerStep.body) ? {
-                subject: aiComposerStep.subject || '',
-                body: aiComposerStep.body || '',
-                assistant_message: 'Current draft loaded. You can ask for a rewrite, different tone, or a new email angle.',
-            } : null;
-            setAIComposerStatus('Chat cleared. Describe the email you want next.');
-            renderAIConversation();
-        });
-        document.getElementById('ai-send-prompt').addEventListener('click', submitAIPrompt);
-        document.getElementById('ai-prompt-input').addEventListener('keydown', (event) => {
-            if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
-                event.preventDefault();
-                submitAIPrompt();
-            }
-        });
-        document.querySelectorAll('#ai-prompt-chips [data-prompt]').forEach(button => {
-            button.addEventListener('click', () => {
-                const input = document.getElementById('ai-prompt-input');
-                input.value = button.dataset.prompt || '';
-                input.focus();
-            });
-        });
-        document.getElementById('ai-composer').addEventListener('click', (event) => {
-            if (event.target.id === 'ai-composer') {
-                closeAIComposer();
-            }
         });
 
         document.getElementById('close-template-library').addEventListener('click', closeTemplateLibrary);
@@ -2710,52 +2543,6 @@ document.getElementById('setting-daily-limit').value =
         });
     </script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script>
-    mermaid.initialize({ startOnLoad: true, securityLevel: 'loose' });
-
-    document.getElementById('canvasTab').addEventListener('click', function() {
-        document.getElementById('flowchart-container').style.display = 'block';
-        document.getElementById('').style.display = 'none';
-        renderFlowchart();
-    });
-
-    document.getElementById('').addEventListener('click', function() {
-        document.getElementById('flowchart-container').style.display = 'none';
-        document.getElementById('').style.display = 'block';
-    });
-
-    function renderFlowchart() {
-        const steps = window.campaignSteps;
-        if (!steps || steps.length === 0) return;
-
-        let graph = 'graph TD\n';
-        steps.forEach((step, i) => {
-            const nodeId = step${i};
-            if (step.type === 'condition' || step.type === 'CONDITION') {
-                graph +=     ${nodeId}{${step.name || 'Condition'}}\n;
-            } else {
-                graph +=     ${nodeId}[${step.name || 'Action'}]\n;
-            }
-            if (i < steps.length - 1) {
-                graph +=     ${nodeId} --> step${i+1}\n;
-            }
-        });
-        steps.forEach((step, i) => {
-            graph +=     click step${i} openStepDetail\n;
-        });
-
-        document.getElementById('mermaidFlowchart').textContent = graph;
-        mermaid.init(undefined, document.getElementById('mermaidFlowchart'));
-    }
-
-    function openStepDetail(stepId) {
-        console.log('Clicked node:', stepId);
-        const stepIndex = parseInt(stepId.replace('step', ''));
-        if (typeof editStep === 'function') {
-            editStep(stepIndex);
-        }
-    }
-</script>
 </body>
 
 </html>

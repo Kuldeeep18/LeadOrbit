@@ -1,11 +1,20 @@
+from django.contrib.auth.password_validation import validate_password
+from django.core.exceptions import ValidationError as DjangoValidationError
+from django.db import transaction
 from rest_framework import serializers
 from .models import User
 from tenants.models import Organization
 
 class OrganizationSerializer(serializers.ModelSerializer):
+    # The Gemini key is a secret: members only learn whether one is saved.
+    has_gemini_api_key = serializers.SerializerMethodField()
+
     class Meta:
         model = Organization
-        fields = '__all__'
+        fields = ['id', 'name', 'billing_plan', 'created_at', 'enable_ai_personalization', 'has_gemini_api_key']
+
+    def get_has_gemini_api_key(self, obj):
+        return bool(obj.gemini_api_key)
 
 class UserSerializer(serializers.ModelSerializer):
     organization = OrganizationSerializer(read_only=True)
@@ -25,6 +34,15 @@ class RegisterSerializer(serializers.Serializer):
             raise serializers.ValidationError('A user with this email already exists.')
         return value
 
+    def validate(self, attrs):
+        candidate = User(email=attrs['email'])
+        try:
+            validate_password(attrs['password'], candidate)
+        except DjangoValidationError as exc:
+            raise serializers.ValidationError({'password': list(exc.messages)})
+        return attrs
+
+    @transaction.atomic
     def create(self, validated_data):
         org = Organization.objects.create(name=validated_data['organization_name'])
         user = User.objects.create_user(

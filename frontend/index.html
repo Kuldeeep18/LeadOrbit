@@ -6,11 +6,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>LeadOrbit - Outreach Platform</title>
   <script>
-    // If user has a token, go to dashboard; otherwise go to login
+    // If user has a token, go to dashboard; otherwise go to landing
     if (localStorage.getItem('access_token')) {
       window.location.href = '/dashboard.html';
     } else {
-      window.location.href = '/login.html';
+      window.location.href = '/landing.html';
     }
   </script>
 </head>

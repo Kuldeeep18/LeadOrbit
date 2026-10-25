@@ -23,9 +23,10 @@
   <style>
     body {
       margin: 0;
-      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif;
-      background: #f8fafc;
-      color: #111827;
+      font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, Segoe UI, sans-serif;
+      background: radial-gradient(circle at 50% 30%, rgba(59, 130, 246, 0.15) 0%, rgba(139, 92, 246, 0.1) 35%, #050811 75%);
+      color: #f8fafc;
+      min-height: 100vh;
     }
     .page-wrapper {
       min-height: 100vh;
@@ -36,11 +37,12 @@
     }
     .card {
       width: 100%;
-      max-width: 720px;
-      background: #ffffff;
-      border: 1px solid #e5e7eb;
+      max-width: 680px;
+      background: rgba(15, 23, 42, 0.75);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 24px;
-      box-shadow: 0 24px 80px rgba(15, 23, 42, 0.08);
+      box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5);
       padding: 40px;
     }
     .brand {
@@ -48,31 +50,34 @@
       align-items: center;
       gap: 10px;
       margin-bottom: 24px;
-      color: #1d4ed8;
+      color: #60a5fa;
       font-weight: 700;
+      font-size: 1.25rem;
       letter-spacing: -0.02em;
     }
     .brand svg {
-      width: 34px;
-      height: 34px;
+      width: 36px;
+      height: 36px;
     }
     h1 {
       margin: 0 0 16px;
-      font-size: 2.4rem;
-      line-height: 1.05;
+      font-size: 2.2rem;
+      line-height: 1.1;
+      color: #f8fafc;
     }
     p {
       margin: 0 0 16px;
       font-size: 1rem;
       line-height: 1.75;
-      color: #475569;
+      color: #94a3b8;
     }
     .note {
       margin-top: 24px;
       padding: 18px 20px;
-      background: #f1f5f9;
+      background: #0b1120;
+      border: 1px solid rgba(255, 255, 255, 0.08);
       border-radius: 16px;
-      color: #334155;
+      color: #cbd5e1;
     }
   </style>
 </head>
@@ -81,7 +86,7 @@
     <div class="card">
       <div class="brand">
         <svg viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-          <rect x="8" y="8" width="32" height="32" rx="10" fill="#1d4ed8" />
+          <rect x="8" y="8" width="32" height="32" rx="10" fill="#3b82f6" />
           <path d="M16 24L22 30L34 18" stroke="white" stroke-width="4" stroke-linecap="round" stroke-linejoin="round" />
         </svg>
         <span>LeadOrbit</span>
@@ -90,7 +95,7 @@
       <p>You have been unsubscribed from all future emails sent through LeadOrbit.</p>
       <p>If you received this message in error, no further action is needed.</p>
       <div class="note">
-        <strong>Privacy note:</strong> Your unsubscribe preference has been recorded and will be respected across all future email campaigns.
+        <strong class="text-white">Privacy note:</strong> Your unsubscribe preference has been recorded and will be respected across all future email campaigns.
       </div>
     </div>
   </div>

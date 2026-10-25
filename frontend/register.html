@@ -30,18 +30,21 @@
     <!-- Shared theme overrides for complete UI consistency -->
     <style>
         body.auth-page {
-            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%) !important;
+            background: radial-gradient(circle at 50% 30%, rgba(59, 130, 246, 0.15) 0%, rgba(139, 92, 246, 0.1) 35%, #050811 75%) !important;
             font-family: 'Manrope', sans-serif;
+            min-height: 100vh;
+            color: #f8fafc;
         }
         .custom-glass-card {
-            background: rgba(30, 41, 59, 0.7) !important;
-            backdrop-filter: blur(16px) !important;
-            -webkit-backdrop-filter: blur(16px) !important;
+            background: rgba(15, 23, 42, 0.75) !important;
+            backdrop-filter: blur(20px) !important;
+            -webkit-backdrop-filter: blur(20px) !important;
             border: 1px solid rgba(255, 255, 255, 0.08) !important;
             border-radius: 20px;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5) !important;
         }
         .brand-gradient {
-            background: linear-gradient(45deg, #00b4db, #00ffca) !important;
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6) !important;
             -webkit-background-clip: text !important;
             background-clip: text !important;
             -webkit-text-fill-color: transparent !important;
@@ -49,19 +52,19 @@
             display: inline-block;
         }
         .custom-input {
-            background-color: rgba(15, 23, 42, 0.5) !important;
-            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            background-color: #0b1120 !important;
+            border: 1px solid rgba(255, 255, 255, 0.12) !important;
             color: #ffffff !important;
         }
         .custom-input:focus {
-            background-color: rgba(15, 23, 42, 0.8) !important;
-            border-color: #00b4db !important;
-            box-shadow: 0 0 0 0.25rem rgba(0, 180, 219, 0.25) !important;
+            background-color: #0f172a !important;
+            border-color: #3b82f6 !important;
+            box-shadow: 0 0 0 0.25rem rgba(59, 130, 246, 0.25) !important;
             color: #ffffff !important;
         }
         .input-group-text-custom {
-            background-color: rgba(15, 23, 42, 0.5) !important;
-            border: 1px solid rgba(255, 255, 255, 0.1) !important;
+            background-color: #0b1120 !important;
+            border: 1px solid rgba(255, 255, 255, 0.12) !important;
             border-right: none !important;
             color: rgba(255, 255, 255, 0.5) !important;
         }
@@ -77,14 +80,7 @@
                 <div class="custom-glass-card p-4 shadow-lg">
                     <div class="card-body">
                         <div class="mb-3">
-    <a href="/" class="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-2">
-        <span>&larr;</span>
-        <span>Back to Home</span>
-    </a>
-</div>
-
-                        <div class="mb-3">
-                            <a href="/" class="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-2">
+                            <a href="/landing.html" class="btn btn-outline-secondary btn-sm d-inline-flex align-items-center gap-2">
                                 <span>&larr;</span>
                                 <span>Back to Home</span>
                             </a>

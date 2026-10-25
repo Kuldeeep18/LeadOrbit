@@ -5,6 +5,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Settings - LeadOrbit</title>
+    <script src="./theme-boot.js"></script>
     <meta name="description" content="LeadOrbit - Settings. Configure your account, integrations, API keys, and preferences.">
     <meta name="keywords" content="settings, account settings, integrations, API keys">
     <meta name="author" content="LeadOrbit Team">
@@ -256,10 +257,8 @@
 
     <script type="module" src="./main.js"></script>
     <script type="module">
-        import { fetchWithAuth, clearTokens } from './api.js';
+        import { fetchWithAuth, clearTokens, API_BASE } from './api.js';
 
-        const apiBaseUrl = (localStorage.getItem('api_base_url') || '').replace(/\/$/, '');
-        const isLocalhost = ['localhost', '127.0.0.1'].includes(window.location.hostname);
 
         function showConfirmModal(title, message, confirmLabel, onConfirm) {
             const modalHtml = `
@@ -325,8 +324,8 @@
             modal.show();
         }
 
-        const defaultOAuthHost = isLocalhost ? 'http://127.0.0.1:8000' : 'https://leadorbit.onrender.com';
-        const oauthHost = apiBaseUrl ? apiBaseUrl.replace(/\/api\/v1$/, '') : defaultOAuthHost;
+        // Same host as the API ('' means this site's own origin, as in Docker).
+        const oauthHost = API_BASE.replace(/\/api\/v1$/, '');
 
         function copyToClipboard(text, button) {
             navigator.clipboard.writeText(text).then(() => {

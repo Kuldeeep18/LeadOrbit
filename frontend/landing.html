@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeadOrbit — Autonomous Multi-Channel Outreach Engine</title>
+    <meta name="description" content="Next-generation multi-tenant outreach platform with visual sequence building, AI email drafting, and omni-channel automation.">
+    <link rel="icon" type="image/png" href="/favicon.png">
+
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+
+    <!-- Icons & Tailwind -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['"Plus Jakarta Sans"', 'sans-serif'],
+                        display: ['"Space Grotesk"', 'sans-serif'],
+                        mono: ['"JetBrains Mono"', 'monospace'],
+                    },
+                    colors: {
+                        orbit: {
+                            50: '#f0f7ff',
+                            100: '#e0effe',
+                            500: '#3b82f6',
+                            600: '#2563eb',
+                            700: '#1d4ed8',
+                            900: '#0f172a',
+                            950: '#070b14',
+                        }
+                    },
+                    animation: {
+                        'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                        'float': 'float 6s ease-in-out infinite',
+                        'float-delayed': 'float 6s ease-in-out 3s infinite',
+                        'spin-slow': 'spin 20s linear infinite',
+                        'beam': 'beam 3s linear infinite',
+                    },
+                    keyframes: {
+                        float: {
+                            '0%, 100%': { transform: 'translateY(0px) rotate(0deg)' },
+                            '50%': { transform: 'translateY(-12px) rotate(1deg)' },
+                        },
+                        beam: {
+                            '0%': { transform: 'translateX(-100%)', opacity: '0' },
+                            '50%': { opacity: '1' },
+                            '100%': { transform: 'translateX(100%)', opacity: '0' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+
+    <!-- Three.js CDN -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <style>
+        /* Custom 3D & Glass Styles */
+        body {
+            background-color: #050811;
+            color: #f8fafc;
+            overflow-x: hidden;
+        }
+
+        .hero-glow {
+            background: radial-gradient(circle at 50% 30%, rgba(59, 130, 246, 0.18) 0%, rgba(139, 92, 246, 0.12) 35%, transparent 70%);
+        }
+
+        .glass-card {
+            background: rgba(15, 23, 42, 0.65);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.4);
+        }
+
+        .glass-card:hover {
+            border-color: rgba(59, 130, 246, 0.35);
+            box-shadow: 0 24px 60px rgba(59, 130, 246, 0.15);
+        }
+
+        .glow-text {
+            text-shadow: 0 0 30px rgba(59, 130, 246, 0.5);
+        }
+
+        .gradient-border {
+            position: relative;
+            background: linear-gradient(135deg, rgba(59, 130, 246, 0.5), rgba(168, 85, 247, 0.5));
+            padding: 1px;
+            border-radius: 16px;
+        }
+
+        .gradient-border-inner {
+            background: #090e1a;
+            border-radius: 15px;
+        }
+
+        /* 3D Isometric Viewport */
+        .perspective-container {
+            perspective: 1200px;
+        }
+
+        .iso-viewport {
+            transform-style: preserve-3d;
+            transition: transform 0.4s cubic-bezier(0.2, 0, 0.2, 1);
+        }
+
+        .iso-viewport:hover {
+            transform: rotateX(8deg) rotateY(-4deg) translateZ(10px);
+        }
+
+        /* Dot Grid Canvas Background */
+        .dot-grid {
+            background-image: radial-gradient(rgba(255, 255, 255, 0.12) 1px, transparent 1px);
+            background-size: 24px 24px;
+        }
+
+        /* Animated Glowing Pulse Line */
+        @keyframes pulseLine {
+            0% { stroke-dashoffset: 200; }
+            100% { stroke-dashoffset: 0; }
+        }
+
+        .pulse-path {
+            stroke-dasharray: 20, 180;
+            animation: pulseLine 2.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #050811;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #1e293b;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #334155;
+        }
+    </style>
+</head>
+
+<body class="selection:bg-blue-500 selection:text-white">
+
+    <!-- ── Background 3D Canvas ── -->
+    <div id="three-container" class="fixed inset-0 pointer-events-none z-0 opacity-70"></div>
+    <div class="fixed inset-0 hero-glow pointer-events-none z-0"></div>
+
+    <!-- ── Top Navigation ── -->
+    <header class="fixed top-0 left-0 right-0 z-50 transition-all duration-300">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 py-4">
+            <div class="glass-card rounded-2xl px-4 sm:px-6 py-3 flex items-center justify-between gap-2">
+                <a href="/landing.html" class="flex items-center gap-2 sm:gap-3 group shrink-0">
+                    <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 via-indigo-500 to-cyan-400 p-[1.5px] shadow-lg shadow-blue-500/20 group-hover:shadow-blue-500/40 transition-all">
+                        <div class="w-full h-full bg-[#090e1a] rounded-[10px] flex items-center justify-center">
+                            <i class="bi bi-diagram-3-fill text-blue-400 text-lg"></i>
+                        </div>
+                    </div>
+                    <div>
+                        <span class="font-display font-bold text-xl tracking-tight text-white flex items-center gap-1.5">
+                            LeadOrbit <span class="hidden sm:inline text-[10px] uppercase font-mono font-bold bg-blue-500/20 text-blue-400 px-2 py-0.5 rounded-full border border-blue-500/30">v2.0</span>
+                        </span>
+                    </div>
+                </a>
+
+                <nav class="hidden md:flex items-center gap-8 text-sm font-medium text-slate-400">
+                    <a href="#workflow-demo" class="hover:text-white transition-colors">Visual Workflow</a>
+                    <a href="#features" class="hover:text-white transition-colors">Features</a>
+                    <a href="#ai-engine" class="hover:text-white transition-colors">AI Studio</a>
+                    <a href="#architecture" class="hover:text-white transition-colors">Stack</a>
+                </nav>
+
+                <div class="flex items-center gap-2 sm:gap-3 shrink-0">
+                    <a href="/login.html" class="whitespace-nowrap px-2 sm:px-4 py-2 text-sm font-semibold text-slate-300 hover:text-white transition-colors">
+                        Sign In
+                    </a>
+                    <a href="/campaign-builder.html" class="relative group whitespace-nowrap px-3 sm:px-5 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-sm font-semibold shadow-lg shadow-blue-500/25 hover:shadow-blue-500/40 transition-all flex items-center gap-2">
+                        <span>Open Builder</span>
+                        <i class="hidden sm:inline-block bi bi-arrow-right group-hover:translate-x-0.5 transition-transform"></i>
+                    </a>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- ── Side-by-Side Hero & Workflow Viewport ── -->
+    <main class="relative z-10 pt-28 xl:pt-24 pb-16 max-w-[1460px] mx-auto px-4 sm:px-6">
+        
+        <div class="grid grid-cols-1 xl:grid-cols-12 gap-8 items-center min-h-[calc(100vh-120px)]">
+            
+            <!-- Left Side: Pitch, Headline, Badges, CTAs, Tech Stack (5 cols) -->
+            <div class="xl:col-span-5 flex flex-col justify-center space-y-6">
+                <!-- Badge -->
+                <div class="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full bg-slate-800/80 border border-slate-700/60 text-xs font-semibold text-blue-400 w-fit backdrop-blur-md animate-float">
+                    <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+                    <span>The Multi-Tenant Outbound Automation Suite</span>
+                </div>
+
+                <!-- Main Heading -->
+                <h1 class="font-display text-4xl lg:text-5xl font-bold tracking-tight text-white leading-[1.12]">
+                    Turn Leads Into <span class="bg-gradient-to-r from-blue-400 via-indigo-300 to-purple-400 bg-clip-text text-transparent glow-text">Conversations, Automatically</span>
+                </h1>
+
+                <p class="text-sm sm:text-base text-slate-400 leading-relaxed max-w-xl">
+                    Design multi-channel outreach campaigns with Gmail, Twilio SMS, Voice Calls, and LinkedIn. Powered by Gemini AI drafting, smart CSV ingestion, and real-time webhook tracking.
+                </p>
+
+                <!-- CTA Group -->
+                <div class="flex flex-wrap items-center gap-3.5 pt-1">
+                    <a href="/campaign-builder.html" class="px-6 py-3.5 rounded-xl bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 hover:opacity-95 text-white font-semibold shadow-xl shadow-blue-500/30 flex items-center gap-2.5 text-sm group transition-all">
+                        <i class="bi bi-play-fill text-lg group-hover:scale-125 transition-transform"></i>
+                        <span>Launch Campaign Studio</span>
+                    </a>
+                    <button onclick="triggerInteractiveDemo()" class="px-5 py-3.5 rounded-xl glass-card text-slate-200 hover:text-white font-semibold text-sm flex items-center gap-2 hover:bg-slate-800/60 transition-all border border-slate-700/60">
+                        <i class="bi bi-stars text-blue-400"></i>
+                        <span>Simulate Sequence</span>
+                    </button>
+                </div>
+
+                <!-- Tech Pills Grid -->
+                <div class="grid grid-cols-2 gap-3 pt-4 border-t border-slate-800/80 text-xs font-mono text-slate-400">
+                    <div class="flex items-center gap-2">
+                        <i class="bi bi-check-circle-fill text-emerald-400"></i> Django 5 REST
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <i class="bi bi-check-circle-fill text-emerald-400"></i> Celery Async
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <i class="bi bi-check-circle-fill text-emerald-400"></i> Gmail & Twilio
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <i class="bi bi-check-circle-fill text-emerald-400"></i> Gemini 2.0 AI
+                    </div>
+                </div>
+            </div>
+
+            <!-- Right Side: 3D Isometric Workflow Canvas (7 cols) -->
+            <div class="xl:col-span-7 perspective-container">
+                <div class="gradient-border shadow-2xl">
+                    <div class="gradient-border-inner p-5 sm:p-6 relative overflow-hidden">
+                        
+                        <!-- Top Window Bar -->
+                        <div class="flex items-center justify-between pb-4 mb-4 border-b border-slate-800/80">
+                            <div class="flex items-center gap-2.5">
+                                <div class="flex gap-1.5">
+                                    <div class="w-2.5 h-2.5 rounded-full bg-rose-500/80"></div>
+                                    <div class="w-2.5 h-2.5 rounded-full bg-amber-500/80"></div>
+                                    <div class="w-2.5 h-2.5 rounded-full bg-emerald-500/80"></div>
+                                </div>
+                                <span class="text-xs font-mono text-slate-400 ml-1.5 flex items-center gap-1.5">
+                                    <i class="bi bi-diagram-3 text-blue-400"></i> leadorbit-flow.canvas (n8n mode)
+                                </span>
+                            </div>
+
+                            <div class="flex items-center gap-2.5">
+                                <span class="px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-400 text-xs font-semibold border border-blue-500/20 flex items-center gap-1.5">
+                                    <span class="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>
+                                    Interactive 3D Canvas
+                                </span>
+                                <div class="flex items-center gap-1 text-xs text-slate-400 bg-slate-800/60 px-2.5 py-0.5 rounded border border-slate-700/60">
+                                    <span class="font-mono text-white font-semibold">100%</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Flow Canvas Area (n8n dot-grid) -->
+                        <div class="iso-viewport dot-grid rounded-xl p-5 min-h-[300px] flex items-center justify-start overflow-x-auto bg-[#070b14]/90 border border-slate-800/80 relative">
+                            
+                            <!-- Flow Nodes Chain (Horizontal n8n Finish) -->
+                            <div class="flex items-center gap-0 min-w-max py-4 px-2" id="demo-flow-chain">
+                                
+                                <!-- Node 0: Start -->
+                                <div class="relative bg-slate-900 border border-slate-700/80 rounded-xl p-3.5 w-52 shadow-lg group hover:border-blue-500/60 transition-all">
+                                    <div class="w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-slate-900 absolute -right-1.5 top-1/2 -translate-y-1/2"></div>
+                                    <div class="flex items-center gap-2.5">
+                                        <div class="w-7 h-7 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center text-xs font-bold">
+                                            <i class="bi bi-flag-fill"></i>
+                                        </div>
+                                        <div>
+                                            <div class="text-xs font-bold text-white">Sequence Start</div>
+                                            <div class="text-[10px] text-slate-400">Lead Enrolled (CSV)</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Connector Line 1 -->
+                                <div class="flex items-center w-12 relative">
+                                    <div class="h-[2px] w-full bg-slate-700 connector-bar" id="line-1"></div>
+                                    <div class="w-5 h-5 rounded-full bg-slate-800 border border-slate-600 text-slate-400 absolute left-1/2 -translate-x-1/2 flex items-center justify-center text-[9px] hover:border-blue-400 hover:text-blue-400 transition-all cursor-pointer">
+                                        <i class="bi bi-plus"></i>
+                                    </div>
+                                </div>
+
+                                <!-- Node 1: AI Email -->
+                                <div class="relative bg-slate-900 border border-slate-700/80 rounded-xl p-3.5 w-56 shadow-lg group hover:border-blue-500/60 transition-all" id="node-email">
+                                    <div class="w-2.5 h-2.5 rounded-full bg-slate-600 border-2 border-slate-900 absolute -left-1.5 top-1/2 -translate-y-1/2"></div>
+                                    <div class="w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-slate-900 absolute -right-1.5 top-1/2 -translate-y-1/2"></div>
+                                    <div class="flex items-center gap-2.5">
+                                        <div class="w-7 h-7 rounded-lg bg-blue-600/20 text-blue-400 flex items-center justify-center text-xs">
+                                            <i class="bi bi-envelope-fill"></i>
+                                        </div>
+                                        <div class="flex-grow">
+                                            <div class="text-xs font-bold text-white flex items-center justify-between">
+                                                <span>Email #1: Intro</span>
+                                                <span class="text-[9px] font-mono text-blue-400 font-normal">Gmail API</span>
+                                            </div>
+                                            <div class="text-[10px] text-slate-400 truncate">Cold outreach with AI draft</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Connector Line 2 -->
+                                <div class="flex items-center w-12 relative">
+                                    <div class="h-[2px] w-full bg-slate-700 connector-bar" id="line-2"></div>
+                                    <div class="w-5 h-5 rounded-full bg-slate-800 border border-slate-600 text-slate-400 absolute left-1/2 -translate-x-1/2 flex items-center justify-center text-[9px]">
+                                        <i class="bi bi-plus"></i>
+                                    </div>
+                                </div>
+
+                                <!-- Node 2: Delay -->
+                                <div class="relative bg-slate-900 border border-slate-700/80 rounded-xl p-3.5 w-48 shadow-lg group hover:border-amber-500/60 transition-all" id="node-delay">
+                                    <div class="w-2.5 h-2.5 rounded-full bg-slate-600 border-2 border-slate-900 absolute -left-1.5 top-1/2 -translate-y-1/2"></div>
+                                    <div class="w-2.5 h-2.5 rounded-full bg-amber-500 border-2 border-slate-900 absolute -right-1.5 top-1/2 -translate-y-1/2"></div>
+                                    <div class="flex items-center gap-2.5">
+                                        <div class="w-7 h-7 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center text-xs">
+                                            <i class="bi bi-clock-fill"></i>
+                                        </div>
+                                        <div>
+                                            <div class="text-xs font-bold text-white">Delay 3 Days</div>
+                                            <div class="text-[10px] text-slate-400">Wait for lead reply</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Connector Line 3 -->
+                                <div class="flex items-center w-12 relative">
+                                    <div class="h-[2px] w-full bg-slate-700 connector-bar" id="line-3"></div>
+                                    <div class="w-5 h-5 rounded-full bg-slate-800 border border-slate-600 text-slate-400 absolute left-1/2 -translate-x-1/2 flex items-center justify-center text-[9px]">
+                                        <i class="bi bi-plus"></i>
+                                    </div>
+                                </div>
+
+                                <!-- Node 3: Condition Branch -->
+                                <div class="relative bg-slate-900 border border-slate-700/80 rounded-xl p-3.5 w-56 shadow-lg group hover:border-pink-500/60 transition-all" id="node-cond">
+                                    <div class="w-2.5 h-2.5 rounded-full bg-slate-600 border-2 border-slate-900 absolute -left-1.5 top-1/2 -translate-y-1/2"></div>
+                                    <div class="flex items-center gap-2.5">
+                                        <div class="w-7 h-7 rounded-lg bg-pink-500/20 text-pink-400 flex items-center justify-center text-xs">
+                                            <i class="bi bi-reply-fill"></i>
+                                        </div>
+                                        <div class="flex-grow">
+                                            <div class="text-xs font-bold text-white">Replied to Email?</div>
+                                            <div class="text-[10px] text-slate-400">Webhook Poller</div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- Branching Paths (Yes / No) -->
+                                <div class="flex flex-col gap-3 pl-3 relative">
+                                    <div class="w-[2px] h-16 bg-slate-700 absolute left-0 top-3"></div>
+
+                                    <!-- Yes Branch -->
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-3 h-[2px] bg-slate-700"></div>
+                                        <span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">YES</span>
+                                        <div class="bg-slate-900 border border-emerald-500/40 rounded-lg p-2 w-44 shadow-md">
+                                            <div class="flex items-center gap-2">
+                                                <i class="bi bi-calendar-check-fill text-emerald-400 text-xs"></i>
+                                                <span class="text-[11px] font-bold text-white">Tag: Deal Booked</span>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <!-- No Branch -->
+                                    <div class="flex items-center gap-2">
+                                        <div class="w-3 h-[2px] bg-slate-700"></div>
+                                        <span class="px-1.5 py-0.5 rounded text-[9px] font-bold bg-rose-500/20 text-rose-400 border border-rose-500/30">NO</span>
+                                        <div class="bg-slate-900 border border-rose-500/40 rounded-lg p-2 w-44 shadow-md">
+                                            <div class="flex items-center gap-2">
+                                                <i class="bi bi-chat-dots-fill text-emerald-400 text-xs"></i>
+                                                <span class="text-[11px] font-bold text-white">SMS Follow-up</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+
+                        <!-- Live Simulation Metrics Footer -->
+                        <div class="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-4">
+                            <div class="glass-card rounded-xl p-3 flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-lg bg-blue-500/20 text-blue-400 flex items-center justify-center text-sm">
+                                    <i class="bi bi-send-check-fill"></i>
+                                </div>
+                                <div>
+                                    <div class="text-base font-bold font-display text-white">100%</div>
+                                    <div class="text-[10px] text-slate-400">Deliverability</div>
+                                </div>
+                            </div>
+                            <div class="glass-card rounded-xl p-3 flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-lg bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-sm">
+                                    <i class="bi bi-envelope-open-fill"></i>
+                                </div>
+                                <div>
+                                    <div class="text-base font-bold font-display text-white">48.2%</div>
+                                    <div class="text-[10px] text-slate-400">Open Rate</div>
+                                </div>
+                            </div>
+                            <div class="glass-card rounded-xl p-3 flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-lg bg-purple-500/20 text-purple-400 flex items-center justify-center text-sm">
+                                    <i class="bi bi-chat-heart-fill"></i>
+                                </div>
+                                <div>
+                                    <div class="text-base font-bold font-display text-white">18.6%</div>
+                                    <div class="text-[10px] text-slate-400">Reply Conv.</div>
+                                </div>
+                            </div>
+                            <div class="glass-card rounded-xl p-3 flex items-center gap-3">
+                                <div class="w-8 h-8 rounded-lg bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-sm">
+                                    <i class="bi bi-shield-check"></i>
+                                </div>
+                                <div>
+                                    <div class="text-base font-bold font-display text-white">0.0%</div>
+                                    <div class="text-[10px] text-slate-400">Domain Shield</div>
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ── 3D Bento Feature Grid ── -->
+        <section id="features" class="my-28">
+            <div class="text-center max-w-2xl mx-auto mb-16">
+                <span class="text-xs font-mono font-bold uppercase tracking-widest text-blue-400 bg-blue-500/10 px-3 py-1 rounded-full border border-blue-500/20">
+                    Engine Capabilities
+                </span>
+                <h2 class="font-display text-4xl md:text-5xl font-bold text-white mt-4 mb-4">
+                    Built for High-Growth Sales & Outbound Teams
+                </h2>
+                <p class="text-slate-400 text-base">
+                    Every piece of the modern sales pipeline, united in one multi-tenant engine.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+
+                <!-- Bento 1: AI Email Studio -->
+                <div class="glass-card rounded-2xl p-8 md:col-span-2 relative overflow-hidden group hover:border-blue-500/40 transition-all">
+                    <div class="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full blur-3xl group-hover:bg-blue-500/20 transition-all"></div>
+                    <div class="relative z-10">
+                        <div class="w-12 h-12 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center text-xl mb-6">
+                            <i class="bi bi-robot"></i>
+                        </div>
+                        <h3 class="text-2xl font-bold text-white mb-2">AI Email Studio with Gemini & Mistral</h3>
+                        <p class="text-slate-400 text-sm max-w-lg mb-6 leading-relaxed">
+                            Generate high-converting, personalized cold email sequences in seconds. Dynamic lead merge tag resolution automatically injects custom prospect variables at send time.
+                        </p>
+
+                        <!-- Mock AI Composer Box -->
+                        <div class="bg-slate-950/80 rounded-xl p-4 border border-slate-800 font-mono text-xs text-slate-300">
+                            <div class="flex items-center justify-between text-[11px] text-slate-500 border-b border-slate-800 pb-2 mb-3">
+                                <span>Prompt: "Write a high-converting 3-line cold email to SaaS founders"</span>
+                                <span class="text-emerald-400 font-bold">200 OK • 180ms</span>
+                            </div>
+                            <div class="text-blue-300 font-semibold mb-1">Subject: Quick question regarding {{company}}'s outbound engine</div>
+                            <div class="text-slate-400">Hi {{firstName}}, noticed {{company}} is scaling sales. We helped similar B2B teams automate multi-channel sequences with zero bounce...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bento 2: Multi-Channel Execution -->
+                <div class="glass-card rounded-2xl p-8 relative overflow-hidden group hover:border-indigo-500/40 transition-all">
+                    <div class="w-12 h-12 rounded-xl bg-indigo-500/20 text-indigo-400 flex items-center justify-center text-xl mb-6">
+                        <i class="bi bi-broadcast-pin"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-white mb-2">Omni-Channel Execution</h3>
+                    <p class="text-slate-400 text-sm mb-6 leading-relaxed">
+                        Trigger multi-step touches across Gmail OAuth, Twilio SMS, voice dialer, and manual LinkedIn tasks.
+                    </p>
+
+                    <div class="space-y-2.5 text-xs font-mono">
+                        <div class="flex items-center justify-between p-2.5 rounded-lg bg-slate-900/80 border border-slate-800">
+                            <span class="text-slate-300 flex items-center gap-2"><i class="bi bi-google text-rose-400"></i> Gmail API</span>
+                            <span class="text-emerald-400 font-semibold">Connected</span>
+                        </div>
+                        <div class="flex items-center justify-between p-2.5 rounded-lg bg-slate-900/80 border border-slate-800">
+                            <span class="text-slate-300 flex items-center gap-2"><i class="bi bi-chat-dots-fill text-emerald-400"></i> Twilio SMS</span>
+                            <span class="text-emerald-400 font-semibold">Active</span>
+                        </div>
+                        <div class="flex items-center justify-between p-2.5 rounded-lg bg-slate-900/80 border border-slate-800">
+                            <span class="text-slate-300 flex items-center gap-2"><i class="bi bi-linkedin text-blue-400"></i> LinkedIn Action</span>
+                            <span class="text-blue-400 font-semibold">Ready</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Bento 3: Smart CSV Ingestion -->
+                <div class="glass-card rounded-2xl p-8 relative overflow-hidden group hover:border-purple-500/40 transition-all">
+                    <div class="w-12 h-12 rounded-xl bg-purple-500/20 text-purple-400 flex items-center justify-center text-xl mb-6">
+                        <i class="bi bi-file-earmark-spreadsheet-fill"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-white mb-2">Smart CSV Importer</h3>
+                    <p class="text-slate-400 text-sm leading-relaxed">
+                        Flexible column alias mapping, automated tag generation, and domain blacklist protection.
+                    </p>
+                </div>
+
+                <!-- Bento 4: Multi-Tenant Architecture -->
+                <div class="glass-card rounded-2xl p-8 relative overflow-hidden group hover:border-emerald-500/40 transition-all">
+                    <div class="w-12 h-12 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-xl mb-6">
+                        <i class="bi bi-shield-lock-fill"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-white mb-2">Multi-Tenant Isolation</h3>
+                    <p class="text-slate-400 text-sm leading-relaxed">
+                        Tenant-scoped organization models with JWT authorization, security headers, and permission boundaries.
+                    </p>
+                </div>
+
+                <!-- Bento 5: Celery Async & Dev Mode -->
+                <div class="glass-card rounded-2xl p-8 relative overflow-hidden group hover:border-cyan-500/40 transition-all">
+                    <div class="w-12 h-12 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-xl mb-6">
+                        <i class="bi bi-lightning-charge-fill"></i>
+                    </div>
+                    <h3 class="text-xl font-bold text-white mb-2">Celery Eager Engine</h3>
+                    <p class="text-slate-400 text-sm leading-relaxed">
+                        Operates synchronously in eager dev mode or seamlessly scales to Redis message queues for production.
+                    </p>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- ── Call to Action Section ── -->
+        <section class="my-28 text-center relative">
+            <div class="gradient-border max-w-4xl mx-auto">
+                <div class="gradient-border-inner p-12 relative overflow-hidden">
+                    <div class="absolute -top-24 left-1/2 -translate-x-1/2 w-96 h-96 bg-blue-500/20 rounded-full blur-3xl pointer-events-none"></div>
+
+                    <h2 class="font-display text-4xl md:text-5xl font-bold text-white mb-6 relative z-10">
+                        Ready to Experience the Next Evolution in Cold Outreach?
+                    </h2>
+                    <p class="text-slate-400 text-lg max-w-xl mx-auto mb-8 relative z-10">
+                        Launch the campaign studio right now and design your multi-channel sequence visually.
+                    </p>
+                    <div class="flex flex-wrap items-center justify-center gap-4 relative z-10">
+                        <a href="/campaign-builder.html" class="px-8 py-4 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white font-bold text-base shadow-xl shadow-blue-500/30 flex items-center gap-2 group transition-all">
+                            <span>Open Campaign Builder</span>
+                            <i class="bi bi-arrow-right group-hover:translate-x-1 transition-transform"></i>
+                        </a>
+                        <a href="/dashboard.html" class="px-8 py-4 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-semibold text-base border border-slate-700 transition-all">
+                            View Dashboard
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ── Footer ── -->
+        <footer class="pt-16 pb-8 border-t border-slate-800/80 text-center text-slate-500 text-xs font-mono">
+            <div class="flex items-center justify-center gap-2 mb-3">
+                <i class="bi bi-diagram-3-fill text-blue-500"></i>
+                <span class="text-slate-300 font-bold font-sans text-sm">LeadOrbit</span>
+                <span>— Open Outreach Automation Platform</span>
+            </div>
+            <p>© 2026 LeadOrbit. Built with Python 3.11, Django REST Framework, Celery, and Modern ES Modules.</p>
+        </footer>
+    </main>
+
+    <!-- ── Three.js 3D Interactive Space Scene Script ── -->
+    <script>
+        // ── 3D Scene Initialization ──
+        const container = document.getElementById('three-container');
+        let scene, camera, renderer, particles, centralSphere, orbitingRings = [];
+        let mouseX = 0, mouseY = 0;
+
+        function initThree() {
+            scene = new THREE.Scene();
+            camera = new THREE.PerspectiveCamera(60, window.innerWidth / window.innerHeight, 0.1, 1000);
+            camera.position.z = 85;
+
+            renderer = new THREE.WebGLRenderer({ alpha: true, antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+            container.appendChild(renderer.domElement);
+
+            // Floating Star Particles
+            const particleCount = 700;
+            const geometry = new THREE.BufferGeometry();
+            const positions = new Float32Array(particleCount * 3);
+            const colors = new Float32Array(particleCount * 3);
+
+            const colorOptions = [
+                new THREE.Color('#3b82f6'),
+                new THREE.Color('#8b5cf6'),
+                new THREE.Color('#38bdf8'),
+                new THREE.Color('#ffffff')
+            ];
+
+            for (let i = 0; i < particleCount * 3; i += 3) {
+                positions[i] = (Math.random() - 0.5) * 160;
+                positions[i + 1] = (Math.random() - 0.5) * 160;
+                positions[i + 2] = (Math.random() - 0.5) * 120;
+
+                const color = colorOptions[Math.floor(Math.random() * colorOptions.length)];
+                colors[i] = color.r;
+                colors[i + 1] = color.g;
+                colors[i + 2] = color.b;
+            }
+
+            geometry.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+            const material = new THREE.PointsMaterial({
+                size: 1.2,
+                vertexColors: true,
+                transparent: true,
+                opacity: 0.75,
+                blending: THREE.AdditiveBlending
+            });
+
+            particles = new THREE.Points(geometry, material);
+            scene.add(particles);
+
+            // Orbiting Wireframe Rings
+            for (let i = 0; i < 3; i++) {
+                const ringGeo = new THREE.TorusGeometry(20 + i * 12, 0.12, 16, 100);
+                const ringMat = new THREE.MeshBasicMaterial({
+                    color: i === 0 ? 0x3b82f6 : (i === 1 ? 0x8b5cf6 : 0x38bdf8),
+                    transparent: true,
+                    opacity: 0.25,
+                    wireframe: true
+                });
+                const ring = new THREE.Mesh(ringGeo, ringMat);
+                ring.rotation.x = Math.PI / (2.5 + i * 0.4);
+                ring.rotation.y = i * 0.5;
+                scene.add(ring);
+                orbitingRings.push(ring);
+            }
+
+            window.addEventListener('resize', onWindowResize);
+            document.addEventListener('mousemove', onMouseMove);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function onMouseMove(event) {
+            mouseX = (event.clientX - window.innerWidth / 2) * 0.03;
+            mouseY = (event.clientY - window.innerHeight / 2) * 0.03;
+        }
+
+        function animateThree() {
+            requestAnimationFrame(animateThree);
+
+            if (particles) {
+                particles.rotation.y += 0.0008;
+                particles.rotation.x += 0.0004;
+            }
+
+            orbitingRings.forEach((ring, idx) => {
+                ring.rotation.z += (idx + 1) * 0.0015;
+                ring.rotation.x += (idx + 1) * 0.0008;
+            });
+
+            // Smooth mouse camera parallax
+            camera.position.x += (mouseX - camera.position.x) * 0.05;
+            camera.position.y += (-mouseY - camera.position.y) * 0.05;
+            camera.lookAt(scene.position);
+
+            renderer.render(scene, camera);
+        }
+
+        initThree();
+        animateThree();
+
+        // ── Interactive Sequence Simulation Demo ──
+        function triggerInteractiveDemo() {
+            const nodeEmail = document.getElementById('node-email');
+            const nodeDelay = document.getElementById('node-delay');
+            const nodeCond = document.getElementById('node-cond');
+            const line1 = document.getElementById('line-1');
+            const line2 = document.getElementById('line-2');
+            const line3 = document.getElementById('line-3');
+
+            // Reset
+            [nodeEmail, nodeDelay, nodeCond].forEach(n => n.classList.remove('ring-2', 'ring-blue-400', 'ring-amber-400', 'ring-pink-400', 'scale-105'));
+            [line1, line2, line3].forEach(l => l.classList.remove('bg-blue-400', 'bg-amber-400', 'bg-pink-400'));
+
+            // Step 1: Send Email
+            line1.classList.add('bg-blue-400', 'transition-colors', 'duration-300');
+            setTimeout(() => {
+                nodeEmail.classList.add('ring-2', 'ring-blue-400', 'scale-105', 'transition-all');
+            }, 300);
+
+            // Step 2: Delay Wait
+            setTimeout(() => {
+                line2.classList.add('bg-amber-400', 'transition-colors', 'duration-300');
+                nodeDelay.classList.add('ring-2', 'ring-amber-400', 'scale-105', 'transition-all');
+            }, 900);
+
+            // Step 3: Check Reply Condition
+            setTimeout(() => {
+                line3.classList.add('bg-pink-400', 'transition-colors', 'duration-300');
+                nodeCond.classList.add('ring-2', 'ring-pink-400', 'scale-105', 'transition-all');
+            }, 1500);
+
+            // Step 4: Celebration Confetti!
+            setTimeout(() => {
+                confetti({
+                    particleCount: 80,
+                    spread: 70,
+                    origin: { y: 0.6 }
+                });
+            }, 2000);
+        }
+    </script>
+</body>
+</html>

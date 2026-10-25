@@ -4,6 +4,7 @@ Twilio SMS & Voice service helpers.
 Handles: sending SMS messages and initiating voice calls via Twilio API.
 """
 import logging
+from xml.sax.saxutils import escape as xml_escape
 
 from django.conf import settings
 
@@ -78,8 +79,9 @@ def initiate_call(to_number, call_script=None):
     if not call_script:
         call_script = 'Hello, this is a call from your outreach campaign. Please hold while we connect you.'
 
-    # Build inline TwiML
-    twiml = f'<Response><Say voice="alice">{call_script}</Say></Response>'
+    # Build inline TwiML. The script carries lead data from CSV imports, so escape it:
+    # "AT&T" would otherwise break the XML, and markup in a field could inject TwiML verbs.
+    twiml = f'<Response><Say voice="alice">{xml_escape(call_script)}</Say></Response>'
 
     client = _get_client()
     call = client.calls.create(

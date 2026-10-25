@@ -83,15 +83,6 @@
                     </div>
                 </div>
             </header>
-            
-            <nav aria-label="breadcrumb" class="mt-2 px-3">
-                <ol class="breadcrumb small">
-                <li class="breadcrumb-item active" aria-current="page">
-                    Dashboard
-                </li>
-                </ol>
-            </nav>
-
 
             <section class="content-wrap">
                 <div class="kpi-grid mb-4">
@@ -117,13 +108,13 @@
                     </div>
                     <div class="kpi-card">
                         <div class="kpi-label">
-                            Emails Sent
+                            Leads Emailed
                             <i class="bi bi-info-circle text-muted ms-1"
                             data-bs-toggle="tooltip"
-                            data-bs-title="Total outbound emails delivered across all campaigns."></i>
+                            data-bs-title="Leads that have received at least one campaign email."></i>
                         </div>
                         <div class="kpi-value"><div class="skeleton-box skeleton-kpi-value skeleton-kpi"></div><span id="emails-sent-count" class="kpi-value-text" style="display: none;">0</span></div>
-                        <div class="kpi-sub">Messages delivered by campaigns</div>
+                        <div class="kpi-sub">Reached by your campaigns</div>
                     </div>
                     <div class="kpi-card">
                         <div class="kpi-label">
@@ -161,6 +152,9 @@
     </div>
 
 </div>
+                    <div id="chart-canvas-wrap" style="display: none; height: 250px; position: relative;">
+                        <canvas id="dashboard-chart" aria-label="Emails sent, opened and replied over the last 30 days" role="img"></canvas>
+                    </div>
                 </div>
 
                 <div class="glass-card p-3 p-md-4">
@@ -197,8 +191,8 @@
                                     <i class="bi bi-stars" aria-hidden="true"></i>
                                 </div>
                                 <div>
-                                    <div class="fw-semibold">Workspace ready</div>
-                                    <small class="text-muted">Start by importing leads and launching a sequence.</small>
+                                    <div class="fw-semibold" id="activity-title">Workspace ready</div>
+                                    <small class="text-muted" id="activity-detail">Start by importing leads and launching a sequence.</small>
                                 </div>
                             </div>
                             <small class="text-muted">Now</small>
@@ -209,6 +203,7 @@
         </main>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <script type="module" src="./main.js"></script>
     <script type="module">
         import { fetchWithAuth } from './api.js';
@@ -228,8 +223,43 @@
                     
                     const chartSkeleton = document.getElementById('chart-skeleton');
                     if (chartSkeleton) chartSkeleton.style.display = 'none';
-                    const chartContent = document.getElementById('chart-content');
-                    if (chartContent) chartContent.style.display = 'flex';
+
+                    const hasData = Number(data.total_leads || 0) > 0
+                        || Number(data.active_campaigns || 0) > 0
+                        || Number(data.emails_sent || 0) > 0;
+                    const ts = data.time_series || {};
+
+                    if (hasData && window.Chart && Array.isArray(ts.labels)) {
+                        document.getElementById('chart-canvas-wrap').style.display = 'block';
+                        const labels = ts.labels.map(iso => new Date(iso + 'T00:00:00')
+                            .toLocaleDateString('en-US', { month: 'short', day: 'numeric' }));
+                        new Chart(document.getElementById('dashboard-chart'), {
+                            type: 'line',
+                            data: {
+                                labels,
+                                datasets: [
+                                    { label: 'Sent', data: ts.sent || [], borderColor: '#0d6efd', backgroundColor: 'rgba(13,110,253,0.1)', fill: true, tension: 0.4 },
+                                    { label: 'Opened', data: ts.opened || [], borderColor: '#198754', backgroundColor: 'rgba(25,135,84,0.1)', fill: true, tension: 0.4 },
+                                    { label: 'Replied', data: ts.replied || [], borderColor: '#f59e0b', backgroundColor: 'rgba(245,158,11,0.1)', fill: true, tension: 0.4 },
+                                ],
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                plugins: { legend: { position: 'bottom' } },
+                                scales: { y: { beginAtZero: true, ticks: { precision: 0 } } },
+                            },
+                        });
+                    } else {
+                        const chartContent = document.getElementById('chart-content');
+                        if (chartContent) chartContent.style.display = 'flex';
+                    }
+
+                    if (hasData) {
+                        document.getElementById('activity-title').textContent = 'Workspace active';
+                        document.getElementById('activity-detail').textContent =
+                            `${Number(data.total_leads || 0).toLocaleString()} leads · ${Number(data.active_campaigns || 0).toLocaleString()} active campaigns · ${Number(data.emails_sent || 0).toLocaleString()} leads emailed`;
+                    }
 
                     const actSkeletons = document.getElementById('activity-skeletons');
                     if (actSkeletons) actSkeletons.style.display = 'none';

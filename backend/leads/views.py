@@ -8,6 +8,19 @@ from .models import BlockedDomain, Lead, LeadImportJob, Tag, LeadTag
 from .serializers import BlockedDomainSerializer, LeadImportJobSerializer, LeadSerializer, TagSerializer
 
 
+MAX_CSV_IMPORT_BYTES = 10 * 1024 * 1024
+
+
+def _decode_csv_upload(raw):
+    """Excel saves "CSV UTF-8" with a byte-order mark and plain "CSV" in the Windows code page."""
+    for encoding in ('utf-8-sig', 'cp1252'):
+        try:
+            return raw.decode(encoding)
+        except UnicodeDecodeError:
+            continue
+    return raw.decode('latin-1')
+
+
 class LeadImportJobPagination(PageNumberPagination):
     page_size = 10
 
@@ -42,7 +55,7 @@ class LeadViewSet(viewsets.ModelViewSet):
           ?status=active|unsubscribed — filter by subscription status
           ?search=<text>            — filter by name / email / company
         """
-        qs = Lead.objects.filter(organization=self.request.user.organization)
+        qs = Lead.objects.filter(organization=self.request.user.organization).prefetch_related('lead_tags__tag')
         params = self.request.query_params
 
         # ── Tag filter ──────────────────────────────────────────────────────
@@ -96,6 +109,11 @@ class LeadViewSet(viewsets.ModelViewSet):
         file_obj = request.FILES.get('file')
         if not file_obj:
             return Response({"error": "No file provided"}, status=status.HTTP_400_BAD_REQUEST)
+        if file_obj.size > MAX_CSV_IMPORT_BYTES:
+            return Response(
+                {"error": f"CSV file is too large (max {MAX_CSV_IMPORT_BYTES // (1024 * 1024)} MB)."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         job = LeadImportJob.objects.create(
             organization=request.user.organization,
@@ -103,7 +121,7 @@ class LeadViewSet(viewsets.ModelViewSet):
         )
         # Trigger async celery task
         from .tasks import import_leads_from_csv
-        file_contents = file_obj.read().decode('utf-8')
+        file_contents = _decode_csv_upload(file_obj.read())
 
         # Ensure we pass the organization to the task
         import_leads_from_csv.delay(file_contents, request.user.organization.id, str(job.id))

@@ -1,4 +1,8 @@
+from unittest.mock import patch
+
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.db import connection
+from django.test.utils import CaptureQueriesContext
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -461,3 +465,92 @@ class LeadFilterTests(APITestCase):
         resp = self._get()
         emails = {l['email'] for l in resp.data}
         self.assertNotIn('spy@example.com', emails)
+
+
+class LeadDataIntegrityTests(APITestCase):
+    def setUp(self):
+        self.org = Organization.objects.create(name='Integrity Org')
+        self.user = _make_user(self.org)
+        self.client.force_authenticate(self.user)
+
+    def test_creating_duplicate_lead_returns_400_instead_of_500(self):
+        _make_lead(self.org, 'Dana@Example.com')
+
+        resp = self.client.post('/api/v1/leads/', {'email': 'dana@example.com'}, format='json')
+
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('email', resp.data)
+        self.assertEqual(Lead.objects.filter(organization=self.org).count(), 1)
+
+    def test_same_email_is_allowed_in_another_organization(self):
+        _make_lead(Organization.objects.create(name='Other Org'), 'dana@example.com')
+
+        resp = self.client.post('/api/v1/leads/', {'email': 'dana@example.com'}, format='json')
+
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+
+    def test_updating_a_lead_does_not_conflict_with_itself(self):
+        lead = _make_lead(self.org, 'dana@example.com')
+
+        resp = self.client.patch(
+            f'/api/v1/leads/{lead.id}/', {'email': 'dana@example.com', 'company': 'Acme'}, format='json'
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+
+    def test_creating_duplicate_tag_returns_400_instead_of_500(self):
+        _make_tag(self.org, 'VIP')
+
+        resp = self.client.post('/api/v1/tags/', {'name': 'vip'}, format='json')
+
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('name', resp.data)
+
+    def test_csv_upload_accepts_windows_1252_files(self):
+        content = 'email,first_name,company\njose@example.com,José,Café Ltd\n'.encode('cp1252')
+        upload = SimpleUploadedFile('excel-export.csv', content, content_type='text/csv')
+
+        resp = self.client.post('/api/v1/leads/import_csv/', {'file': upload}, format='multipart')
+
+        self.assertEqual(resp.status_code, status.HTTP_202_ACCEPTED)
+        lead = Lead.objects.get(organization=self.org, email='jose@example.com')
+        self.assertEqual(lead.first_name, 'José')
+        self.assertEqual(lead.company, 'Café Ltd')
+
+    def test_csv_upload_rejects_oversized_files(self):
+        upload = SimpleUploadedFile('big.csv', b'email\nsomeone@example.com\n', content_type='text/csv')
+
+        with patch('leads.views.MAX_CSV_IMPORT_BYTES', 10):
+            resp = self.client.post('/api/v1/leads/import_csv/', {'file': upload}, format='multipart')
+
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertFalse(LeadImportJob.objects.filter(organization=self.org).exists())
+
+    def test_csv_import_updates_existing_lead_regardless_of_email_case(self):
+        _make_lead(self.org, 'dana@example.com', first_name='Old')
+
+        import_leads_from_csv('email,first_name\nDANA@Example.com,New\n', str(self.org.id))
+
+        leads = Lead.objects.filter(organization=self.org)
+        self.assertEqual(leads.count(), 1)
+        self.assertEqual(leads.get().first_name, 'New')
+
+    def test_listing_leads_does_not_query_tags_once_per_lead(self):
+        tag = _make_tag(self.org, 'VIP')
+
+        def add_tagged_leads(prefix, count):
+            for index in range(count):
+                lead = _make_lead(self.org, f'{prefix}{index}@example.com')
+                LeadTag.objects.create(organization=self.org, lead=lead, tag=tag)
+
+        def count_list_queries():
+            with CaptureQueriesContext(connection) as queries:
+                resp = self.client.get('/api/v1/leads/')
+            self.assertEqual(resp.status_code, status.HTTP_200_OK)
+            return len(queries.captured_queries)
+
+        add_tagged_leads('first', 2)
+        baseline = count_list_queries()
+        add_tagged_leads('more', 5)
+
+        self.assertEqual(count_list_queries(), baseline)

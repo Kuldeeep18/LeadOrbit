@@ -1,0 +1,19 @@
+# Keep secrets, local data and dev clutter out of Docker images.
+.git
+.github
+.env
+**/.env
+**/venv
+**/.venv
+**/__pycache__
+**/*.pyc
+**/*.log
+**/*.sqlite3
+backend/staticfiles
+backend/celerybeat-schedule*
+frontend/src
+outreach_frontend
+hive
+roster-backups
+*.json
+*.md

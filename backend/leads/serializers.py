@@ -4,10 +4,26 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from .models import BlockedDomain, Lead, LeadImportJob, Tag, LeadTag, validate_domain
 
 
+def _request_organization(serializer):
+    request = serializer.context.get('request')
+    return getattr(getattr(request, 'user', None), 'organization', None)
+
+
 class TagSerializer(serializers.ModelSerializer):
     class Meta:
         model = Tag
         fields = ['id', 'name', 'color']
+
+    def validate_name(self, value):
+        value = value.strip()
+        organization = _request_organization(self)
+        if organization is not None:
+            duplicates = Tag.objects.filter(organization=organization, name__iexact=value)
+            if self.instance is not None:
+                duplicates = duplicates.exclude(pk=self.instance.pk)
+            if duplicates.exists():
+                raise serializers.ValidationError('A tag with this name already exists.')
+        return value
 
 
 class LeadSerializer(serializers.ModelSerializer):
@@ -29,9 +45,21 @@ class LeadSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['organization', 'score']
 
+    def validate_email(self, value):
+        # Checked here so a duplicate is a 400, not an IntegrityError (500) from the
+        # (organization, email) constraint; case-insensitive so one person isn't emailed twice.
+        organization = _request_organization(self)
+        if organization is not None:
+            duplicates = Lead.objects.filter(organization=organization, email__iexact=value)
+            if self.instance is not None:
+                duplicates = duplicates.exclude(pk=self.instance.pk)
+            if duplicates.exists():
+                raise serializers.ValidationError('A lead with this email already exists.')
+        return value
+
     def get_tags(self, obj):
-        tags = Tag.objects.filter(tagged_leads__lead=obj)
-        return TagSerializer(tags, many=True).data
+        # LeadViewSet prefetches lead_tags__tag, so listing leads doesn't query per lead.
+        return TagSerializer([link.tag for link in obj.lead_tags.all()], many=True).data
 
     def _set_tags(self, lead, tag_ids):
         """Replace the lead's tags with the given list of Tag UUIDs."""
