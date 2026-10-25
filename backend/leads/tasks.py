@@ -84,6 +84,17 @@ def import_leads_from_csv(file_contents, organization_id, job_id=None):
         dialect = csv.excel
     reader = csv.DictReader(stream, dialect=dialect)
 
+# Trim leading/trailing whitespace from CSV headers
+    if reader.fieldnames:
+
+        reader.fieldnames = [
+
+            header.strip() if header is not None else None
+
+            for header in reader.fieldnames
+
+        ]
+
     leads_created = 0
     leads_updated = 0
     failed_count = 0
