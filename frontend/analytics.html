@@ -445,54 +445,213 @@
         campaignSelect.appendChild(opt);
     });
 };
-            const renderCampaignAnalysis = (campaign) => {
-                if (!campaign) {
-                    summaryEl.textContent = 'Select a campaign to see details.';
-                    if (campaignStepChart) campaignStepChart.destroy();
-                    return;
+const renderCampaignAnalysis = (campaign) => {
+    if (!campaign) {
+        summaryEl.textContent = 'Select a campaign to see details.';
+        if (campaignStepChart) campaignStepChart.destroy();
+        return;
+    }
+
+    const steps = campaign.steps || [];
+    const connected = campaign.connected_account?.email || 'Not connected';
+    const created = campaign.created_at
+        ? new Date(campaign.created_at).toLocaleString()
+        : '—';
+
+    const sent = campaign.sent_count || 0;
+    const opened = campaign.open_count || 0;
+    const replied = campaign.reply_count || 0;
+    const bounced = campaign.bounced_count || 0;
+
+    let score = 50;
+
+    if (sent > 0) {
+        const openRate = (opened / sent) * 100;
+        const replyRate = (replied / sent) * 100;
+        const bounceRate = (bounced / sent) * 100;
+
+        score += openRate * 0.3;
+        score += replyRate * 0.5;
+        score -= bounceRate * 0.2;
+    }
+
+    score = Math.max(0, Math.min(100, Math.round(score)));
+
+    const healthStatus =
+        score >= 80
+            ? "Excellent"
+            : score >= 60
+            ? "Good"
+            : "Needs Attention";
+
+    let insights = [];
+
+    if (sent === 0) {
+        insights.push("No campaign activity yet.");
+    }
+
+    if (opened === 0 && sent > 0) {
+        insights.push("Low open rate.");
+    }
+
+    if (replied === 0 && sent > 0) {
+        insights.push("Low reply rate.");
+    }
+
+    if (bounced > 0) {
+        insights.push("High bounce rate.");
+    }
+
+    if (opened > 0 && replied > 0) {
+        insights.push("Good engagement.");
+    }
+
+    let recommendations = [];
+
+if (sent === 0) {
+    recommendations.push("Launch the campaign to start collecting performance data.");
+}
+
+if (opened === 0 && sent > 0) {
+    recommendations.push("Improve your email subject line to increase open rates.");
+}
+
+if (replied === 0 && sent > 0) {
+    recommendations.push("Improve your email content and Call-to-Action (CTA).");
+}
+
+if (bounced > 0) {
+    recommendations.push("Verify your email list to reduce bounce rate.");
+}
+
+
+if (score >= 80) {
+    recommendations = [
+        "Keep the campaign running and monitor conversion performance."
+    ];
+}
+else if (score >= 60) {
+    recommendations = [
+        "Optimize email content to improve reply rates."
+    ];
+}
+    const scoreColor =
+    score >= 80 ? "#16a34a" :
+    score >= 60 ? "#f59e0b" :
+                  "#dc2626";
+
+    
+
+    summaryEl.innerHTML = `
+    <div class="fw-semibold fs-5">${campaign.name}</div>
+
+    <div class="small text-muted mt-2">
+        Status:
+        <span class="fw-semibold">${campaign.status || 'DRAFT'}</span>
+    </div>
+
+    <div class="small text-muted">
+        Enrolled Leads:
+        <span class="fw-semibold">${campaign.enrolled_count || 0}</span>
+    </div>
+
+    <div class="small text-muted">
+        Steps Configured:
+        <span class="fw-semibold">${steps.length}</span>
+    </div>
+
+    <hr>
+
+    <div class="small">
+        <strong>Campaign Quality Score:</strong>
+        <span style="color:${scoreColor};font-weight:700;font-size:18px;">
+            ${score} / 100
+        </span>
+    </div>
+
+    <div class="small mt-2">
+        <strong>Campaign Status:</strong>
+        <span class="${
+            score >= 80
+                ? "text-success"
+                : score >= 60
+                ? "text-warning"
+                : "text-danger"
+        } fw-bold">
+            ${healthStatus}
+        </span>
+    </div>
+
+    <hr>
+
+    <div class="small mt-3">
+        <strong>💡 Next Action</strong>
+        <div class="text-muted mt-1">
+            ${recommendations.length
+                ? recommendations[0]
+                : "No action required."}
+        </div>
+    </div>
+
+    <div class="mt-4"></div>
+
+    <div class="small text-muted">
+        <strong>Sender Account:</strong>
+        <span class="fw-semibold">${connected}</span>
+    </div>
+
+    <div class="small text-muted mt-1">
+        <strong>Created:</strong>
+        <span class="fw-semibold">${created}</span>
+    </div>
+
+    <div class="mt-3">
+        <a class="btn btn-sm btn-logout" href="/campaign-builder.html?id=${campaign.id}">
+            Open in Builder
+        </a>
+    </div>
+`;
+
+    const stepCounts = steps.reduce((acc, step) => {
+        const key = step.channel_type || "OTHER";
+        acc[key] = (acc[key] || 0) + 1;
+        return acc;
+    }, {});
+
+    const labels = Object.keys(stepCounts);
+    const values = Object.values(stepCounts);
+
+    if (campaignStepChart) campaignStepChart.destroy();
+
+    campaignStepChart = new Chart(document.getElementById("campaignStepChart"), {
+        type: "doughnut",
+        data: {
+            labels: labels.length ? labels : ["No steps"],
+            datasets: [{
+                data: values.length ? values : [1],
+                backgroundColor: [
+                    "#0d6efd",
+                    "#0a66c2",
+                    "#16a34a",
+                    "#25d366",
+                    "#94a3b8",
+                    "#64748b",
+                    "#14b8a6",
+                    "#f59e0b",
+                    "#ef4444"
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            plugins: {
+                legend: {
+                    position: "bottom"
                 }
-
-                const steps = campaign.steps || [];
-                const connected = campaign.connected_account?.email || 'Not connected';
-                const created = campaign.created_at ? new Date(campaign.created_at).toLocaleString() : '—';
-                summaryEl.innerHTML = `
-                    <div class="fw-semibold">${campaign.name}</div>
-                    <div class="small text-muted mt-1">Status: <span class="fw-semibold">${campaign.status || 'DRAFT'}</span></div>
-                    <div class="small text-muted">Enrolled leads: <span class="fw-semibold">${campaign.enrolled_count || 0}</span></div>
-                    <div class="small text-muted">Steps configured: <span class="fw-semibold">${steps.length}</span></div>
-                    <div class="small text-muted">Sender account: <span class="fw-semibold">${connected}</span></div>
-                    <div class="small text-muted">Created: <span class="fw-semibold">${created}</span></div>
-                    <div class="mt-2">
-                        <a class="btn btn-sm btn-logout" href="/campaign-builder.html?id=${campaign.id}">
-                            Open in Builder
-                        </a>
-                    </div>
-                `;
-
-                const stepCounts = steps.reduce((acc, step) => {
-                    const key = step.channel_type || 'OTHER';
-                    acc[key] = (acc[key] || 0) + 1;
-                    return acc;
-                }, {});
-                const labels = Object.keys(stepCounts);
-                const values = Object.values(stepCounts);
-
-                if (campaignStepChart) campaignStepChart.destroy();
-                campaignStepChart = new Chart(document.getElementById('campaignStepChart'), {
-                    type: 'doughnut',
-                    data: {
-                        labels: labels.length ? labels : ['No steps'],
-                        datasets: [{
-                            data: values.length ? values : [1],
-                            backgroundColor: ['#0d6efd', '#0a66c2', '#16a34a', '#25d366', '#94a3b8', '#64748b', '#14b8a6', '#f59e0b', '#ef4444'],
-                        }],
-                    },
-                    options: {
-                        responsive: true,
-                        plugins: { legend: { position: 'bottom' } },
-                    },
-                });
-            };
+            }
+        }
+    });
+};
 
             campaigns = await loadCampaigns();
             renderStatusChart(campaigns);
@@ -522,6 +681,7 @@
                         return;
                     }
                     const campaign = await res.json();
+                    console.log(campaign);
                     renderCampaignAnalysis(campaign);
                 } catch (e) {
                     console.error(e);
