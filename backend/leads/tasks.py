@@ -1,10 +1,13 @@
 import csv
 import io
 import re
+import json
+import unicodedata
 from celery import shared_task
 from django.core.exceptions import ValidationError
 from django.core.validators import validate_email
-from .models import Lead
+from django.db import transaction, IntegrityError
+from .models import Lead, LeadTag, Tag
 from .models import LeadImportJob
 from tenants.models import Organization
 import logging
@@ -16,6 +19,9 @@ STANDARD_FIELD_ALIASES = {
     'first_name': ('firstName', 'first_name', 'firstname', 'first name'),
     'last_name': ('lastName', 'last_name', 'lastname', 'last name'),
     'company': ('companyName', 'company', 'company_name', 'organization'),
+    'title': ('title', 'job_title', 'jobtitle'),
+    'status': ('status',),
+    'tags': ('tags',),
     'linkedin_url': ('linkedinUrl', 'linkedin_url', 'linkedin', 'linkedin_profile'),
     'phone': ('phone', 'phoneNumber', 'phone_number', 'mobile', 'phone number'),
 }
@@ -62,6 +68,55 @@ def _extract_custom_variables(row):
             continue
         custom_variables[custom_key] = (value or '').strip()
     return custom_variables
+
+
+def _unprotect_csv_formula(value):
+    if not value or not value.startswith("'"):
+        return value
+    remainder = value[1:]
+    index = 0
+    while index < len(remainder):
+        char = remainder[index]
+        category = unicodedata.category(char)
+        if char.isspace() or ord(char) < 32 or 127 <= ord(char) <= 159 or category in ('Cf', 'Zl', 'Zp'):
+            index += 1
+            continue
+        break
+    if index < len(remainder) and remainder[index] in ('=', '+', '-', '@'):
+        return remainder
+    return value
+
+
+def _parse_import_tags(value):
+    if not value:
+        return []
+
+    value = str(value)
+    if value.startswith('json:'):
+        try:
+            parsed = json.loads(value[5:])
+        except (json.JSONDecodeError, TypeError):
+            parsed = None
+        if isinstance(parsed, list):
+            names = []
+            seen = set()
+            for raw_name in parsed:
+                name = _unprotect_csv_formula(str(raw_name).strip())
+                key = name.casefold()
+                if name and key not in seen:
+                    seen.add(key)
+                    names.append(name)
+            return names
+
+    names = []
+    seen = set()
+    for name in str(value).split(';'):
+        name = _unprotect_csv_formula(name.strip())
+        key = name.casefold()
+        if name and key not in seen:
+            seen.add(key)
+            names.append(name)
+    return names
 
 
 @shared_task
@@ -117,42 +172,131 @@ def import_leads_from_csv(file_contents, organization_id, job_id=None):
             continue
 
         # Flexible aliases for common exports (Lemlist, HubSpot, custom CSVs)
-        first_name = _get_field(normalized_row, 'firstName', 'first_name', 'firstname', 'first name')
-        last_name = _get_field(normalized_row, 'lastName', 'last_name', 'lastname', 'last name')
-        company = _get_field(normalized_row, 'companyName', 'company', 'company_name', 'organization')
+        first_name = _unprotect_csv_formula(
+            _get_field(normalized_row, 'firstName', 'first_name', 'firstname', 'first name')
+        )
+        last_name = _unprotect_csv_formula(
+            _get_field(normalized_row, 'lastName', 'last_name', 'lastname', 'last name')
+        )
+        company = _unprotect_csv_formula(
+            _get_field(normalized_row, 'companyName', 'company', 'company_name', 'organization')
+        )
+        title = _unprotect_csv_formula(
+            _get_field(normalized_row, 'title', 'job_title', 'jobtitle')
+        )
         linkedin_url = _get_field(normalized_row, 'linkedinUrl', 'linkedin_url', 'linkedin', 'linkedin_profile')
-        phone = _get_field(normalized_row, 'phone', 'phoneNumber', 'phone_number', 'mobile', 'phone number')
+        phone = _unprotect_csv_formula(
+            _get_field(normalized_row, 'phone', 'phoneNumber', 'phone_number', 'mobile', 'phone number')
+        )
+        status_value = _get_field(normalized_row, 'status').strip().lower()
+        tags_value = _unprotect_csv_formula(
+            _get_field(normalized_row, 'tags')
+        )
+        import_tags = _parse_import_tags(tags_value)
+        has_tags_column = any(_normalize_key(key) == 'tags' for key in row)
         custom_variables = _extract_custom_variables(row)
 
-        # Normalize phone to E.164 format (add +91 for 10-digit Indian numbers)
-        if phone and not phone.startswith('+'):
-            phone = re.sub(r'[^0-9]', '', phone)  # strip non-digits
+        export_headers = {'email', 'firstname', 'lastname', 'company', 'title', 'phone', 'status', 'tags', 'createdat'}
+        normalized_headers = {_normalize_key(key) for key in row}
+        round_trip_export = export_headers.issubset(normalized_headers)
+
+        # Preserve phone formatting for exporter round trips. Retain the existing
+        # best-effort normalization for legacy imports that predate status/tags.
+        if phone and not phone.startswith('+') and not round_trip_export:
+            phone = re.sub(r'[^0-9]', '', phone)
             if len(phone) == 10:
                 phone = '+91' + phone
             elif len(phone) == 12 and phone.startswith('91'):
                 phone = '+' + phone
             else:
-                phone = '+' + phone  # best-effort prefix
+                phone = '+' + phone
 
         try:
-            # Create or update the Lead for this organization. Matching is case-insensitive
-            # so "John@Acme.com" and "john@acme.com" stay one lead and get one email.
-            fields = {
-                'first_name': first_name,
-                'last_name': last_name,
-                'company': company,
-                'linkedin_url': linkedin_url or None,
-                'phone': phone or None,
-                'custom_variables': custom_variables,
-            }
-            lead = Lead.objects.filter(organization=org, email__iexact=email).first()
-            created = lead is None
-            if created:
-                Lead.objects.create(organization=org, email=email, **fields)
-            else:
-                for name, value in fields.items():
-                    setattr(lead, name, value)
-                lead.save()
+            with transaction.atomic():
+                org_lock = Organization.objects.select_for_update().filter(pk=org.pk).first()
+                if org_lock is not None:
+                    org = org_lock
+                # Create or update the Lead for this organization. Matching is case-insensitive
+                # so "John@Acme.com" and "john@acme.com" stay one lead and get one email.
+                fields = {
+                    'first_name': first_name,
+                    'last_name': last_name,
+                    'company': company,
+                    'linkedin_url': linkedin_url or None,
+                    'phone': phone or None,
+                    'custom_variables': custom_variables,
+                }
+                if title:
+                    fields['custom_variables'] = {
+                        **custom_variables,
+                        'title': title,
+                    }
+                if status_value == 'unsubscribed':
+                    fields['global_unsubscribe'] = True
+                elif status_value == 'active':
+                    fields['global_unsubscribe'] = False
+
+                lead = Lead.objects.select_for_update().filter(
+                    organization=org,
+                    email__iexact=email,
+                ).first()
+                created = lead is None
+                if created:
+                    try:
+                        with transaction.atomic():
+                            lead = Lead.objects.create(organization=org, email=email, **fields)
+                    except IntegrityError:
+                        lead = Lead.objects.select_for_update().filter(
+                            organization=org,
+                            email__iexact=email,
+                        ).first()
+                        if lead is None:
+                            raise
+                        created = False
+                        for name, value in fields.items():
+                            setattr(lead, name, value)
+                        lead.save(update_fields=[*fields.keys()])
+                else:
+                    for name, value in fields.items():
+                        setattr(lead, name, value)
+                    lead.save()
+
+                if has_tags_column:
+                    desired_tags = []
+                    seen_tag_ids = set()
+                    for tag_name in import_tags:
+                        tag = Tag.objects.filter(
+                            organization=org,
+                            name__iexact=tag_name,
+                        ).first()
+                        if tag is None:
+                            try:
+                                with transaction.atomic():
+                                    tag, _ = Tag.objects.get_or_create(
+                                        organization=org,
+                                        name=tag_name,
+                                        defaults={'color': '#6366f1'},
+                                    )
+                            except IntegrityError:
+                                tag = Tag.objects.filter(
+                                    organization=org,
+                                    name__iexact=tag_name,
+                                ).first()
+                                if tag is None:
+                                    raise
+                        if tag.id not in seen_tag_ids:
+                            seen_tag_ids.add(tag.id)
+                            desired_tags.append(tag)
+
+                    LeadTag.objects.filter(lead=lead).exclude(
+                        tag_id__in=[tag.id for tag in desired_tags]
+                    ).delete()
+                    for tag in desired_tags:
+                        LeadTag.objects.get_or_create(
+                            organization=org,
+                            lead=lead,
+                            tag=tag,
+                        )
         except Exception as exc:
             failed_count += 1
             error_log.append({

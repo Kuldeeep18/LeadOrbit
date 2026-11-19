@@ -1,4 +1,11 @@
+import csv
+import io
+import re
+import unicodedata
+import json
+
 from django.db.models import Q
+from django.http import StreamingHttpResponse
 from rest_framework import viewsets, parsers, status
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action
@@ -9,6 +16,61 @@ from .serializers import BlockedDomainSerializer, LeadImportJobSerializer, LeadS
 
 
 MAX_CSV_IMPORT_BYTES = 10 * 1024 * 1024
+CSV_EXPORT_HEADERS = [
+    'email',
+    'first_name',
+    'last_name',
+    'company',
+    'title',
+    'phone',
+    'status',
+    'tags',
+    'created_at',
+]
+
+
+def _protect_csv_formula(value, field_name=None):
+    if value is None:
+        return ''
+    text = str(value)
+    if field_name == 'phone' and re.fullmatch(r'[+\d][+\d\s().-]*', text):
+        return text
+    index = 0
+    while index < len(text):
+        char = text[index]
+        category = unicodedata.category(char)
+        if char.isspace() or ord(char) < 32 or 127 <= ord(char) <= 159 or category in ('Cf', 'Zl', 'Zp'):
+            index += 1
+            continue
+        break
+    if index < len(text) and text[index] in ('=', '+', '-', '@'):
+        return "'" + text
+    return text
+
+
+def _csv_value(value):
+    if value is None:
+        return ''
+    if hasattr(value, 'isoformat'):
+        return value.isoformat()
+    return str(value)
+
+
+def _serialize_export_tags(tag_names):
+    protected_names = [
+        _protect_csv_formula(name)
+        for name in tag_names
+    ]
+    return 'json:' + json.dumps(protected_names, ensure_ascii=False)
+
+
+def _get_lead_title(lead):
+    custom_variables = lead.custom_variables if isinstance(lead.custom_variables, dict) else {}
+    for key in ('title', 'job_title', 'jobtitle'):
+        value = custom_variables.get(key)
+        if value not in (None, ''):
+            return value
+    return ''
 
 
 def _decode_csv_upload(raw):
@@ -134,6 +196,54 @@ class LeadViewSet(viewsets.ModelViewSet):
             },
             status=status.HTTP_202_ACCEPTED,
         )
+
+    @action(detail=False, methods=['get'], url_path='export_csv')
+    def export_csv(self, request):
+        queryset = self.get_queryset().order_by('created_at', 'id').prefetch_related(
+            'lead_tags__tag'
+        )
+
+        def generate_csv_rows():
+            buffer = io.StringIO(newline='')
+            writer = csv.writer(buffer, dialect='excel')
+            writer.writerow(CSV_EXPORT_HEADERS)
+            yield buffer.getvalue()
+            buffer.seek(0)
+            buffer.truncate(0)
+
+            for lead in queryset.iterator(chunk_size=500):
+                tags = _serialize_export_tags([
+                    link.tag.name
+                    for link in sorted(
+                        lead.lead_tags.all(),
+                        key=lambda relation: relation.tag.name.casefold(),
+                    )
+                ])
+                row = [
+                    lead.email,
+                    lead.first_name,
+                    lead.last_name,
+                    lead.company,
+                    _get_lead_title(lead),
+                    lead.phone,
+                    'unsubscribed' if lead.global_unsubscribe else 'active',
+                    tags,
+                    lead.created_at,
+                ]
+                writer.writerow([
+                    _protect_csv_formula(_csv_value(value), CSV_EXPORT_HEADERS[index])
+                    for index, value in enumerate(row)
+                ])
+                yield buffer.getvalue()
+                buffer.seek(0)
+                buffer.truncate(0)
+
+        response = StreamingHttpResponse(
+            generate_csv_rows(),
+            content_type='text/csv; charset=utf-8',
+        )
+        response['Content-Disposition'] = 'attachment; filename="leads_export.csv"'
+        return response
 
     @action(detail=True, methods=['post'], url_path='tags')
     def assign_tags(self, request, pk=None):
