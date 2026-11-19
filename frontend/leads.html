@@ -203,6 +203,9 @@
                         <button class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#uploadModal">
                             <i class="bi bi-upload me-1" aria-hidden="true"></i> Import CSV
                         </button>
+                        <button id="export-csv-btn" class="btn btn-sm btn-outline-primary" type="button">
+                            <i class="bi bi-download me-1" aria-hidden="true"></i> Export CSV
+                        </button>
                         <button id="logout-btn" class="btn btn-sm btn-logout" aria-label="Log out">Logout</button>
                     </div>
                 </div>
@@ -788,6 +791,47 @@
             renderImportHistory(allImportJobs);
         }
 
+        async function exportLeadsCsv() {
+            const btn = document.getElementById('export-csv-btn');
+            if (btn.disabled) return;
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span> Exporting...';
+            let objectUrl = null;
+            let link = null;
+            try {
+                const res = await fetchWithAuth('/leads/export_csv/');
+                if (!res.ok) {
+                    if (res.status === 401) {
+                        throw new Error('Authentication required');
+                    }
+                    if (res.status === 403) {
+                        throw new Error('You do not have permission to export leads');
+                    }
+                    throw new Error('Unable to export leads');
+                }
+
+                const blob = await res.blob();
+                objectUrl = URL.createObjectURL(blob);
+                link = document.createElement('a');
+                link.href = objectUrl;
+                link.download = 'leads_export.csv';
+                document.body.appendChild(link);
+                link.click();
+                alert('Leads exported successfully.');
+            } catch (err) {
+                alert(err.message || 'Unable to export leads.');
+            } finally {
+                if (link) link.remove();
+                if (objectUrl) {
+                    const urlToRevoke = objectUrl;
+                    setTimeout(() => URL.revokeObjectURL(urlToRevoke), 1000);
+                }
+                btn.disabled = false;
+                btn.innerHTML = '<i class="bi bi-download me-1" aria-hidden="true"></i> Export CSV';
+            }
+        }
+
         // ─── Text search (client-side, applied on top of server results) ────
 
         function applySearch() {
@@ -818,6 +862,7 @@
 
             document.getElementById('lead-search').addEventListener('input', applySearch);
             document.getElementById('refresh-history-btn').addEventListener('click', loadImportHistory);
+            document.getElementById('export-csv-btn').addEventListener('click', exportLeadsCsv);
 
             const filterPanel = document.getElementById('filter-panel');
             document.getElementById('filter-toggle-btn').addEventListener('click', () => {

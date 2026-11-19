@@ -31,6 +31,11 @@ The platform uses semantic REST principles built via Django REST Framework. Auth
 - **Req**: `multipart/form-data` with `file` (CSV), plus JSON configuration mapping CSV columns to Lead fields.
 - **Res**: `{"task_id": "uuid", "message": "Import queued successfully"}`
 
+**`GET /api/v1/leads/export_csv/`**
+- **Auth**: Organization-authenticated user required.
+- **Res**: `text/csv` download containing `email`, `first_name`, `last_name`, `company`, `title`, `phone`, `status`, `tags`, and `created_at`.
+- **Filename**: `leads_export.csv`
+
 ### 3. Campaigns
 **`GET /api/v1/campaigns/`**
 - **Res**: List of Campaigns with aggregated active counts (paginated).

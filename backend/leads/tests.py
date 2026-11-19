@@ -1,3 +1,5 @@
+import csv
+import io
 from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
@@ -554,3 +556,377 @@ class LeadDataIntegrityTests(APITestCase):
         add_tagged_leads('more', 5)
 
         self.assertEqual(count_list_queries(), baseline)
+
+
+class LeadCsvExportTests(APITestCase):
+    def setUp(self):
+        self.org = Organization.objects.create(name='Export Org')
+        self.other_org = Organization.objects.create(name='Other Export Org')
+        self.user = _make_user(self.org)
+
+    def _export_text(self):
+        response = self.client.get('/api/v1/leads/export_csv/')
+        if hasattr(response, 'streaming_content'):
+            return b''.join(response.streaming_content).decode('utf-8')
+        return response.content.decode('utf-8')
+
+    def test_authenticated_user_exports_csv_headers_and_leads(self):
+        lead = _make_lead(
+            self.org,
+            'alice@example.com',
+            first_name='Alice',
+            last_name='Smith',
+            company='Acme',
+            phone='+123456789',
+            custom_variables={'title': 'CEO'},
+        )
+        tag = _make_tag(self.org, 'VIP')
+        LeadTag.objects.create(organization=self.org, lead=lead, tag=tag)
+        self.client.force_authenticate(self.user)
+
+        response = self.client.get('/api/v1/leads/export_csv/')
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response['Content-Type'], 'text/csv; charset=utf-8')
+        self.assertIn('leads_export.csv', response['Content-Disposition'])
+        text = b''.join(response.streaming_content).decode('utf-8')
+        rows = list(csv.DictReader(io.StringIO(text)))
+        self.assertEqual(
+            list(rows[0].keys()),
+            ['email', 'first_name', 'last_name', 'company', 'title', 'phone', 'status', 'tags', 'created_at'],
+        )
+        self.assertEqual(rows[0]['email'], 'alice@example.com')
+        self.assertEqual(rows[0]['title'], 'CEO')
+        self.assertEqual(rows[0]['status'], 'active')
+        self.assertEqual(rows[0]['tags'], 'json:["VIP"]')
+
+    def test_unauthenticated_request_is_rejected(self):
+        response = self.client.get('/api/v1/leads/export_csv/')
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_export_excludes_other_organizations_and_handles_empty_dataset(self):
+        _make_lead(self.other_org, 'secret@example.com')
+        self.client.force_authenticate(self.user)
+
+        text = self._export_text()
+        rows = list(csv.DictReader(io.StringIO(text)))
+
+        self.assertEqual(rows, [])
+        self.assertEqual(
+            text.strip(),
+            'email,first_name,last_name,company,title,phone,status,tags,created_at',
+        )
+
+    def test_export_excludes_other_org_when_current_org_has_leads(self):
+        _make_lead(self.org, 'visible@example.com')
+        _make_lead(self.other_org, 'hidden@example.com')
+        self.client.force_authenticate(self.user)
+
+        text = self._export_text()
+
+        self.assertIn('visible@example.com', text)
+        self.assertNotIn('hidden@example.com', text)
+
+    def test_special_characters_are_escaped_and_tags_are_semicolon_separated(self):
+        lead = _make_lead(
+            self.org,
+            'comma@example.com',
+            first_name='Ana, "AJ"',
+            company='Acme\nLabs',
+        )
+        for name in ('Cold', 'VIP'):
+            tag = _make_tag(self.org, name)
+            LeadTag.objects.create(organization=self.org, lead=lead, tag=tag)
+        self.client.force_authenticate(self.user)
+
+        text = self._export_text()
+        rows = list(csv.DictReader(io.StringIO(text)))
+
+        self.assertEqual(rows[0]['first_name'], 'Ana, "AJ"')
+        self.assertEqual(rows[0]['company'], 'Acme\nLabs')
+        self.assertEqual(rows[0]['tags'], 'json:["Cold", "VIP"]')
+
+    def test_formula_injection_values_are_prefixed(self):
+        lead = _make_lead(
+            self.org,
+            '=HYPERLINK("bad")',
+            first_name='-SUM(A1:A2)',
+            last_name='@cmd',
+            company='+data',
+        )
+        self.client.force_authenticate(self.user)
+
+        text = self._export_text()
+        rows = list(csv.DictReader(io.StringIO(text)))
+
+        self.assertTrue(rows[0]['email'].startswith("'"))
+        self.assertTrue(rows[0]['first_name'].startswith("'"))
+        self.assertTrue(rows[0]['last_name'].startswith("'"))
+        self.assertTrue(rows[0]['company'].startswith("'"))
+
+    def test_csv_import_still_creates_lead_with_title(self):
+        self.client.force_authenticate(self.user)
+
+        import_leads_from_csv(
+            'email,first_name,title\nimported@example.com,Imported,VP Sales\n',
+            str(self.org.id),
+        )
+
+        lead = Lead.objects.get(organization=self.org, email='imported@example.com')
+        self.assertEqual(lead.custom_variables['title'], 'VP Sales')
+
+    def test_unsubscribed_status_round_trips_to_global_unsubscribe(self):
+        lead = _make_lead(
+            self.org,
+            'roundtrip@example.com',
+            first_name='Round',
+            global_unsubscribe=True,
+        )
+        self.client.force_authenticate(self.user)
+
+        exported = self._export_text()
+        lead.delete()
+        import_leads_from_csv(exported, str(self.org.id))
+
+        restored = Lead.objects.get(organization=self.org, email='roundtrip@example.com')
+        self.assertTrue(restored.global_unsubscribe)
+
+    def test_active_status_round_trip_does_not_change_unrelated_setting(self):
+        lead = _make_lead(
+            self.org,
+            'active-roundtrip@example.com',
+            first_name='Active',
+            global_unsubscribe=False,
+        )
+        self.client.force_authenticate(self.user)
+
+        exported = self._export_text()
+        import_leads_from_csv(exported, str(self.org.id))
+
+        restored = Lead.objects.get(organization=self.org, email=lead.email)
+        self.assertFalse(restored.global_unsubscribe)
+
+    def test_exported_tags_restore_actual_relationships_and_duplicate_names(self):
+        lead = _make_lead(self.org, 'tagged@example.com')
+        first_tag = _make_tag(self.org, 'VIP')
+        LeadTag.objects.create(organization=self.org, lead=lead, tag=first_tag)
+        LeadTag.objects.create(
+            organization=self.org,
+            lead=lead,
+            tag=_make_tag(self.org, 'Cold'),
+        )
+        self.client.force_authenticate(self.user)
+
+        exported = self._export_text()
+        LeadTag.objects.filter(lead=lead).delete()
+        import_leads_from_csv(exported, str(self.org.id))
+
+        restored_tag_names = set(
+            LeadTag.objects.filter(lead=lead).values_list('tag__name', flat=True)
+        )
+        self.assertEqual(restored_tag_names, {'VIP', 'Cold'})
+        self.assertEqual(
+            LeadTag.objects.filter(lead=lead).values('tag__organization_id').distinct().count(),
+            1,
+        )
+
+    def test_empty_tags_remove_existing_relationships_on_import(self):
+        lead = _make_lead(self.org, 'empty-tags@example.com')
+        LeadTag.objects.create(
+            organization=self.org,
+            lead=lead,
+            tag=_make_tag(self.org, 'Existing'),
+        )
+        self.client.force_authenticate(self.user)
+
+        import_leads_from_csv(
+            'email,tags\nempty-tags@example.com,\n',
+            str(self.org.id),
+        )
+
+        self.assertFalse(LeadTag.objects.filter(lead=lead).exists())
+
+    def test_duplicate_import_tags_create_one_organization_tag(self):
+        self.client.force_authenticate(self.user)
+        lead = _make_lead(self.org, 'duplicates@example.com')
+
+        import_leads_from_csv(
+            'email,tags\nduplicates@example.com,VIP; VIP; vip\n',
+            str(self.org.id),
+        )
+
+        self.assertEqual(
+            LeadTag.objects.filter(
+                lead=lead,
+                tag__organization=self.org,
+            ).count(),
+            1,
+        )
+
+    def test_import_tag_name_is_not_resolved_across_orgs(self):
+        _make_tag(self.other_org, 'PrivateTag')
+        self.client.force_authenticate(self.user)
+
+        import_leads_from_csv(
+            'email,tags\nisolated@example.com,PrivateTag\n',
+            str(self.org.id),
+        )
+
+        lead = Lead.objects.get(organization=self.org, email='isolated@example.com')
+        relationship = LeadTag.objects.get(lead=lead)
+        self.assertEqual(relationship.tag.organization, self.org)
+        self.assertEqual(relationship.tag.name, 'PrivateTag')
+
+    def test_formula_protection_covers_text_title_company_and_tags(self):
+        lead = _make_lead(
+            self.org,
+            'formula-fields@example.com',
+            first_name='  =SUM(A1:A2)',
+            company='\t@cmd',
+            custom_variables={'title': '\r\n-HYPERLINK("bad")'},
+        )
+        tag = _make_tag(self.org, '=1+1')
+        LeadTag.objects.create(organization=self.org, lead=lead, tag=tag)
+        self.client.force_authenticate(self.user)
+
+        text = self._export_text()
+        rows = list(csv.DictReader(io.StringIO(text)))
+
+        self.assertEqual(rows[0]['first_name'], "'  =SUM(A1:A2)")
+        self.assertEqual(rows[0]['company'], "'\t@cmd")
+        self.assertEqual(rows[0]['title'], "'\r\n-HYPERLINK(\"bad\")")
+        self.assertEqual(rows[0]['tags'], 'json:["\'=1+1"]')
+
+    def test_legitimate_phone_numbers_and_normal_text_are_not_corrupted(self):
+        lead = _make_lead(
+            self.org,
+            'legitimate@example.com',
+            first_name='José, "AJ"',
+            company='Research & Development\nEurope',
+            phone='+1 (555) 123-4567',
+            custom_variables={'title': 'VP - Sales'},
+        )
+        self.client.force_authenticate(self.user)
+
+        text = self._export_text()
+        rows = list(csv.DictReader(io.StringIO(text)))
+
+        self.assertEqual(rows[0]['first_name'], 'José, "AJ"')
+        self.assertEqual(rows[0]['company'], 'Research & Development\nEurope')
+        self.assertEqual(rows[0]['phone'], '+1 (555) 123-4567')
+        self.assertEqual(rows[0]['title'], 'VP - Sales')
+
+    def test_phone_with_or_without_plus_round_trips_without_reformatting(self):
+        for suffix, phone in (
+            ('plus', '+44 20 7946 0958'),
+            ('local', '5551234567'),
+        ):
+            lead = _make_lead(
+                self.org,
+                f'{suffix}@example.com',
+                phone=phone,
+            )
+            self.client.force_authenticate(self.user)
+
+            exported = self._export_text()
+            lead.delete()
+            import_leads_from_csv(exported, str(self.org.id))
+
+            restored = Lead.objects.get(
+                organization=self.org,
+                email=f'{suffix}@example.com',
+            )
+            self.assertEqual(restored.phone, phone)
+
+    def test_tag_with_semicolon_unicode_and_formula_prefix_round_trips(self):
+        lead = _make_lead(self.org, 'semicolon-tag@example.com')
+        tag = _make_tag(self.org, 'VIP; 東京; =SUM(A1:A2)')
+        LeadTag.objects.create(organization=self.org, lead=lead, tag=tag)
+        self.client.force_authenticate(self.user)
+
+        exported = self._export_text()
+        LeadTag.objects.filter(lead=lead).delete()
+        import_leads_from_csv(exported, str(self.org.id))
+
+        relationship = LeadTag.objects.get(lead=lead)
+        self.assertEqual(relationship.tag.name, 'VIP; 東京; =SUM(A1:A2)')
+
+    def test_legacy_semicolon_tags_remain_supported(self):
+        self.client.force_authenticate(self.user)
+
+        import_leads_from_csv(
+            'email,tags\nlegacy-tags@example.com,VIP; Cold\n',
+            str(self.org.id),
+        )
+
+        lead = Lead.objects.get(
+            organization=self.org,
+            email='legacy-tags@example.com',
+        )
+        names = set(
+            LeadTag.objects.filter(lead=lead).values_list('tag__name', flat=True)
+        )
+        self.assertEqual(names, {'VIP', 'Cold'})
+
+    def test_unicode_format_control_before_formula_prefix_is_restored(self):
+        lead = _make_lead(
+            self.org,
+            'unicode-control@example.com',
+            first_name='\u202e=SUM(A1:A2)',
+        )
+        self.client.force_authenticate(self.user)
+
+        text = self._export_text()
+        rows = list(csv.DictReader(io.StringIO(text)))
+
+        self.assertEqual(rows[0]['first_name'], "'\u202e=SUM(A1:A2)")
+
+        lead.delete()
+        import_leads_from_csv(text, str(self.org.id))
+        restored = Lead.objects.get(
+            organization=self.org,
+            email='unicode-control@example.com',
+        )
+        self.assertEqual(restored.first_name, '\u202e=SUM(A1:A2)')
+
+    def test_exported_title_is_imported_as_canonical_title_key(self):
+        lead = _make_lead(
+            self.org,
+            'title-roundtrip@example.com',
+            custom_variables={'job_title': 'Director'},
+        )
+        lead.delete()
+        self.client.force_authenticate(self.user)
+
+        import_leads_from_csv(
+            'email,title\ntitle-roundtrip@example.com,Director\n',
+            str(self.org.id),
+        )
+
+        restored = Lead.objects.get(
+            organization=self.org,
+            email='title-roundtrip@example.com',
+        )
+        self.assertEqual(restored.custom_variables['title'], 'Director')
+
+    def test_export_tag_lookup_does_not_scale_queries_per_lead(self):
+        lead = _make_lead(self.org, 'query-one@example.com')
+        tag = _make_tag(self.org, 'VIP')
+        LeadTag.objects.create(organization=self.org, lead=lead, tag=tag)
+        self.client.force_authenticate(self.user)
+
+        with CaptureQueriesContext(connection) as few_queries:
+            few_text = self._export_text()
+        few_count = len(few_queries)
+        self.assertIn('VIP', few_text)
+
+        for index in range(20):
+            extra_lead = _make_lead(self.org, f'query-{index}@example.com')
+            LeadTag.objects.create(organization=self.org, lead=extra_lead, tag=tag)
+
+        with CaptureQueriesContext(connection) as many_queries:
+            many_text = self._export_text()
+        many_count = len(many_queries)
+
+        self.assertIn('query-19@example.com', many_text)
+        self.assertLessEqual(many_count, few_count + 2)
