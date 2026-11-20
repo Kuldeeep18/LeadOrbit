@@ -82,9 +82,13 @@ frontend/
   src/                  # leftover Vite starter files; not used by the live UI
 
 outreach_frontend/      # currently empty
-*.md                    # product and architecture docs from earlier phases
-```
 
+docs/                   # product, architecture and engineering docs (see docs/README.md)
+  samples/              # sample files, e.g. lemlist_style_contacts.csv
+.github/                # workflows and issue/PR templates
+deploy/                 # Dockerfiles, Caddyfile, entrypoint scripts
+
+> 📚 Project documentation lives in [`docs/`](docs/README.md).
 ## Local Setup
 
 ### 1. Create a virtual environment and install dependencies
