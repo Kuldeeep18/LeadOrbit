@@ -609,3 +609,24 @@ if (document.readyState === 'loading') {
 } else {
     initKeyboardShortcuts();
 }
+
+// Initialize Bootstrap tooltips, including dynamically rendered elements.
+function initTooltips() {
+    if (!window.bootstrap?.Tooltip) return;
+
+    document.querySelectorAll('[data-bs-toggle="tooltip"]').forEach(element => {
+        bootstrap.Tooltip.getOrCreateInstance(element);
+    });
+}
+
+if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initTooltips);
+} else {
+    initTooltips();
+}
+
+const tooltipObserver = new MutationObserver(() => initTooltips());
+tooltipObserver.observe(document.documentElement, {
+    childList: true,
+    subtree: true
+});
