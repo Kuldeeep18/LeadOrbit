@@ -183,10 +183,10 @@
         };
 
         const STATUS_DETAILS = {
-            ACTIVE: { label: 'Active' },
-            DRAFT: { label: 'Draft' },
-            PAUSED: { label: 'Paused' },
-            COMPLETED: { label: 'Completed' },
+            ACTIVE: { label: 'Active', description: 'Campaign is currently running and sending emails.' },
+            DRAFT: { label: 'Draft', description: 'Campaign is being prepared and has not started.' },
+            PAUSED: { label: 'Paused', description: 'Campaign is temporarily stopped and can be resumed.' },
+            COMPLETED: { label: 'Completed', description: 'Campaign has finished all scheduled activities.' },
         };
 
         let allCampaigns = [];
@@ -291,8 +291,8 @@
 
         function buildStatusPill(status) {
             const safeStatus = normalizeStatus(status);
-            const label = STATUS_DETAILS[safeStatus].label;
-            return `<span class="status-pill ${safeStatus}">${label}</span>`;
+            const { label, description } = STATUS_DETAILS[safeStatus];
+            return `<span class="status-pill ${safeStatus}" data-bs-toggle="tooltip" data-bs-placement="top" title="${description}">${label}</span>`;
         }
 
         function renderCampaignGrid() {

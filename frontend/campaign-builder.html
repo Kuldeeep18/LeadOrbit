@@ -1036,7 +1036,7 @@
     </button>
 </div>
 
-<button class="status-toggle off" id="status-toggle" title="Toggle Active/Inactive" aria-label="Toggle campaign status"></button>   
+<button class="status-toggle off" id="status-toggle" data-bs-toggle="tooltip" data-bs-placement="top" title="Campaign is being prepared and has not started." aria-label="Toggle campaign status"></button>
             <i class="bi bi-gear" style="color:#94a3b8; cursor:pointer;" id="settings-icon" aria-hidden="true"></i>
         </div>
         <div class="d-flex align-items-center gap-3">
@@ -1693,7 +1693,7 @@ ${rows || `
 </tr>
 `}
 </tbody>
-                           
+
                         </table>
                     </div>
                 </div>
@@ -2582,12 +2582,33 @@ return data;
             });
         });
 
-        // Status toggle
-        document.getElementById('status-toggle').addEventListener('click', function () {
+        // Status toggle and contextual tooltip
+        const statusToggle = document.getElementById('status-toggle');
+
+        function updateStatusToggleTooltip() {
+            const isActive = statusToggle.classList.contains('on');
+            const description = isActive
+                ? 'Campaign is currently running and sending emails.'
+                : 'Campaign is being prepared and has not started.';
+
+            statusToggle.setAttribute('title', description);
+            statusToggle.setAttribute('data-bs-title', description);
+
+            if (window.bootstrap?.Tooltip) {
+                const existingTooltip = bootstrap.Tooltip.getInstance(statusToggle);
+                if (existingTooltip) existingTooltip.dispose();
+                bootstrap.Tooltip.getOrCreateInstance(statusToggle);
+            }
+        }
+
+        statusToggle.addEventListener('click', function () {
             this.classList.toggle('on');
             this.classList.toggle('off');
+            updateStatusToggleTooltip();
             if (activeTab === 'launch') renderLaunchTab();
         });
+
+        updateStatusToggleTooltip();
 
         // ─── SAVE / NEXT ────────────────────
         document.getElementById('next-step-btn').addEventListener('click', async () => {
@@ -2654,6 +2675,7 @@ document.getElementById('campaign-name').value = data.name;
                         if (data.status === 'ACTIVE') {
                             document.getElementById('status-toggle').classList.add('on');
                             document.getElementById('status-toggle').classList.remove('off');
+                            updateStatusToggleTooltip();
                         }
                         if (data.connected_account && data.connected_account.id) {
                             selectedConnectedAccountId = data.connected_account.id;
