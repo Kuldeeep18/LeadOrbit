@@ -20,7 +20,7 @@ class UserSerializer(serializers.ModelSerializer):
     organization = OrganizationSerializer(read_only=True)
     class Meta:
         model = User
-        fields = ['id', 'email', 'role', 'organization', 'is_active']
+        fields = ['id', 'email', 'role', 'organization', 'is_active', 'deletion_scheduled_at']
 
 class RegisterSerializer(serializers.Serializer):
     email = serializers.EmailField()

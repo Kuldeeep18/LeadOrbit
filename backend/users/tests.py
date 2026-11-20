@@ -1,3 +1,5 @@
+from datetime import timedelta
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -191,3 +193,172 @@ class RegistrationAndLoginTests(APITestCase):
         )
 
         self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+
+class AccountDeactivationTests(APITestCase):
+    def setUp(self):
+        self.organization = Organization.objects.create(name='Test Org')
+        self.user = User.objects.create_user(
+            email='user@example.com',
+            password='StrongPass123!',
+            organization=self.organization,
+            role=User.ROLE_MEMBER,
+        )
+        self.other_user = User.objects.create_user(
+            email='other@example.com',
+            password='StrongPass123!',
+            organization=self.organization,
+            role=User.ROLE_MEMBER,
+        )
+
+    def test_unauthenticated_request_is_rejected(self):
+        response = self.client.delete(
+            '/api/v1/auth/account/',
+            {'email': 'user@example.com'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_authenticated_user_can_deactivate_own_account_with_correct_email(self):
+        self.client.force_authenticate(self.user)
+        before = timezone.now()
+        response = self.client.delete(
+            '/api/v1/auth/account/',
+            {'email': 'user@example.com'},
+            format='json',
+        )
+        after = timezone.now()
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data, {'message': 'Account scheduled for deletion in 30 days.'})
+
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.is_active)
+        self.assertIsNotNone(self.user.deletion_scheduled_at)
+        expected_scheduled_min = before + timedelta(days=30)
+        expected_scheduled_max = after + timedelta(days=30)
+        self.assertTrue(expected_scheduled_min <= self.user.deletion_scheduled_at <= expected_scheduled_max)
+
+    def test_authenticated_user_can_deactivate_with_case_insensitive_email(self):
+        self.client.force_authenticate(self.user)
+        response = self.client.delete(
+            '/api/v1/auth/account/',
+            {'email': 'USER@EXAMPLE.COM'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.user.refresh_from_db()
+        self.assertFalse(self.user.is_active)
+
+    def test_incorrect_confirmation_email_is_rejected(self):
+        self.client.force_authenticate(self.user)
+        response = self.client.delete(
+            '/api/v1/auth/account/',
+            {'email': 'wrong@example.com'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('email', response.data)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_active)
+        self.assertIsNone(self.user.deletion_scheduled_at)
+
+    def test_missing_confirmation_email_is_rejected(self):
+        self.client.force_authenticate(self.user)
+        response = self.client.delete(
+            '/api/v1/auth/account/',
+            {},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('email', response.data)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_active)
+        self.assertIsNone(self.user.deletion_scheduled_at)
+
+    def test_cannot_deactivate_another_users_account(self):
+        # Even if the authenticated user sends another user's email, it's rejected
+        self.client.force_authenticate(self.user)
+        response = self.client.delete(
+            '/api/v1/auth/account/',
+            {'email': self.other_user.email},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+        self.other_user.refresh_from_db()
+        self.assertTrue(self.other_user.is_active)
+        self.assertIsNone(self.other_user.deletion_scheduled_at)
+        self.user.refresh_from_db()
+        self.assertTrue(self.user.is_active)
+
+    def test_user_data_is_not_immediately_hard_deleted(self):
+        self.client.force_authenticate(self.user)
+        user_id = self.user.id
+        org_id = self.organization.id
+
+        response = self.client.delete(
+            '/api/v1/auth/account/',
+            {'email': self.user.email},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.assertTrue(User.objects.filter(id=user_id).exists())
+        self.assertTrue(Organization.objects.filter(id=org_id).exists())
+
+    def test_repeated_deactivation_requests_do_not_reset_original_schedule(self):
+        fixed_schedule = timezone.now() + timedelta(days=20)
+        self.user.is_active = False
+        self.user.deletion_scheduled_at = fixed_schedule
+        self.user.save(update_fields=['is_active', 'deletion_scheduled_at'])
+
+        self.client.force_authenticate(self.user)
+        response = self.client.delete(
+            '/api/v1/auth/account/',
+            {'email': self.user.email},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+
+        self.user.refresh_from_db()
+        self.assertEqual(self.user.deletion_scheduled_at, fixed_schedule)
+
+    def test_deactivated_user_cannot_obtain_token(self):
+        self.user.is_active = False
+        self.user.save(update_fields=['is_active'])
+
+        response = self.client.post(
+            '/api/v1/token/',
+            {'email': self.user.email, 'password': 'StrongPass123!'},
+            format='json',
+        )
+        self.assertEqual(response.status_code, status.HTTP_401_UNAUTHORIZED)
+
+    def test_deactivated_user_cannot_access_protected_endpoints_with_existing_token(self):
+        # Obtain token while active
+        token_response = self.client.post(
+            '/api/v1/token/',
+            {'email': self.user.email, 'password': 'StrongPass123!'},
+            format='json',
+        )
+        access_token = token_response.data['access']
+
+        # Verify access works with token
+        self.client.credentials(HTTP_AUTHORIZATION=f'Bearer {access_token}')
+        res_before = self.client.get('/api/v1/auth/me/')
+        self.assertEqual(res_before.status_code, status.HTTP_200_OK)
+
+        # Deactivate account via the endpoint
+        deact_res = self.client.delete(
+            '/api/v1/auth/account/',
+            {'email': self.user.email},
+            format='json',
+        )
+        self.assertEqual(deact_res.status_code, status.HTTP_200_OK)
+
+        # Immediate follow-up request with same token must be rejected because is_active is False
+        res_after = self.client.get('/api/v1/auth/me/')
+        self.assertEqual(res_after.status_code, status.HTTP_401_UNAUTHORIZED)
