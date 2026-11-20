@@ -163,42 +163,64 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
     <script type="module" src="./main.js"></script>
-    <script type="module">
-        import { register } from './api.js';
+   <script type="module">
+    import { register } from './api.js';
 
-        document.addEventListener('DOMContentLoaded', () => {
-            const form = document.querySelector('form');
-            if (form) {
-                form.addEventListener('submit', async (e) => {
-                    e.preventDefault();
+    const form = document.querySelector('form');
+    const btn = form.querySelector('button[type="submit"]');
 
-                    const first_name = document.getElementById('firstName').value;
-                    const last_name = document.getElementById('lastName').value;
-                    const email = document.getElementById('emailAddress').value;
-                    const password = document.getElementById('password').value;
+    const originalText = btn.innerHTML;
+    let isSubmitting = false;
 
-                    const organization_name = first_name + "'s Organization";
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
 
-                    try {
-                        const btn = form.querySelector('button[type="submit"]');
-                        btn.disabled = true;
-                        btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status" aria-hidden="true"></span> Signing up...';
+        // Prevent duplicate submissions
+        if (isSubmitting) return;
 
-                        await register({
-                            first_name, last_name, email, password, organization_name
-                        });
+        isSubmitting = true;
+        btn.disabled = true;
+        btn.setAttribute('aria-busy', 'true');
 
-                        window.location.href = '/dashboard.html';
-                    } catch (err) {
-                        alert('Registration failed. Please try again.');
-                        const btn = form.querySelector('button[type="submit"]');
-                        btn.disabled = false;
-                        btn.textContent = 'Sign Up';
-                    }
-                });
-            }
-        });
-    </script>
+        // Show loading spinner
+        btn.innerHTML = `
+            <span class="spinner-border spinner-border-sm me-2"
+                  role="status"
+                  aria-hidden="true"></span>
+            Signing Up...
+        `;
+
+        const first_name = document.getElementById('firstName').value;
+        const last_name = document.getElementById('lastName').value;
+        const email = document.getElementById('emailAddress').value;
+        const password = document.getElementById('password').value;
+
+        const organization_name = first_name + "'s Organization";
+
+        try {
+            await register({
+                first_name,
+                last_name,
+                email,
+                password,
+                organization_name
+            });
+
+            window.location.href = '/dashboard.html';
+
+        } catch (err) {
+            console.error('Registration error:', err);
+
+            alert('Registration failed. Please try again.');
+
+            // Restore button after failure
+            isSubmitting = false;
+            btn.disabled = false;
+            btn.removeAttribute('aria-busy');
+            btn.innerHTML = originalText;
+        }
+    });
+</script>
 </body>
 
 </html>
