@@ -473,6 +473,34 @@ class LeadDataIntegrityTests(APITestCase):
         self.user = _make_user(self.org)
         self.client.force_authenticate(self.user)
 
+    def test_lead_creation_trims_string_fields(self):
+        lead = Lead.objects.create(
+            organization=self.org,
+            email='  trim@example.com  ',
+            first_name='  Priyanshi  ',
+            last_name='  Yadav  ',
+            company='  Example Inc  ',
+            phone='  1234567890  ',
+            linkedin_url='  https://example.com/profile  ',
+        )
+
+        self.assertEqual(lead.email, 'trim@example.com')
+        self.assertEqual(lead.first_name, 'Priyanshi')
+        self.assertEqual(lead.last_name, 'Yadav')
+        self.assertEqual(lead.company, 'Example Inc')
+        self.assertEqual(lead.phone, '1234567890')
+        self.assertEqual(lead.linkedin_url, 'https://example.com/profile')
+
+    def test_lead_update_trims_string_fields(self):
+        lead = _make_lead(self.org, 'update@example.com')
+        lead.first_name = '  Updated  '
+        lead.company = '  Updated Company  '
+        lead.save()
+        lead.refresh_from_db()
+
+        self.assertEqual(lead.first_name, 'Updated')
+        self.assertEqual(lead.company, 'Updated Company')
+
     def test_creating_duplicate_lead_returns_400_instead_of_500(self):
         _make_lead(self.org, 'Dana@Example.com')
 
