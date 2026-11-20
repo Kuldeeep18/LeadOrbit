@@ -62,6 +62,70 @@
             outline: 2px solid #3b82f6;
             background: #0f172a;
         }
+        /* Campaign ID and copy button */
+.campaign-id-wrap {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 7px;
+    color: #94a3b8;
+    font-size: 0.72rem;
+    white-space: nowrap;
+}
+
+.campaign-id-wrap[hidden] {
+    display: none;
+}
+
+.campaign-id-value {
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: #cbd5e1;
+    font-family: monospace;
+}
+
+.copy-campaign-id-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 2px 5px;
+    border: 0;
+    border-radius: 4px;
+    background: transparent;
+    color: #93c5fd;
+    cursor: pointer;
+}
+
+.copy-campaign-id-btn:hover,
+.copy-campaign-id-btn:focus-visible {
+    background: rgba(59, 130, 246, 0.18);
+    color: #fff;
+    outline: none;
+}
+
+.campaign-copy-toast {
+    position: fixed;
+    right: 24px;
+    bottom: 24px;
+    z-index: 1000;
+    padding: 10px 16px;
+    border-radius: 8px;
+    background: #064e3b;
+    color: #ecfdf5;
+    font-size: 14px;
+    opacity: 0;
+    transform: translateY(8px);
+    pointer-events: none;
+    transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.campaign-copy-toast.visible {
+    opacity: 1;
+    transform: translateY(0);
+}
 
         .tab-pills {
             display: flex;
@@ -955,8 +1019,24 @@
             <a href="/campaigns.html" style="color:#64748b; text-decoration:none; font-size:1.2rem;"><i
                     class="bi bi-x-lg" aria-hidden="true"></i></a>
             <i class="bi bi-diagram-3" style="color:#94a3b8;" aria-hidden="true"></i>
-            <input type="text" class="campaign-name" id="campaign-name" value="New Campaign" aria-label="Campaign name">
-            <button class="status-toggle off" id="status-toggle" title="Toggle Active/Inactive" aria-label="Toggle campaign status" ></button>
+       <input type="text" class="campaign-name" id="campaign-name" value="New Campaign" aria-label="Campaign name">
+
+<div class="campaign-id-wrap" id="campaign-id-wrap" hidden>
+    <span>Campaign ID:</span>
+
+    <span class="campaign-id-value" id="campaign-id-value"></span>
+
+    <button type="button"
+        class="copy-campaign-id-btn"
+        id="copy-campaign-id-btn"
+        aria-label="Copy campaign ID"
+        title="Copy campaign ID">
+
+        <i class="bi bi-clipboard" aria-hidden="true"></i>
+    </button>
+</div>
+
+<button class="status-toggle off" id="status-toggle" title="Toggle Active/Inactive" aria-label="Toggle campaign status"></button>   
             <i class="bi bi-gear" style="color:#94a3b8; cursor:pointer;" id="settings-icon" aria-hidden="true"></i>
         </div>
         <div class="d-flex align-items-center gap-3">
@@ -972,6 +1052,11 @@
     </div>
 
     <!-- â”€â”€â”€ Main Layout â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ -->
+    <div class="campaign-copy-toast"
+     id="campaign-copy-toast"
+     role="status"
+     aria-live="polite">
+</div>
     <!-- ─── Main Layout ─────────────────────── -->
     <div class="main-layout">
         <!-- Canvas -->
@@ -1197,6 +1282,57 @@
 
         const params = new URLSearchParams(window.location.search);
         const editId = params.get('id');
+        // Display Campaign ID
+function updateCampaignIdDisplay() {
+    const wrapper = document.getElementById('campaign-id-wrap');
+    const value = document.getElementById('campaign-id-value');
+
+    if (!wrapper || !value) return;
+
+    if (campaignId) {
+        value.textContent = String(campaignId);
+        wrapper.hidden = false;
+    } else {
+        value.textContent = '';
+        wrapper.hidden = true;
+    }
+}
+
+// Show toast notification
+let campaignCopyToastTimer;
+
+function showCampaignCopyToast(message, isError = false) {
+    const toast = document.getElementById('campaign-copy-toast');
+
+    if (!toast) return;
+
+    toast.textContent = message;
+    toast.style.background = isError ? '#7f1d1d' : '#064e3b';
+
+    toast.classList.add('visible');
+
+    clearTimeout(campaignCopyToastTimer);
+
+    campaignCopyToastTimer = setTimeout(() => {
+        toast.classList.remove('visible');
+    }, 2500);
+}
+
+// Copy Campaign ID
+async function copyCampaignId() {
+    if (!campaignId) return;
+
+    try {
+        await navigator.clipboard.writeText(String(campaignId));
+
+        showCampaignCopyToast('Campaign ID copied!');
+    } catch (error) {
+        showCampaignCopyToast(
+            'Could not copy Campaign ID. Check clipboard permissions.',
+            true
+        );
+    }
+}
 
         // ─── ICONS MAP ──────────────────────
         const ICONS = {
@@ -1675,8 +1811,11 @@ ${rows || `
             }
 
             const data = await res.json();
-            campaignId = data.id;
-            return data;
+campaignId = data.id;
+
+updateCampaignIdDisplay();
+
+return data;
         }
 
         async function enrollLeads() {
@@ -2482,12 +2621,14 @@ ${rows || `
 
         // ─── INIT ───────────────────────────
         document.addEventListener('DOMContentLoaded', async () => {
+            document.getElementById('copy-campaign-id-btn')
+    .addEventListener('click', copyCampaignId);
+
+updateCampaignIdDisplay();
             document.getElementById('settings-icon').addEventListener('click', () => {
-    const modal = new bootstrap.Modal(
-        document.getElementById('campaignSettingsModal')
-    );
-    modal.show();
-});
+                const modal = new bootstrap.Modal(document.getElementById('campaignSettingsModal'));
+                modal.show();
+            });
             // Load connected accounts
             try {
                 const res = await fetchWithAuth('/connected-accounts/');
@@ -2505,8 +2646,11 @@ ${rows || `
                     const res = await fetchWithAuth(`/campaigns/${editId}/`);
                     if (res.ok) {
                         const data = await res.json();
-                        campaignId = data.id;
-                        document.getElementById('campaign-name').value = data.name;
+                       campaignId = data.id;
+
+updateCampaignIdDisplay();
+
+document.getElementById('campaign-name').value = data.name;
                         if (data.status === 'ACTIVE') {
                             document.getElementById('status-toggle').classList.add('on');
                             document.getElementById('status-toggle').classList.remove('off');
