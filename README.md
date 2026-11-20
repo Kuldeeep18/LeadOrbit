@@ -15,9 +15,10 @@ This README is based on the current codebase, not the older planning documents i
 - [What Works Today](#what-works-today)
 - [Stack](#stack)
 - [Repo Layout](#repo-layout)
-- [Local Setup](#local-setup)
+- [Docker Compose Setup](#docker-compose-setup)
+- [Local Setup (Non-Docker)](#local-setup-non-docker)
 - [Deploy for free (Render + Netlify)](#deploy-for-free-render--netlify)
-- [Deploy with Docker](#deploy-with-docker)
+- [Deploy with Docker (Production)](#deploy-with-docker-production)
 - [Background Jobs](#background-jobs)
 - [Frontend Behavior](#frontend-behavior)
 - [API Surface](#api-surface)
@@ -89,7 +90,147 @@ docs/                   # product, architecture and engineering docs (see docs/R
 deploy/                 # Dockerfiles, Caddyfile, entrypoint scripts
 
 > 📚 Project documentation lives in [`docs/`](docs/README.md).
-## Local Setup
+
+## Docker Compose Setup
+
+The recommended quick-start path uses Docker Compose to run the full development stack (Django backend, Celery worker, Celery Beat scheduler, Redis broker, and frontend server) with a single command.
+
+### Prerequisites
+
+Before starting, ensure you have installed:
+
+- **Git**: [git-scm.com](https://git-scm.com/)
+- **Docker Engine** or **Docker Desktop** (version 20.10+): [docker.com/products/docker-desktop](https://www.docker.com/products/docker-desktop/)
+- **Docker Compose V2** (`docker compose` CLI plugin, included with Docker Desktop)
+- **System resources**: At least 4 GB RAM available for containers (more if using local AI models).
+
+### Installation
+
+1. Clone the repository and navigate into the project directory:
+
+```sh
+git clone https://github.com/Kuldeeep18/LeadOrbit.git
+cd LeadOrbit
+```
+
+### Environment setup
+
+Prepare your development environment file by copying `.env.example`:
+
+```sh
+cp .env.example .env
+```
+
+The Compose setup includes safe development defaults so that the stack can boot immediately even if `.env` is minimal:
+- `SECRET_KEY`: Set to a development fallback (change in production).
+- `DEBUG`: Set to `True`.
+- `CELERY_BROKER_URL`: Configured to use the container network (`redis://redis:6379/0`).
+- `CELERY_RESULT_BACKEND`: Configured to `redis://redis:6379/1`.
+- Optional variables: Google OAuth credentials (`GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`), AI provider (`AI_PROVIDER`), and webhook secrets.
+
+> **Security Note:** `.env` is git-ignored. Never commit real secrets, API keys, or credentials to version control.
+
+### Start the complete application
+
+Start all services (building container images on first run):
+
+```sh
+docker compose up --build
+```
+
+To run all services in the background (detached mode):
+
+```sh
+docker compose up -d --build
+```
+
+This command automatically:
+1. Starts the **Redis 7** service and performs health checks.
+2. Builds the **Django backend** container, connects to Redis, and starts the development server with live code reloading.
+3. Launches the **Celery worker** for asynchronous tasks (lead imports, campaign steps).
+4. Launches **Celery Beat** for scheduled task processing (periodic campaign checks and bounce monitoring).
+5. Serves the **frontend** static application via an HTTP server.
+
+### Accessing services
+
+Once containers are running, access the services on your host machine:
+
+- **Frontend Application**: [http://localhost:8080/login.html](http://localhost:8080/login.html)
+- **Django Backend API**: [http://localhost:8000/api/v1/](http://localhost:8000/api/v1/)
+- **Django Admin**: [http://localhost:8000/admin/](http://localhost:8000/admin/)
+- **Redis**: `localhost:6379` (available for local inspection tools like `redis-cli`)
+
+### Running migrations
+
+To apply database migrations inside the running backend container:
+
+```sh
+docker compose exec backend python manage.py migrate
+```
+
+To create an admin superuser:
+
+```sh
+docker compose exec backend python manage.py createsuperuser
+```
+
+### Viewing logs
+
+Monitor logs in real-time:
+
+- **All services**:
+  ```sh
+  docker compose logs -f
+  ```
+- **Backend API only**:
+  ```sh
+  docker compose logs -f backend
+  ```
+- **Celery Worker**:
+  ```sh
+  docker compose logs -f worker
+  ```
+- **Celery Beat Scheduler**:
+  ```sh
+  docker compose logs -f beat
+  ```
+- **Redis**:
+  ```sh
+  docker compose logs -f redis
+  ```
+- **Frontend server**:
+  ```sh
+  docker compose logs -f frontend
+  ```
+
+### Stopping services
+
+To stop all running containers while preserving data:
+
+```sh
+docker compose down
+```
+
+### Resetting the environment
+
+- **Standard stop**: `docker compose down` stops and removes the containers and networks while keeping database files and Redis volumes intact.
+- **Full reset (destructive)**: If you need to completely wipe persistent volume data (such as Redis queues and cached states):
+  ```sh
+  docker compose down -v
+  ```
+  > ⚠️ **Warning:** The `-v` flag deletes Docker volumes (`redisdata`). Make sure you have backed up any necessary data before executing this command.
+
+### Troubleshooting
+
+- **Docker daemon not running**: Ensure Docker Desktop is launched and running before executing `docker compose` commands.
+- **Port conflicts (`8000`, `8080`, or `6379` already in use)**: Ensure no local background processes (such as a local Redis server or previous `runserver` terminal) are holding ports 8000, 8080, or 6379.
+- **Frontend unable to reach backend**: The browser runs on your host machine, communicating directly with `http://localhost:8000`. Ensure port 8000 is open and accessible from your browser.
+- **Redis connection errors in Celery**: Ensure the Redis container is healthy by checking `docker compose ps`. The backend and Celery workers use `redis://redis:6379/0` over the internal Docker network.
+- **Django migration errors**: Run `docker compose exec backend python manage.py migrate` to sync the database schema.
+
+---
+
+## Local Setup (Non-Docker)
 
 ### 1. Create a virtual environment and install dependencies
 
@@ -187,9 +328,9 @@ What to expect on free plans:
 - Sequence steps are sent when the scheduler runs, so a "wait 1 day" step can fire up to ~10 minutes late. GitHub may delay scheduled runs at busy times, and it pauses schedules in repos with no activity for 60 days. [cron-job.org](https://cron-job.org) is a free alternative that can call the same URL every minute.
 - AI personalization is off (`AI_PROVIDER=none`): emails go out exactly as written, with merge tags filled in.
 
-## Deploy with Docker
+## Deploy with Docker (Production)
 
-One command runs the whole product on any Linux server (or Docker Desktop), including a self-hosted AI model, with no paid APIs:
+One command runs the complete production stack on any Linux server (or Docker Desktop) using `docker-compose.prod.yml`, including Caddy web server with automatic HTTPS, PostgreSQL, Gunicorn, Celery, Redis, and a self-hosted AI model:
 
 | Container | Role |
 |---|---|
@@ -201,8 +342,8 @@ One command runs the whole product on any Linux server (or Docker Desktop), incl
 
 ```sh
 cp .env.docker.example .env      # fill in SECRET_KEY, MAILBOX_CREDENTIALS_ENCRYPTION_KEY, POSTGRES_PASSWORD, WEBHOOK_SECRET
-docker compose up -d --build     # first start downloads the AI model (~2 GB)
-docker compose ps                # everything should be Up / healthy
+docker compose -f docker-compose.prod.yml up -d --build     # first start downloads the AI model (~2 GB)
+docker compose -f docker-compose.prod.yml ps                # everything should be Up / healthy
 ```
 
 Open `http://<server>/`. For a real domain, set `SITE_ADDRESS=leadorbit.example.com` (plus the matching `PUBLIC_URL`, `ALLOWED_HOSTS`, `CSRF_TRUSTED_ORIGINS`, `BACKEND_BASE_URL`, `FRONTEND_BASE_URL`), point the domain's DNS at the server and open ports 80/443. Caddy fetches a free Let's Encrypt certificate automatically.
@@ -210,7 +351,7 @@ Open `http://<server>/`. For a real domain, set `SITE_ADDRESS=leadorbit.example.
 **Server sizing:** at least 4 vCPU, 8 GB RAM and 25 GB disk (the Ollama image is ~9 GB). On CPU, a 3B model writes one email in roughly 20–30 s. That's fine for background sending. With an NVIDIA GPU, add the GPU override for several-times-faster generation (3–6 s per email on a laptop RTX 4050):
 
 ```sh
-docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
+docker compose -f docker-compose.prod.yml -f docker-compose.gpu.yml up -d
 ```
 
 **No VPS? Host from your own PC.** A free [Cloudflare Tunnel](https://developers.cloudflare.com/cloudflare-one/connectivity/cloudflare-tunnel/) publishes the stack without a static IP or opening router ports, and Cloudflare provides HTTPS:
@@ -218,7 +359,7 @@ docker compose -f docker-compose.yml -f docker-compose.gpu.yml up -d
 1. Add your domain to a free Cloudflare account, then create a tunnel under *Zero Trust → Networks → Tunnels* and copy its token.
 2. In the tunnel, add a public hostname (e.g. `app.yourdomain.com`) pointing to service `http://web:80`.
 3. In `.env`: `CLOUDFLARE_TUNNEL_TOKEN=<token>`, keep `SITE_ADDRESS=:80`, and set `PUBLIC_URL`, `BACKEND_BASE_URL`, `FRONTEND_BASE_URL`, `CSRF_TRUSTED_ORIGINS` to `https://app.yourdomain.com` and `ALLOWED_HOSTS=app.yourdomain.com,localhost,127.0.0.1`.
-4. `docker compose -f docker-compose.yml -f docker-compose.gpu.yml --profile tunnel up -d`
+4. `docker compose -f docker-compose.prod.yml -f docker-compose.gpu.yml --profile tunnel up -d`
 
 The PC must stay on and awake. Turn on *Start Docker Desktop when you sign in*; the containers restart on their own.
 
@@ -227,10 +368,10 @@ To skip AI entirely (smaller server), set `AI_PROVIDER=none`; campaigns then sen
 Useful commands:
 
 ```sh
-docker compose logs -f backend worker                       # follow logs
-docker compose exec backend python manage.py createsuperuser # Django admin at /admin/
-docker compose exec db pg_dump -U leadorbit leadorbit > backup.sql
-git pull && docker compose up -d --build                    # update to the latest code
+docker compose -f docker-compose.prod.yml logs -f backend worker                       # follow logs
+docker compose -f docker-compose.prod.yml exec backend python manage.py createsuperuser # Django admin at /admin/
+docker compose -f docker-compose.prod.yml exec db pg_dump -U leadorbit leadorbit > backup.sql
+git pull && docker compose -f docker-compose.prod.yml up -d --build                    # update to the latest code
 ```
 
 ## Background Jobs
