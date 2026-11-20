@@ -147,29 +147,51 @@
     <script type="module">
         import { login } from './api.js';
 
-        document.addEventListener('DOMContentLoaded', () => {
-            const form = document.querySelector('form');
-            if (form) {
-                form.addEventListener('submit', async (e) => {
-                    e.preventDefault();
-                    const email = document.getElementById('floatingInput').value;
-                    const password = document.getElementById('floatingPassword').value;
-                    try {
-                        const btn = form.querySelector('button[type="submit"]');
-                        btn.disabled = true;
-                        btn.textContent = 'Signing In...';
-                        await login(email, password);
-                        window.location.href = '/dashboard.html';
-                    } catch (err) {
-                        alert('Login failed. Please check your credentials.');
-                        const btn = form.querySelector('button[type="submit"]');
-                        btn.disabled = false;
-                        btn.textContent = 'Sign In';
-                    }
-                });
-            }
-        });
-    </script>
+    const form = document.querySelector('form');
+    const btn = form.querySelector('button[type="submit"]');
+
+    const originalText = btn.innerHTML;
+    let isSubmitting = false;
+
+    form.addEventListener('submit', async (e) => {
+        e.preventDefault();
+
+        // Prevent duplicate submissions
+        if (isSubmitting) return;
+
+        isSubmitting = true;
+        btn.disabled = true;
+        btn.setAttribute('aria-busy', 'true');
+
+        // Show loading spinner
+        btn.innerHTML = `
+            <span class="spinner-border spinner-border-sm me-2"
+                  role="status"
+                  aria-hidden="true"></span>
+            Signing In...
+        `;
+
+        const email = document.getElementById('floatingInput').value;
+        const password = document.getElementById('floatingPassword').value;
+
+        try {
+            await login(email, password);
+
+            window.location.href = '/dashboard.html';
+
+        } catch (err) {
+            console.error('Login error:', err);
+
+            alert('Login failed. Please check your credentials.');
+
+            // Restore button after failure
+            isSubmitting = false;
+            btn.disabled = false;
+            btn.removeAttribute('aria-busy');
+            btn.innerHTML = originalText;
+        }
+    });
+</script>
 </body>
 
 </html>
