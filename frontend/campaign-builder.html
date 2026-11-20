@@ -2626,10 +2626,9 @@ return data;
 
 updateCampaignIdDisplay();
             document.getElementById('settings-icon').addEventListener('click', () => {
-    const modal = new b
-    
-    modal.show();
-});
+                const modal = new bootstrap.Modal(document.getElementById('campaignSettingsModal'));
+                modal.show();
+            });
             // Load connected accounts
             try {
                 const res = await fetchWithAuth('/connected-accounts/');
