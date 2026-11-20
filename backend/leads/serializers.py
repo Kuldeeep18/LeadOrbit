@@ -45,6 +45,21 @@ class LeadSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['organization', 'score']
 
+    def validate(self, attrs):
+        attrs = super().validate(attrs)
+
+        string_fields = [
+            'email', 'first_name', 'last_name',
+            'company', 'phone', 'linkedin_url',
+        ]
+
+        for field in string_fields:
+            value = attrs.get(field)
+            if isinstance(value, str):
+                attrs[field] = value.strip()
+
+        return attrs
+
     def validate_email(self, value):
         # Checked here so a duplicate is a 400, not an IntegrityError (500) from the
         # (organization, email) constraint; case-insensitive so one person isn't emailed twice.

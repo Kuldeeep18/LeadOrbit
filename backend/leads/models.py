@@ -38,6 +38,30 @@ class Lead(TenantModel):
     class Meta:
         unique_together = ('organization', 'email')
 
+    def _trim_string_fields(self):
+        """Remove leading and trailing whitespace from lead string fields."""
+        string_fields = [
+            'email',
+            'first_name',
+            'last_name',
+            'company',
+            'phone',
+            'linkedin_url',
+        ]
+
+        for field in string_fields:
+            value = getattr(self, field)
+            if isinstance(value, str):
+                setattr(self, field, value.strip())
+
+    def clean(self):
+        self._trim_string_fields()
+        super().clean()
+
+    def save(self, *args, **kwargs):
+        self._trim_string_fields()
+        super().save(*args, **kwargs)
+
     def __str__(self):
         return f"{self.first_name} {self.last_name} ({self.email})"
 
