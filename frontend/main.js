@@ -427,10 +427,8 @@ async function initAppShell() {
 
     injectProjectFooter();
 
-    initBackToTop();
-
     const backToTopHTML = `
-        <button id="back-to-top" aria-label="Back to top" title="Back to top">
+        <button id="back-to-top" class="back-to-top" aria-label="Back to top" title="Back to top">
             <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                 <path d="M13.5 13.5l4.545-4.545a1 1 0 0 1 1.418 1.418l-6.066 6.065a1 1 0 0 1-1.418-1.418l4.546-4.546a1 1 0 0 1 0-1.418L13.5 11.082a1 1 0 0 1-1.418-1.418l-6.066 6.065a1 1 0 0 1 1.418-1.418l4.545 4.545Z"/>
             </svg>
@@ -438,6 +436,8 @@ async function initAppShell() {
     `;
 
     document.body.insertAdjacentHTML('beforeend', backToTopHTML);
+
+    initBackToTop();
 
     try {
         const res = await fetchWithAuth('/auth/me/');
