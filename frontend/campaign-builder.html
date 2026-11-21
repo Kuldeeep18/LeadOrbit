@@ -1010,6 +1010,66 @@
                 display: none;
             }
         }
+
+        /* ── Weekly Schedule Grid ────────────────── */
+        .weekly-schedule-grid {
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            background: #090e1a;
+            padding: 10px;
+        }
+        .weekly-schedule-grid .day-headings {
+            display: grid;
+            grid-template-columns: 50px repeat(7, 1fr);
+            gap: 4px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            color: #94a3b8;
+            text-align: center;
+            margin-bottom: 6px;
+            padding-bottom: 4px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+        .weekly-schedule-grid .hour-blocks {
+            max-height: 280px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            padding-right: 2px;
+        }
+        .weekly-schedule-grid .hour-row {
+            display: grid;
+            grid-template-columns: 50px repeat(7, 1fr);
+            gap: 4px;
+            align-items: center;
+        }
+        .weekly-schedule-grid .hour-label {
+            font-size: 0.7rem;
+            color: #64748b;
+            font-family: monospace;
+            text-align: right;
+            padding-right: 6px;
+        }
+        .weekly-schedule-grid .hour-slot {
+            height: 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            user-select: none;
+        }
+        .weekly-schedule-grid .hour-slot.enabled {
+            background: #2563eb;
+            box-shadow: 0 0 6px rgba(37, 99, 235, 0.4);
+        }
+        .weekly-schedule-grid .hour-slot.disabled {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .weekly-schedule-grid .hour-slot:hover {
+            border-color: #60a5fa;
+            opacity: 0.9;
+        }
     </style>
 </head>
 <body class="builder-page">
@@ -1181,7 +1241,7 @@
     <script type="module" src="./main.js"></script>
     <!-- Campaign Settings Modal -->
 <div class="modal fade" id="campaignSettingsModal" tabindex="-1">
-  <div class="modal-dialog">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
     <div class="modal-content">
 
       <div class="modal-header">
@@ -1241,6 +1301,7 @@
           <p class="text-muted small mb-2">Define when emails can be sent. Click hourly slots to enable/disable.</p>
           <div class="weekly-schedule-grid" id="weekly-schedule-grid">
             <div class="day-headings">
+              <div class="day-heading spacer"></div>
               <div class="day-heading mon">Mon</div>
               <div class="day-heading tue">Tue</div>
               <div class="day-heading wed">Wed</div>
@@ -2720,16 +2781,16 @@ document.getElementById('setting-daily-limit').value =
                 } catch (e) { console.error(e); }
             }
 
+            initWeeklySchedule(scheduleConfig);
+
             switchTab('sequence');
         });
 
-        <!-- WEEKLY SCHEDULE GRID ────────────────
-     The grid is initialized on campaign load via initWeeklySchedule()
-     and the global scheduleConfig variable is used elsewhere.
--->
-        }
-
-        function initWeeklySchedule(scheduleConfig) {
+        /* ── WEEKLY SCHEDULE GRID ────────────────
+           The grid is initialized on campaign load via initWeeklySchedule()
+           and the global scheduleConfig variable is used elsewhere.
+        */
+        function initWeeklySchedule(config) {
             const grid = document.getElementById('weekly-schedule-grid');
             if (!grid) return;
 
@@ -2737,9 +2798,7 @@ document.getElementById('setting-daily-limit').value =
             if (!hourBlocks) return;
 
             // Default schedule if none configured
-            if (!scheduleConfig) {
-                scheduleConfig = {};
-            }
+            const cfg = config || {};
 
             // Generate 24 hours × 7 days grid
             let html = '';
@@ -2747,7 +2806,7 @@ document.getElementById('setting-daily-limit').value =
                 html += `<div class="hour-row">
                     <span class="hour-label">${h.toString().padStart(2, '0')}:00</span>`;
                 for (const day of ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']) {
-                    const slots = scheduleConfig[day] || [];
+                    const slots = cfg[day] || [];
                     const hasSlot = slots.some(s => s.start <= h && h < s.end);
                     const dayShort = day.charAt(0).toUpperCase() + day.slice(1);
                     html += `<div class="hour-slot ${hasSlot ? 'enabled' : 'disabled'}" data-day="${day}" data-hour="${h}" title="${dayShort} ${h.toString().padStart(2, '0')}:00-${(h+1).toString().padStart(2, '0')}:00">
@@ -2758,23 +2817,16 @@ document.getElementById('setting-daily-limit').value =
             }
             hourBlocks.innerHTML = html;
 
-            // Add click handlers
-            document.querySelectorAll('.hour-slot:not(.disabled)').forEach(slot => {
+            // Add click handlers to all hour slots
+            document.querySelectorAll('.hour-slot').forEach(slot => {
                 slot.addEventListener('click', () => {
                     slot.classList.toggle('enabled');
                     slot.classList.toggle('disabled');
                 });
             });
         }
-
-        // Initialize when modal opens - grid already rendered on load
-        const originalSettingsToggle = document.getElementById('settings-icon');
-        if (originalSettingsToggle) {
-            originalSettingsToggle.addEventListener('click', () => {
-                // Grid already initialized on load; just show modal
-            });
-        }
     </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 
 </html>
