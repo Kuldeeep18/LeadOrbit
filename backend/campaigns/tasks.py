@@ -58,6 +58,34 @@ def _coerce_int(value):
         return None
 
 
+def _is_within_schedule(schedule_config, now=None):
+    """
+    Check if the current weekday/hour falls within the allowed schedule slots.
+    schedule_config format: { "monday": [{"start": 9, "end": 17}], "tuesday": [] }
+    Hours are in 24-hour format.
+    """
+    if not schedule_config:
+        return True
+
+    now = now or timezone.now()
+    # Get weekday name (monday, tuesday, etc.)
+    weekday = now.strftime('%A').lower()
+
+    if weekday not in schedule_config:
+        return True  # No config for this weekday, allow
+
+    slots = schedule_config.get(weekday, [])
+    current_hour = now.hour
+
+    for slot in slots:
+        start = slot.get('start', 0)
+        end = slot.get('end', 23)
+        if start <= current_hour < end:
+            return True
+
+    return False
+
+
 def _get_step_metadata(raw_steps, step_order):
     index = step_order - 1
     if index < 0 or index >= len(raw_steps):
@@ -612,8 +640,16 @@ def process_active_leads_once(now=None, time_budget_seconds=None):
                 
                 if not first_step:
                     break
-                clead.current_step = first_step
-                clead.next_execution_time = now + timedelta(minutes=max(first_step.delay_minutes, 0))
+                
+                # Check schedule configuration when assigning first step
+                if not _is_within_schedule(clead.campaign.schedule_config, now):
+                    # Schedule doesn't allow sending at this time;
+                    # wait until the next allowed window (1 hour from now)
+                    clead.next_execution_time = now + timedelta(hours=1)
+                else:
+                    clead.current_step = first_step
+                    clead.next_execution_time = now + timedelta(minutes=max(first_step.delay_minutes, 0))
+                
                 clead.status = 'ACTIVE'
                 clead.save(update_fields=['current_step', 'next_execution_time', 'status'])
 
@@ -625,6 +661,14 @@ def process_active_leads_once(now=None, time_budget_seconds=None):
                 break
 
             if clead.current_step.channel_type == 'EMAIL':
+                # Check schedule configuration before sending
+                if not _is_within_schedule(clead.campaign.schedule_config, now):
+                    # Schedule doesn't allow sending at this time;
+                    # advance to next allowed window
+                    clead.next_execution_time = now + timedelta(hours=1)
+                    clead.save(update_fields=['next_execution_time'])
+                    break
+
                 prev_step_id = clead.current_step_id
                 prev_next_time = clead.next_execution_time
                 send_email_step.delay(clead.id, clead.current_step.id)

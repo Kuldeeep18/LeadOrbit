@@ -65,6 +65,11 @@ class Campaign(TenantModel):
     name = models.CharField(max_length=255)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='DRAFT')
     settings = models.JSONField(default=dict, blank=True)
+    schedule_config = models.JSONField(
+        default=dict,
+        blank=True,
+        help_text="Weekly schedule config e.g. {'monday': [{'start': 9, 'end': 17}], 'tuesday': []}"
+    )
     connected_account = models.ForeignKey(ConnectedEmailAccount, on_delete=models.SET_NULL, null=True, blank=True, related_name='campaigns')
     
     # Cached counters for performance optimization
