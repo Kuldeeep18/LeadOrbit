@@ -615,6 +615,12 @@ class LeadNameCapitalizationTests(APITestCase):
         self.assertEqual(lead.first_name, 'J.R.')
         self.assertEqual(lead.last_name, 'Anne/Marie OʼNeil')
 
+    def test_combining_accents_stay_inside_name_part(self):
+        lead = _make_lead(self.org, 'jose@example.com', first_name='jóse', last_name='garcía-lópez')
+
+        self.assertEqual(lead.first_name, 'Jóse')
+        self.assertEqual(lead.last_name, 'García-López')
+
     def test_names_with_existing_capitals_are_left_alone(self):
         lead = _make_lead(self.org, 'mc@example.com', first_name='DeShawn', last_name='McDonald')
 

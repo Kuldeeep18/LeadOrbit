@@ -23,9 +23,11 @@ def validate_domain(value):
     return domain
 
 # Any run of whitespace or punctuation starts a new name part ("j.r.", "anne/marie",
-# "o’neil"). U+02BC (modifier apostrophe) counts as a word character in Python, so it
-# is listed explicitly.
-NAME_PART_PATTERN = re.compile("([\\W_ʼ]+)")
+# "o’neil"). Combining accents (e.g. the U+0301 in a decomposed "josé") stay inside
+# their part. U+02BC (modifier apostrophe) counts as a word character in Python, so
+# it is listed explicitly.
+_COMBINING_MARKS = '̀-ͯ᪰-᫿᷀-᷿⃐-⃿︠-︯'
+NAME_PART_PATTERN = re.compile(f"((?:[^\\w{_COMBINING_MARKS}]|[_ʼ])+)")
 
 
 def capitalize_name(value):
