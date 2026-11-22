@@ -537,20 +537,43 @@
 
         function renderLeadRows(leads) {
             const tbody = document.getElementById('leads-table-body');
+
             if (leads.length === 0) {
-                tbody.innerHTML = `
-<tr>
-    <td colspan="7" class="text-center py-5">
-        <div class="empty-state">
-            <i class="bi bi-people display-4 text-secondary" aria-hidden="true"></i>
-            <h5 class="mt-3 mb-2">No leads found</h5>
-            <p class="text-muted mb-3">Try clearing your filters or import your first CSV.</p>
-            <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#uploadModal">
-                <i class="bi bi-upload me-1" aria-hidden="true"></i> Import CSV
-            </button>
-        </div>
-    </td>
-</tr>`;
+                const searchQuery = (document.getElementById('lead-search')?.value || '').trim();
+                const hasSearchOrFilters = Boolean(searchQuery) ||
+                    Object.keys(activeFilters || {}).length > 0;
+
+                if (hasSearchOrFilters) {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="7" class="text-center py-5">
+                                <div class="empty-state">
+                                    <i class="bi bi-search display-4 text-secondary" aria-hidden="true"></i>
+                                    <h5 class="mt-3 mb-2">No matching leads found</h5>
+                                    <p class="text-muted mb-3">Try adjusting your search or filters.</p>
+                                    <button class="btn btn-outline-primary btn-sm" type="button"
+                                        data-clear-search-filters>
+                                        <i class="bi bi-x-circle me-1" aria-hidden="true"></i>
+                                        Clear Search &amp; Filters
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>`;
+                } else {
+                    tbody.innerHTML = `
+                        <tr>
+                            <td colspan="7" class="text-center py-5">
+                                <div class="empty-state">
+                                    <i class="bi bi-people display-4 text-secondary" aria-hidden="true"></i>
+                                    <h5 class="mt-3 mb-2">No leads found</h5>
+                                    <p class="text-muted mb-3">Try clearing your filters or import your first CSV.</p>
+                                    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#uploadModal">
+                                        <i class="bi bi-upload me-1" aria-hidden="true"></i> Import CSV
+                                    </button>
+                                </div>
+                            </td>
+                        </tr>`;
+                }
                 return;
             }
 
@@ -772,6 +795,20 @@
 
         // ─── Data loading ────────────────────────────────────────────────────
 
+        async function clearSearchAndFilters() {
+            document.getElementById('lead-search').value = '';
+            clearFilters();
+
+            try {
+                const leads = await fetchLeadsWithFilters({});
+                allLeads = leads;
+                renderStats(leads);
+                renderLeadRows(leads);
+            } catch (e) {
+                console.error('Error clearing search and filters:', e);
+            }
+        }
+
         async function loadLeads() {
             const res = await fetchWithAuth('/leads/');
             if (!res.ok) return;
@@ -817,6 +854,11 @@
             await loadTags();
 
             document.getElementById('lead-search').addEventListener('input', applySearch);
+        document.getElementById('leads-table-body').addEventListener('click', (event) => {
+            if (event.target.closest('[data-clear-search-filters]')) {
+                clearSearchAndFilters();
+            }
+        });
             document.getElementById('refresh-history-btn').addEventListener('click', loadImportHistory);
 
             const filterPanel = document.getElementById('filter-panel');
