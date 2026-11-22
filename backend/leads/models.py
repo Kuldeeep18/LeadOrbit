@@ -22,6 +22,14 @@ def validate_domain(value):
         raise ValidationError('Enter a valid domain, for example competitor.com.')
     return domain
 
+NAME_PART_PATTERN = re.compile(r"([\s\-']+)")
+
+
+def capitalize_name(value):
+    """Capitalize each part of a name: "mary-jane o'neil" -> "Mary-Jane O'Neil"."""
+    return ''.join(part[:1].upper() + part[1:] for part in NAME_PART_PATTERN.split(value))
+
+
 class Lead(TenantModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.EmailField()
@@ -54,12 +62,25 @@ class Lead(TenantModel):
             if isinstance(value, str):
                 setattr(self, field, value.strip())
 
+    def _capitalize_names(self):
+        """Capitalize all-lowercase first/last names so merge tags read "Hi John".
+
+        Names that already contain capitals (e.g. "McDonald", "DeShawn") are left
+        alone, since their casing was chosen on purpose.
+        """
+        for field in ('first_name', 'last_name'):
+            value = getattr(self, field)
+            if isinstance(value, str) and value and value == value.lower():
+                setattr(self, field, capitalize_name(value))
+
     def clean(self):
         self._trim_string_fields()
+        self._capitalize_names()
         super().clean()
 
     def save(self, *args, **kwargs):
         self._trim_string_fields()
+        self._capitalize_names()
         super().save(*args, **kwargs)
 
     def __str__(self):
