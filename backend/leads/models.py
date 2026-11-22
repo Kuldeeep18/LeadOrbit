@@ -23,6 +23,14 @@ def validate_domain(value):
     return domain
 
 class Lead(TenantModel):
+    class PipelineStatus(models.TextChoices):
+        NEW        = 'new',       'New'
+        CONTACTED  = 'contacted', 'Contacted'
+        INTERESTED = 'interested','Interested'
+        REPLIED    = 'replied',   'Replied'
+        CONVERTED  = 'converted', 'Converted'
+        CLOSED     = 'closed',    'Closed'
+
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
     email = models.EmailField()
     first_name = models.CharField(max_length=100, blank=True, null=True)
@@ -34,6 +42,12 @@ class Lead(TenantModel):
     custom_variables = models.JSONField(default=dict, blank=True)
     global_unsubscribe = models.BooleanField(default=False)
     score = models.IntegerField(default=0)
+    pipeline_status = models.CharField(
+        max_length=20,
+        choices=PipelineStatus.choices,
+        default=PipelineStatus.NEW,
+        db_index=True,
+    )
 
     class Meta:
         unique_together = ('organization', 'email')
