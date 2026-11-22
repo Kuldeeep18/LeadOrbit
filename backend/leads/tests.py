@@ -609,6 +609,12 @@ class LeadNameCapitalizationTests(APITestCase):
         self.assertEqual(lead.first_name, 'Mary‑Jane')
         self.assertEqual(lead.last_name, 'O’Neil')
 
+    def test_other_punctuation_separates_name_parts(self):
+        lead = _make_lead(self.org, 'punct@example.com', first_name='j.r.', last_name='anne/marie oʼneil')
+
+        self.assertEqual(lead.first_name, 'J.R.')
+        self.assertEqual(lead.last_name, 'Anne/Marie OʼNeil')
+
     def test_names_with_existing_capitals_are_left_alone(self):
         lead = _make_lead(self.org, 'mc@example.com', first_name='DeShawn', last_name='McDonald')
 

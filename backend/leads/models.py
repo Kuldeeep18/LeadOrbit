@@ -22,8 +22,10 @@ def validate_domain(value):
         raise ValidationError('Enter a valid domain, for example competitor.com.')
     return domain
 
-# Whitespace, hyphens (ASCII, U+2010, U+2011) and apostrophes (ASCII, U+2019, U+02BC).
-NAME_PART_PATTERN = re.compile("([\\s\\-‐‑'’ʼ]+)")
+# Any run of whitespace or punctuation starts a new name part ("j.r.", "anne/marie",
+# "o’neil"). U+02BC (modifier apostrophe) counts as a word character in Python, so it
+# is listed explicitly.
+NAME_PART_PATTERN = re.compile("([\\W_ʼ]+)")
 
 
 def capitalize_name(value):
