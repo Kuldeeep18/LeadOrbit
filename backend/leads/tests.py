@@ -603,6 +603,12 @@ class LeadNameCapitalizationTests(APITestCase):
         self.assertEqual(lead.first_name, 'Mary-Jane')
         self.assertEqual(lead.last_name, "O'Neil Van Dyke")
 
+    def test_unicode_apostrophes_and_hyphens_separate_name_parts(self):
+        lead = _make_lead(self.org, 'uni@example.com', first_name='mary‑jane', last_name='o’neil')
+
+        self.assertEqual(lead.first_name, 'Mary‑Jane')
+        self.assertEqual(lead.last_name, 'O’Neil')
+
     def test_names_with_existing_capitals_are_left_alone(self):
         lead = _make_lead(self.org, 'mc@example.com', first_name='DeShawn', last_name='McDonald')
 

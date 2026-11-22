@@ -22,7 +22,8 @@ def validate_domain(value):
         raise ValidationError('Enter a valid domain, for example competitor.com.')
     return domain
 
-NAME_PART_PATTERN = re.compile(r"([\s\-']+)")
+# Whitespace, hyphens (ASCII, U+2010, U+2011) and apostrophes (ASCII, U+2019, U+02BC).
+NAME_PART_PATTERN = re.compile("([\\s\\-‐‑'’ʼ]+)")
 
 
 def capitalize_name(value):
