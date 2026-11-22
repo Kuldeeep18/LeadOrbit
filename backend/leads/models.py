@@ -33,13 +33,27 @@ def _continues_name_part(char):
     return char.isalnum() or unicodedata.category(char).startswith('M')
 
 
+def _upper_same_length(char):
+    """Uppercase ``char`` only if that keeps it one character long.
+
+    Some characters expand when uppercased ("ß" -> "SS", "ŉ" -> "ʼN"). Keeping those
+    as typed means capitalization never changes a name's length, so a name that fit
+    the column's max_length before saving still fits after.
+    """
+    upper = char.upper()
+    return upper if len(upper) == 1 else char
+
+
 def capitalize_name(value):
-    """Capitalize each part of a name: "mary-jane o'neil" -> "Mary-Jane O'Neil"."""
+    """Capitalize each part of a name: "mary-jane o'neil" -> "Mary-Jane O'Neil".
+
+    The result always has the same length as ``value``.
+    """
     result = []
     at_part_start = True
     for char in value:
         if _continues_name_part(char):
-            result.append(char.upper() if at_part_start else char)
+            result.append(_upper_same_length(char) if at_part_start else char)
             at_part_start = False
         else:
             result.append(char)

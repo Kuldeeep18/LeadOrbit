@@ -627,6 +627,24 @@ class LeadNameCapitalizationTests(APITestCase):
 
         self.assertEqual(lead.first_name, 'А҃б')
 
+    def test_capitalization_never_makes_a_name_longer(self):
+        # "ß".upper() is "SS"; uppercasing it would push a 100-char name past max_length.
+        long_name = 'ß' + 'a' * 99
+        lead = _make_lead(self.org, 'long@example.com', first_name=long_name, last_name='ŉoel')
+
+        lead.refresh_from_db()
+        self.assertEqual(lead.first_name, long_name)
+        self.assertEqual(len(lead.first_name), Lead._meta.get_field('first_name').max_length)
+        self.assertEqual(lead.last_name, 'ŉoel')
+
+    def test_capitalize_name_keeps_length_for_every_character(self):
+        from leads.models import capitalize_name
+
+        for codepoint in range(0x10000):
+            char = chr(codepoint)
+            if char.isalnum() and char == char.lower():
+                self.assertEqual(len(capitalize_name(char)), 1, msg=f'U+{codepoint:04X}')
+
     def test_names_with_existing_capitals_are_left_alone(self):
         lead = _make_lead(self.org, 'mc@example.com', first_name='DeShawn', last_name='McDonald')
 
