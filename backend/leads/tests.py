@@ -621,6 +621,12 @@ class LeadNameCapitalizationTests(APITestCase):
         self.assertEqual(lead.first_name, 'Jóse')
         self.assertEqual(lead.last_name, 'García-López')
 
+    def test_combining_marks_outside_latin_ranges_stay_inside_name_part(self):
+        # U+0483 (Cyrillic titlo) is a combining mark outside the U+0300 block.
+        lead = _make_lead(self.org, 'cyr@example.com', first_name='а҃б')
+
+        self.assertEqual(lead.first_name, 'А҃б')
+
     def test_names_with_existing_capitals_are_left_alone(self):
         lead = _make_lead(self.org, 'mc@example.com', first_name='DeShawn', last_name='McDonald')
 

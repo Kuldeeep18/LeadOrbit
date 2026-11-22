@@ -3,6 +3,7 @@ from django.core.exceptions import ValidationError
 from tenants.models import TenantModel
 import uuid
 import re
+import unicodedata
 
 DOMAIN_PATTERN = re.compile(r'^(?!-)[a-z0-9-]+(?:\.[a-z0-9-]+)+$')
 
@@ -22,17 +23,28 @@ def validate_domain(value):
         raise ValidationError('Enter a valid domain, for example competitor.com.')
     return domain
 
-# Any run of whitespace or punctuation starts a new name part ("j.r.", "anne/marie",
-# "o’neil"). Combining accents (e.g. the U+0301 in a decomposed "josé") stay inside
-# their part. U+02BC (modifier apostrophe) counts as a word character in Python, so
-# it is listed explicitly.
-_COMBINING_MARKS = '̀-ͯ᪰-᫿᷀-᷿⃐-⃿︠-︯'
-NAME_PART_PATTERN = re.compile(f"((?:[^\\w{_COMBINING_MARKS}]|[_ʼ])+)")
+def _continues_name_part(char):
+    """Letters, digits and combining marks (Unicode category M*, e.g. the accent in
+    a decomposed "josé") belong to the current name part; anything else, such as
+    whitespace or punctuation, starts a new one. U+02BC is a letter (Lm) to Unicode
+    but is used as an apostrophe in names, so it is treated as a separator."""
+    if char == 'ʼ':
+        return False
+    return char.isalnum() or unicodedata.category(char).startswith('M')
 
 
 def capitalize_name(value):
     """Capitalize each part of a name: "mary-jane o'neil" -> "Mary-Jane O'Neil"."""
-    return ''.join(part[:1].upper() + part[1:] for part in NAME_PART_PATTERN.split(value))
+    result = []
+    at_part_start = True
+    for char in value:
+        if _continues_name_part(char):
+            result.append(char.upper() if at_part_start else char)
+            at_part_start = False
+        else:
+            result.append(char)
+            at_part_start = True
+    return ''.join(result)
 
 
 class Lead(TenantModel):
