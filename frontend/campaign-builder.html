@@ -1010,6 +1010,10 @@
                 display: none;
             }
         }
+        .subject-counter { font-size: 12px; margin-top: 4px; color: #6b7280; }
+        .subject-counter.good { color: #16a34a; }
+        .subject-counter.warn { color: #d97706; }
+        .subject-counter.bad  { color: #dc2626; }
     </style>
 </head>
 <body class="builder-page">
@@ -2318,6 +2322,7 @@ return data;
                 <div class="mb-3">
                     <div class="ep-label">Subject <span class="text-muted fw-normal">&middot; Add Cc</span></div>
                     <input type="text" class="ep-input" id="ep-subject" placeholder="Subject" value="${step.subject || ''}">
+                    <div class="subject-counter" id="ep-subject-counter" aria-live="polite"></div>
                 </div>
                 <div class="mb-3">
                     <div class="ep-label">Body</div>
@@ -2336,7 +2341,20 @@ return data;
             `;
 
             // Bind inputs
-            document.getElementById('ep-subject').addEventListener('input', (e) => { step.subject = e.target.value; });
+            const updateSubjectCounter = () => {
+                const input = document.getElementById('ep-subject');
+                const counter = document.getElementById('ep-subject-counter');
+                if (!input || !counter) return;
+                const n = input.value.length;
+                let cls = 'good', msg = 'Good length';
+                if (n === 0) { cls = ''; msg = 'Aim for 30\u201360 characters'; }
+                else if (n < 30) { cls = 'warn'; msg = 'Too short, aim for 30\u201360'; }
+                else if (n > 60) { cls = n > 80 ? 'bad' : 'warn'; msg = 'Too long, aim for 30\u201360'; }
+                counter.textContent = n + ' characters \u00b7 ' + msg;
+                counter.className = 'subject-counter ' + cls;
+            };
+            document.getElementById('ep-subject').addEventListener('input', (e) => { step.subject = e.target.value; updateSubjectCounter(); });
+            updateSubjectCounter();
             document.getElementById('ep-body').addEventListener('input', (e) => { step.body = e.target.value; });
 
             let activeEditor = document.getElementById('ep-body');
@@ -2369,6 +2387,7 @@ return data;
 
             if (body.id === 'ep-subject') {
                 step.subject = body.value;
+                updateSubjectCounter();
             } else {
                 step.body = body.value;
             }
