@@ -3,6 +3,7 @@ from django.core.exceptions import ValidationError
 from tenants.models import TenantModel
 import uuid
 import re
+import unicodedata
 
 DOMAIN_PATTERN = re.compile(r'^(?!-)[a-z0-9-]+(?:\.[a-z0-9-]+)+$')
 
@@ -21,6 +22,44 @@ def validate_domain(value):
     if not domain or not DOMAIN_PATTERN.match(domain):
         raise ValidationError('Enter a valid domain, for example competitor.com.')
     return domain
+
+def _continues_name_part(char):
+    """Letters, digits and combining marks (Unicode category M*, e.g. the accent in
+    a decomposed "josé") belong to the current name part; anything else, such as
+    whitespace or punctuation, starts a new one. U+02BC is a letter (Lm) to Unicode
+    but is used as an apostrophe in names, so it is treated as a separator."""
+    if char == 'ʼ':
+        return False
+    return char.isalnum() or unicodedata.category(char).startswith('M')
+
+
+def _upper_same_length(char):
+    """Uppercase ``char`` only if that keeps it one character long.
+
+    Some characters expand when uppercased ("ß" -> "SS", "ŉ" -> "ʼN"). Keeping those
+    as typed means capitalization never changes a name's length, so a name that fit
+    the column's max_length before saving still fits after.
+    """
+    upper = char.upper()
+    return upper if len(upper) == 1 else char
+
+
+def capitalize_name(value):
+    """Capitalize each part of a name: "mary-jane o'neil" -> "Mary-Jane O'Neil".
+
+    The result always has the same length as ``value``.
+    """
+    result = []
+    at_part_start = True
+    for char in value:
+        if _continues_name_part(char):
+            result.append(_upper_same_length(char) if at_part_start else char)
+            at_part_start = False
+        else:
+            result.append(char)
+            at_part_start = True
+    return ''.join(result)
+
 
 class Lead(TenantModel):
     id = models.UUIDField(primary_key=True, default=uuid.uuid4, editable=False)
@@ -54,12 +93,25 @@ class Lead(TenantModel):
             if isinstance(value, str):
                 setattr(self, field, value.strip())
 
+    def _capitalize_names(self):
+        """Capitalize all-lowercase first/last names so merge tags read "Hi John".
+
+        Names that already contain capitals (e.g. "McDonald", "DeShawn") are left
+        alone, since their casing was chosen on purpose.
+        """
+        for field in ('first_name', 'last_name'):
+            value = getattr(self, field)
+            if isinstance(value, str) and value and value == value.lower():
+                setattr(self, field, capitalize_name(value))
+
     def clean(self):
         self._trim_string_fields()
+        self._capitalize_names()
         super().clean()
 
     def save(self, *args, **kwargs):
         self._trim_string_fields()
+        self._capitalize_names()
         super().save(*args, **kwargs)
 
     def __str__(self):

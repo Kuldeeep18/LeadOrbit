@@ -582,3 +582,95 @@ class LeadDataIntegrityTests(APITestCase):
         add_tagged_leads('more', 5)
 
         self.assertEqual(count_list_queries(), baseline)
+
+
+class LeadNameCapitalizationTests(APITestCase):
+    def setUp(self):
+        self.org = Organization.objects.create(name='Name Org')
+        self.user = _make_user(self.org, email='names@example.com')
+        self.client.force_authenticate(self.user)
+
+    def test_lowercase_names_are_capitalized_on_create(self):
+        lead = _make_lead(self.org, 'john@example.com', first_name='john', last_name='smith')
+
+        lead.refresh_from_db()
+        self.assertEqual(lead.first_name, 'John')
+        self.assertEqual(lead.last_name, 'Smith')
+
+    def test_each_name_part_is_capitalized(self):
+        lead = _make_lead(self.org, 'mj@example.com', first_name='mary-jane', last_name="o'neil van dyke")
+
+        self.assertEqual(lead.first_name, 'Mary-Jane')
+        self.assertEqual(lead.last_name, "O'Neil Van Dyke")
+
+    def test_unicode_apostrophes_and_hyphens_separate_name_parts(self):
+        lead = _make_lead(self.org, 'uni@example.com', first_name='mary‑jane', last_name='o’neil')
+
+        self.assertEqual(lead.first_name, 'Mary‑Jane')
+        self.assertEqual(lead.last_name, 'O’Neil')
+
+    def test_other_punctuation_separates_name_parts(self):
+        lead = _make_lead(self.org, 'punct@example.com', first_name='j.r.', last_name='anne/marie oʼneil')
+
+        self.assertEqual(lead.first_name, 'J.R.')
+        self.assertEqual(lead.last_name, 'Anne/Marie OʼNeil')
+
+    def test_combining_accents_stay_inside_name_part(self):
+        lead = _make_lead(self.org, 'jose@example.com', first_name='jóse', last_name='garcía-lópez')
+
+        self.assertEqual(lead.first_name, 'Jóse')
+        self.assertEqual(lead.last_name, 'García-López')
+
+    def test_combining_marks_outside_latin_ranges_stay_inside_name_part(self):
+        # U+0483 (Cyrillic titlo) is a combining mark outside the U+0300 block.
+        lead = _make_lead(self.org, 'cyr@example.com', first_name='а҃б')
+
+        self.assertEqual(lead.first_name, 'А҃б')
+
+    def test_capitalization_never_makes_a_name_longer(self):
+        # "ß".upper() is "SS"; uppercasing it would push a 100-char name past max_length.
+        long_name = 'ß' + 'a' * 99
+        lead = _make_lead(self.org, 'long@example.com', first_name=long_name, last_name='ŉoel')
+
+        lead.refresh_from_db()
+        self.assertEqual(lead.first_name, long_name)
+        self.assertEqual(len(lead.first_name), Lead._meta.get_field('first_name').max_length)
+        self.assertEqual(lead.last_name, 'ŉoel')
+
+    def test_capitalize_name_keeps_length_for_every_character(self):
+        from leads.models import capitalize_name
+
+        for codepoint in range(0x10000):
+            char = chr(codepoint)
+            if char.isalnum() and char == char.lower():
+                self.assertEqual(len(capitalize_name(char)), 1, msg=f'U+{codepoint:04X}')
+
+    def test_names_with_existing_capitals_are_left_alone(self):
+        lead = _make_lead(self.org, 'mc@example.com', first_name='DeShawn', last_name='McDonald')
+
+        self.assertEqual(lead.first_name, 'DeShawn')
+        self.assertEqual(lead.last_name, 'McDonald')
+
+    def test_empty_and_missing_names_are_unchanged(self):
+        lead = _make_lead(self.org, 'blank@example.com', first_name='', last_name=None)
+
+        self.assertEqual(lead.first_name, '')
+        self.assertIsNone(lead.last_name)
+
+    def test_names_are_capitalized_when_created_through_the_api(self):
+        resp = self.client.post(
+            '/api/v1/leads/',
+            {'email': 'api@example.com', 'first_name': 'ana', 'last_name': 'lopez'},
+            format='json',
+        )
+
+        self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
+        self.assertEqual(resp.data['first_name'], 'Ana')
+        self.assertEqual(resp.data['last_name'], 'Lopez')
+
+    def test_names_are_capitalized_on_csv_import(self):
+        import_leads_from_csv('email,first_name,last_name\nlee@example.com,lee, chen \n', str(self.org.id))
+
+        lead = Lead.objects.get(organization=self.org, email='lee@example.com')
+        self.assertEqual(lead.first_name, 'Lee')
+        self.assertEqual(lead.last_name, 'Chen')
