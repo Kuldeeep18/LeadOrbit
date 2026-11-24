@@ -2743,6 +2743,32 @@ return data;
             }
         });
 
+        // ─── CTRL+S / CMD+S SAVE ─────────────
+        document.addEventListener('keydown', async (event) => {
+            const isSaveShortcut =
+                (event.ctrlKey || event.metaKey) &&
+                !event.altKey &&
+                !event.shiftKey &&
+                (event.key || '').toLowerCase() === 's';
+
+            if (!isSaveShortcut || activeTab !== 'sequence') return;
+
+            event.preventDefault();
+
+            const nextBtn = document.getElementById('next-step-btn');
+            if (event.repeat || nextBtn.disabled) return;
+
+            nextBtn.disabled = true;
+            try {
+                await saveCampaign();
+                showCampaignCopyToast('Campaign saved');
+            } catch (e) {
+                showCampaignCopyToast(e.message || 'Unable to save campaign.', true);
+            } finally {
+                nextBtn.disabled = false;
+            }
+        });
+
         // ─── INIT ───────────────────────────
         document.addEventListener('DOMContentLoaded', async () => {
             document.getElementById('copy-campaign-id-btn')
