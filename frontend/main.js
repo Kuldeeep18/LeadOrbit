@@ -498,6 +498,7 @@ function injectShortcutsModal() {
                                     <tr><td><kbd>Alt + S</kbd></td><td>Navigate to Settings</td></tr>
                                     <tr><td><kbd>Alt + N</kbd></td><td>New Campaign Builder</td></tr>
                                     <tr><td><kbd>Ctrl/Cmd + T</kbd></td><td>Toggle Dark/Light Theme</td></tr>
+                                    <tr><td><kbd>Ctrl/Cmd + S</kbd></td><td>Save campaign (Campaign Builder)</td></tr>
                                     <tr><td><kbd>?</kbd></td><td>Show this help menu</td></tr>
                                     <tr><td><kbd>/</kbd></td><td>Focus search bar</td></tr>
                                 </tbody>
