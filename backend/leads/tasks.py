@@ -84,15 +84,37 @@ def import_leads_from_csv(file_contents, organization_id, job_id=None):
         dialect = csv.excel
     reader = csv.DictReader(stream, dialect=dialect)
 
+    email_headers = {
+        _normalize_key('email'),
+        _normalize_key('work_email'),
+        _normalize_key('email_address'),
+    }
+    headers = {
+        _normalize_key(header)
+        for header in (reader.fieldnames or [])
+    }
+    has_email_header = bool(headers & email_headers)
+
     leads_created = 0
     leads_updated = 0
     failed_count = 0
     error_log = []
     total_rows = 0
+    seen_emails = set()
 
     for row_number, row in enumerate(reader, start=2):
         total_rows += 1
         normalized_row = _normalize_row(row)
+
+        if not has_email_header:
+            failed_count += 1
+            error_log.append({
+                'row': row_number,
+                'email': '',
+                'error': 'Missing required column: email',
+                'data': normalized_row,
+            })
+            continue
         email = _get_field(normalized_row, 'email', 'work_email', 'email_address')
         if not email:
             failed_count += 1
@@ -115,6 +137,20 @@ def import_leads_from_csv(file_contents, organization_id, job_id=None):
                 'data': normalized_row,
             })
             continue
+
+        # Reject duplicate email addresses within this CSV file.
+        email_key = email.strip().lower()
+        if email_key in seen_emails:
+            failed_count += 1
+            error_log.append({
+                'row': row_number,
+                'email': email,
+                'error': 'Duplicate email address',
+                'data': normalized_row,
+            })
+            continue
+
+        seen_emails.add(email_key)
 
         # Flexible aliases for common exports (Lemlist, HubSpot, custom CSVs)
         first_name = _get_field(normalized_row, 'firstName', 'first_name', 'firstname', 'first name')
