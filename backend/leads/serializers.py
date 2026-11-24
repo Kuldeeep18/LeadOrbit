@@ -6,15 +6,12 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from .models import BlockedDomain, Lead, LeadImportJob, Tag, LeadTag, validate_domain
 
 # Matches common phone formats: +1234567890, (123) 456-7890, 123-456-7890,
-# 123.456.7890, 123 456 7890, +1 (123) 456-7890, +1-123-456-7890, etc.
+# 123.456.7890, 123 456 7890, +1 (123) 456-7890, +1-123-456-7890,
+# +33 6 12 34 56 78, etc.
 PHONE_REGEX = re.compile(
-    r'^\+?\d{0,3}'           # optional country code
-    r'[\s\-]?'               # optional space or hyphen after country code
-    r'(?:\(\d{1,4}\)|\d{1,4})'  # area code: fully parenthesized or plain
-    r'[\s.\-]?'              # separator
-    r'\d{1,4}'               # first group
-    r'[\s.\-]?'              # separator
-    r'\d{1,9}$'              # second group
+    r'^(?:\+?\d{1,3}[\s\-]?)?'    # optional country code with its separator
+    r'(?:\(\d{1,4}\)|\d{1,4})'    # area code: fully parenthesized or plain
+    r'(?:[\s.\-]?\d{1,4}){1,5}$'  # remaining digit groups (1-5 groups)
 )
 
 
