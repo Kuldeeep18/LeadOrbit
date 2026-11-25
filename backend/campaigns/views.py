@@ -1,10 +1,11 @@
 import hmac
 import logging
 import urllib.parse
+import csv
 from html import escape
 
 from django.core.exceptions import ValidationError
-from django.http import HttpResponseRedirect, HttpResponseBadRequest
+from django.http import HttpResponseRedirect, HttpResponseBadRequest, StreamingHttpResponse
 from django.views.decorators.csrf import csrf_exempt
 
 from rest_framework import status, viewsets
@@ -312,6 +313,54 @@ class CampaignViewSet(viewsets.ModelViewSet):
             'limit': limit,
             'leads': leads_data,
         })
+
+    @action(detail=True, methods=['get'])
+    def export_leads(self, request, pk=None):
+        """Stream enrolled lead details as a CSV file."""
+        campaign = self.get_object()
+
+        def generate_rows():
+            import io
+
+            buffer = io.StringIO()
+            writer = csv.writer(buffer)
+            writer.writerow([
+                'email',
+                'first_name',
+                'last_name',
+                'status',
+                'current_step_order',
+                'last_sent',
+                'opens',
+                'clicks',
+                'replies',
+            ])
+            yield buffer.getvalue()
+
+            enrolled_leads = (
+                campaign.enrolled_leads
+                .select_related('lead', 'current_step')
+                .order_by('lead__email')
+            )
+            for campaign_lead in enrolled_leads.iterator():
+                buffer.seek(0)
+                buffer.truncate(0)
+                writer.writerow([
+                    campaign_lead.lead.email,
+                    campaign_lead.lead.first_name or '',
+                    campaign_lead.lead.last_name or '',
+                    campaign_lead.status,
+                    campaign_lead.current_step.step_order if campaign_lead.current_step else '',
+                    campaign_lead.last_sent_message_id or '',
+                    1 if campaign_lead.last_opened_at else 0,
+                    1 if campaign_lead.last_clicked_at else 0,
+                    1 if campaign_lead.last_replied_at or campaign_lead.status == 'REPLIED' else 0,
+                ])
+                yield buffer.getvalue()
+
+        response = StreamingHttpResponse(generate_rows(), content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="campaign_leads.csv"'
+        return response
 
     @action(detail=True, methods=['post'])
     def process_now(self, request, pk=None):

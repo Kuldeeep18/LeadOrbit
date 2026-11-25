@@ -1753,7 +1753,12 @@ async function copyCampaignId() {
                 <div class="flow-node w-100" style="max-width: 960px;">
                     <div class="d-flex justify-content-between align-items-center mb-3">
                         <h5 class="mb-0">Select leads for this campaign</h5>
-                        <span id="selected-leads-count" class="text-muted small">${selectedLeadIds.size} selected</span>
+                        <div class="d-flex align-items-center gap-3">
+                            <span id="selected-leads-count" class="text-muted small">${selectedLeadIds.size} selected</span>
+                            <button type="button" class="btn btn-sm btn-outline-primary" id="export-leads-btn">
+                                <i class="bi bi-download me-1" aria-hidden="true"></i> Export Leads
+                            </button>
+                        </div>
                     </div>
                     <div class="table-responsive">
                         <table class="table table-sm align-middle mb-0">
@@ -1815,6 +1820,40 @@ ${rows || `
                     </div>
                 </div>
             `;
+
+            const exportButton = document.getElementById('export-leads-btn');
+            if (exportButton) {
+                exportButton.addEventListener('click', async () => {
+                    try {
+                        await exportCampaignLeads();
+                    } catch (error) {
+                        alert(error.message || 'Unable to export campaign leads.');
+                    }
+                });
+            }
+        }
+
+        async function exportCampaignLeads() {
+            if (!campaignId) {
+                throw new Error('Save campaign before exporting leads.');
+            }
+
+            const response = await fetchWithAuth(`/campaigns/${campaignId}/export_leads/`, {
+                timeoutMs: 120000,
+            });
+            if (!response.ok) {
+                throw new Error('Failed to export campaign leads.');
+            }
+
+            const blob = await response.blob();
+            const downloadUrl = window.URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = downloadUrl;
+            link.download = 'campaign_leads.csv';
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(downloadUrl);
         }
 
         function renderLaunchTab() {
