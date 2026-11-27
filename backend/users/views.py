@@ -1,3 +1,5 @@
+from datetime import timedelta
+from django.utils import timezone
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -90,5 +92,37 @@ class AuthViewSet(viewsets.GenericViewSet):
         request.user.organization.delete()
         return Response(
             {'message': 'Organization successfully deleted.'},
+            status=status.HTTP_200_OK,
+        )
+
+    @action(detail=False, methods=['delete'], permission_classes=[IsAuthenticated], url_path='account')
+    def account(self, request):
+        confirmation_email = (request.data.get('email') if isinstance(request.data, dict) else None) or ''
+        confirmation_email = str(confirmation_email).strip()
+
+        if not confirmation_email:
+            return Response(
+                {'email': ['Confirmation email is required.']},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if confirmation_email.lower() != request.user.email.strip().lower():
+            return Response(
+                {'email': ['Confirmation email does not match your account email.']},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        user = request.user
+        update_fields = ['is_active']
+        user.is_active = False
+
+        if not user.deletion_scheduled_at:
+            user.deletion_scheduled_at = timezone.now() + timedelta(days=30)
+            update_fields.append('deletion_scheduled_at')
+
+        user.save(update_fields=update_fields)
+
+        return Response(
+            {'message': 'Account scheduled for deletion in 30 days.'},
             status=status.HTTP_200_OK,
         )

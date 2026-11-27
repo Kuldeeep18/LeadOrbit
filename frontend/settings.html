@@ -245,9 +245,10 @@
                     <div class="col-lg-6">
                         <div class="glass-card p-4 border border-danger-subtle h-100">
                             <div class="section-title text-danger"><i class="bi bi-exclamation-triangle me-2" aria-hidden="true"></i>Danger Zone</div>
-                            <p class="text-muted mb-3">These actions are irreversible.</p>
+                            <p class="text-muted mb-3">These actions are irreversible or deactivate access.</p>
                             <button class="btn btn-outline-danger btn-sm me-2" id="delete-leads-btn">Delete All Leads</button>
-                            <button class="btn btn-outline-danger btn-sm" id="delete-org-btn">Delete Organization</button>
+                            <button class="btn btn-outline-danger btn-sm me-2" id="delete-org-btn">Delete Organization</button>
+                            <button class="btn btn-outline-danger btn-sm" id="deactivate-account-btn">Deactivate Account</button>
                         </div>
                     </div>
                 </div>
@@ -322,6 +323,135 @@
                 if (onConfirm) onConfirm(inputValue);
             };
             modal.show();
+        }
+
+        function showAccountDeactivationModal(expectedEmail) {
+            const modalHtml = `
+                <div class="modal fade" id="deactivateAccountModal" tabindex="-1" aria-labelledby="deactivateAccountModalLabel" aria-hidden="true">
+                    <div class="modal-dialog modal-dialog-centered">
+                        <div class="modal-content">
+                            <div class="modal-header">
+                                <h5 class="modal-title text-danger" id="deactivateAccountModalLabel">
+                                    <i class="bi bi-exclamation-triangle-fill me-2" aria-hidden="true"></i>Deactivate Account
+                                </h5>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <form id="deactivateAccountForm" novalidate>
+                                <div class="modal-body">
+                                    <div class="alert alert-warning mb-3">
+                                        <p class="mb-1 fw-semibold">Your account will be deactivated and scheduled for deletion after 30 days.</p>
+                                        <p class="mb-0 small text-muted">You will be logged out immediately and lose access to your account and campaigns.</p>
+                                    </div>
+                                    <p class="small text-muted mb-3">
+                                        To confirm deactivation, please type your registered email address
+                                        ${expectedEmail ? `(<strong class="text-body">${expectedEmail}</strong>)` : ''} below:
+                                    </p>
+                                    <div class="mb-2">
+                                        <label for="deactivationEmailInput" class="form-label small fw-semibold">Registered Email Address</label>
+                                        <input type="email" class="form-control" id="deactivationEmailInput" placeholder="name@example.com" required autocomplete="off">
+                                        <div class="invalid-feedback" id="deactivationEmailFeedback">Please enter your registered email address.</div>
+                                    </div>
+                                    <div class="alert alert-danger d-none mt-3 mb-0" id="deactivationModalError" role="alert"></div>
+                                    <div class="alert alert-success d-none mt-3 mb-0" id="deactivationModalSuccess" role="alert"></div>
+                                </div>
+                                <div class="modal-footer">
+                                    <button type="button" class="btn btn-secondary" id="deactivateCancelBtn" data-bs-dismiss="modal">Cancel</button>
+                                    <button type="submit" class="btn btn-danger" id="deactivateConfirmBtn">
+                                        <span class="spinner-border spinner-border-sm me-1 d-none" id="deactivateSpinner" aria-hidden="true"></span>
+                                        <span id="deactivateBtnText">Deactivate Account</span>
+                                    </button>
+                                </div>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            `;
+            const existingModal = document.getElementById('deactivateAccountModal');
+            if (existingModal) existingModal.remove();
+            document.body.insertAdjacentHTML('beforeend', modalHtml);
+
+            const modalEl = document.getElementById('deactivateAccountModal');
+            const modal = new bootstrap.Modal(modalEl);
+            const form = document.getElementById('deactivateAccountForm');
+            const emailInput = document.getElementById('deactivationEmailInput');
+            const errorAlert = document.getElementById('deactivationModalError');
+            const successAlert = document.getElementById('deactivationModalSuccess');
+            const feedbackEl = document.getElementById('deactivationEmailFeedback');
+            const confirmBtn = document.getElementById('deactivateConfirmBtn');
+            const cancelBtn = document.getElementById('deactivateCancelBtn');
+            const spinner = document.getElementById('deactivateSpinner');
+            const btnText = document.getElementById('deactivateBtnText');
+
+            form.addEventListener('submit', async (e) => {
+                e.preventDefault();
+                errorAlert.classList.add('d-none');
+                errorAlert.textContent = '';
+                emailInput.classList.remove('is-invalid');
+
+                const typedEmail = emailInput.value.trim();
+                if (!typedEmail) {
+                    emailInput.classList.add('is-invalid');
+                    feedbackEl.textContent = 'Please enter your registered email address.';
+                    emailInput.focus();
+                    return;
+                }
+
+                if (expectedEmail && typedEmail.toLowerCase() !== expectedEmail.toLowerCase()) {
+                    emailInput.classList.add('is-invalid');
+                    feedbackEl.textContent = 'Email address does not match your account email.';
+                    emailInput.focus();
+                    return;
+                }
+
+                confirmBtn.disabled = true;
+                cancelBtn.disabled = true;
+                emailInput.disabled = true;
+                spinner.classList.remove('d-none');
+                btnText.textContent = 'Deactivating...';
+
+                try {
+                    const res = await fetchWithAuth('/auth/account/', {
+                        method: 'DELETE',
+                        body: JSON.stringify({ email: typedEmail }),
+                    });
+                    const data = await res.json().catch(() => ({}));
+
+                    if (!res.ok) {
+                        const errMsg = (data.email && data.email[0]) || data.detail || data.error || 'Failed to deactivate account.';
+                        errorAlert.textContent = errMsg;
+                        errorAlert.classList.remove('d-none');
+                        confirmBtn.disabled = false;
+                        cancelBtn.disabled = false;
+                        emailInput.disabled = false;
+                        spinner.classList.add('d-none');
+                        btnText.textContent = 'Deactivate Account';
+                        return;
+                    }
+
+                    successAlert.textContent = data.message || 'Account scheduled for deletion in 30 days.';
+                    successAlert.classList.remove('d-none');
+                    confirmBtn.classList.add('d-none');
+                    clearTokens();
+
+                    setTimeout(() => {
+                        modal.hide();
+                        window.location.href = '/login.html';
+                    }, 2000);
+                } catch (err) {
+                    errorAlert.textContent = err.message || 'Could not deactivate account right now.';
+                    errorAlert.classList.remove('d-none');
+                    confirmBtn.disabled = false;
+                    cancelBtn.disabled = false;
+                    emailInput.disabled = false;
+                    spinner.classList.add('d-none');
+                    btnText.textContent = 'Deactivate Account';
+                }
+            });
+
+            modal.show();
+            modalEl.addEventListener('shown.bs.modal', () => {
+                emailInput.focus();
+            });
         }
 
         // Same host as the API ('' means this site's own origin, as in Docker).
@@ -539,6 +669,14 @@
                             })();
                         });
                     });
+                });
+            }
+
+            const deactivateAccountBtn = document.getElementById('deactivate-account-btn');
+            if (deactivateAccountBtn) {
+                deactivateAccountBtn.addEventListener('click', () => {
+                    const userEmail = (document.getElementById('profile-email')?.value || '').trim();
+                    showAccountDeactivationModal(userEmail);
                 });
             }
 
