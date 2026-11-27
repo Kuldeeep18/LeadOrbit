@@ -76,17 +76,85 @@
                         <div class="title-meta">Build, monitor, and launch outreach sequences faster.</div>
                     </div>
                     <div class="d-flex flex-wrap align-items-center gap-2">
-                        <div class="search-wrap">
-                            <div class="input-group input-group-sm">
-                                <span class="input-group-text"><i class="bi bi-search" aria-hidden="true"></i></span>
-                                <input type="text" id="campaign-search" class="form-control" placeholder="Search campaign name or status" aria-label="Search campaigns">
-                            </div>
-                        </div>
-                        <a href="/campaign-builder.html" class="btn btn-sm btn-primary px-3">
-                           <i class="bi bi-plus-lg me-1" aria-hidden="true"></i> New Campaign
-                        </a>
-                        <button id="logout-btn" class="btn btn-sm btn-logout" aria-label="Log out">Logout</button>
-                    </div>
+
+    <div class="search-wrap">
+
+        <div class="input-group input-group-sm">
+
+            <span class="input-group-text">
+
+                <i class="bi bi-search"></i>
+
+            </span>
+
+            <input
+                type="text"
+                id="campaign-search"
+                class="form-control"
+                placeholder="Search campaigns">
+
+        </div>
+
+    </div>
+
+    <select
+        id="campaign-status"
+        class="form-select form-select-sm"
+        style="width:160px;">
+
+        <option value="">
+
+            All Status
+
+        </option>
+
+        <option value="DRAFT">
+
+            Draft
+
+        </option>
+
+        <option value="ACTIVE">
+
+            Active
+
+        </option>
+
+        <option value="PAUSED">
+
+            Paused
+
+        </option>
+
+        <option value="COMPLETED">
+
+            Completed
+
+        </option>
+
+    </select>
+
+    <a href="/campaign-builder.html"
+
+       class="btn btn-sm btn-primary px-3">
+
+       <i class="bi bi-plus-lg me-1"></i>
+
+       New Campaign
+
+    </a>
+
+    <button
+       id="logout-btn"
+
+       class="btn btn-sm btn-logout">
+
+       Logout
+
+    </button>
+
+</div>
+                        
                 </div>
             </header>
             
@@ -438,13 +506,15 @@
             renderOverview();
             renderCampaignGrid();
         }
-
         async function loadCampaigns() {
             const res = await fetchWithAuth('/campaigns/');
-            if (!res.ok) throw new Error('Failed to load campaigns.');
+            if (!res.ok) {
+                throw new Error('Failed to load campaigns.');
+            }
             allCampaigns = await res.json();
             renderApp();
         }
+<<<<<<< HEAD
 
         async function confirmDeleteCampaign() {
             if (!deleteCampaignId) return;
@@ -486,6 +556,8 @@
             }
         }
 
+=======
+>>>>>>> 7c613fc (feat: add status filtering to campaigns list view)
         document.addEventListener('DOMContentLoaded', async () => {
             document.querySelectorAll('.filter-chip').forEach(button => {
                 button.addEventListener('click', () => {
@@ -493,12 +565,35 @@
                     renderApp();
                 });
             });
-
             const searchInput = document.getElementById('campaign-search');
-            searchInput.addEventListener('input', () => {
-                searchQuery = searchInput.value || '';
-                renderCampaignGrid();
-            });
+
+            const statusSelect =
+                document.getElementById('campaign-status');
+
+                searchInput.addEventListener(
+                    'input',
+                    ()=>{
+
+                    searchQuery =
+
+                    searchInput.value || '';
+
+                    renderCampaignGrid();
+
+        }); 
+        statusSelect.addEventListener(
+            'change',
+            ()=>{
+
+            activeFilter =
+
+            statusSelect.value
+            ? statusSelect.value
+            : 'all';
+
+            renderApp();
+
+        });          
 
             const deleteModalEl = document.getElementById('deleteCampaignModal');
             const confirmDeleteButton = document.getElementById('confirm-delete-campaign-btn');
