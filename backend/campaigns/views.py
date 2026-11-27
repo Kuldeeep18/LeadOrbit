@@ -431,7 +431,7 @@ class WebhookView(APIView):
             return Response({'detail': 'Forbidden'}, status=status.HTTP_403_FORBIDDEN)
 
         event_type = (request.data.get('event') or '').strip().lower()
-        lead_email = request.data.get('email')
+        lead_email = str(request.data.get('email') or '').strip()
         message_id = request.data.get('message_id') or request.data.get('messageId')
         bounce_details = self._extract_bounce_details(request.data)
         
@@ -444,7 +444,7 @@ class WebhookView(APIView):
 
                 # Find active campaign lead matching this email
                 base_qs = CampaignLead.objects.filter(
-                    lead__email=lead_email,
+                    lead__email__iexact=lead_email,
                     status__in=tracked_statuses,
                 )
                 if message_id:
