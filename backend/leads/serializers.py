@@ -1,7 +1,18 @@
+import re
+
 from rest_framework import serializers
 from django.core.exceptions import ValidationError as DjangoValidationError
 
 from .models import BlockedDomain, Lead, LeadImportJob, Tag, LeadTag, validate_domain
+
+# Matches common phone formats: +1234567890, (123) 456-7890, 123-456-7890,
+# 123.456.7890, 123 456 7890, +1 (123) 456-7890, +1-123-456-7890,
+# +33 6 12 34 56 78, etc.
+PHONE_REGEX = re.compile(
+    r'^(?:\+?\d{1,3}[\s\-]?)?'    # optional country code with its separator
+    r'(?:\(\d{1,4}\)|\d{1,4})'    # area code: fully parenthesized or plain
+    r'(?:[\s.\-]?\d{1,4}){1,5}$'  # remaining digit groups (1-5 groups)
+)
 
 
 def _request_organization(serializer):
@@ -59,6 +70,17 @@ class LeadSerializer(serializers.ModelSerializer):
                 attrs[field] = value.strip()
 
         return attrs
+
+    def validate_phone(self, value):
+        """Reject phone numbers that don't look like a real phone number."""
+        if not value:
+            return value
+        value = value.strip()
+        if not PHONE_REGEX.match(value):
+            raise serializers.ValidationError(
+                'Enter a valid phone number (e.g. +1234567890 or (123) 456-7890).'
+            )
+        return value
 
     def validate_email(self, value):
         # Checked here so a duplicate is a 400, not an IntegrityError (500) from the
