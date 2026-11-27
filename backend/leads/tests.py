@@ -1,8 +1,11 @@
+from datetime import timedelta
+import uuid
 from unittest.mock import patch
 
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
+from django.utils import timezone
 from rest_framework import status
 from rest_framework.test import APITestCase
 
@@ -465,6 +468,48 @@ class LeadFilterTests(APITestCase):
         resp = self._get()
         emails = {l['email'] for l in resp.data}
         self.assertNotIn('spy@example.com', emails)
+
+    def test_filter_by_valid_random_tag_uuid_returns_200(self):
+        resp = self._get(tags=str(uuid.uuid4()))
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(resp.data, [])
+
+    def test_filter_by_invalid_tag_uuid_returns_400(self):
+        resp = self._get(tags='not-a-uuid')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('tags', resp.data)
+
+    def test_filter_by_mixed_valid_and_invalid_tag_uuids_returns_400(self):
+        resp = self._get(tags=f'{uuid.uuid4()},not-a-uuid')
+        self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn('tags', resp.data)
+
+    def test_filter_by_invalid_created_after_returns_400(self):
+        for bad_date in ('2026-99-99', 'not-a-date'):
+            with self.subTest(bad_date=bad_date):
+                resp = self._get(created_after=bad_date)
+                self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertIn('created_after', resp.data)
+
+    def test_filter_by_invalid_created_before_returns_400(self):
+        for bad_date in ('2026-13-01', 'invalid'):
+            with self.subTest(bad_date=bad_date):
+                resp = self._get(created_before=bad_date)
+                self.assertEqual(resp.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertIn('created_before', resp.data)
+
+    def test_filter_by_valid_date_range(self):
+        today = timezone.localdate()
+        resp = self._get(
+            created_after=(today - timedelta(days=1)).isoformat(),
+            created_before=today.isoformat(),
+        )
+        self.assertEqual(resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(len(resp.data), 4)
+
+        empty_resp = self._get(created_after=(today + timedelta(days=1)).isoformat())
+        self.assertEqual(empty_resp.status_code, status.HTTP_200_OK)
+        self.assertEqual(empty_resp.data, [])
 
 
 class LeadDataIntegrityTests(APITestCase):
