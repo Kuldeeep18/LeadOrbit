@@ -19,6 +19,7 @@ class FakeClient:
         open_prs=None,
         merged_today=None,
         check_runs=None,
+        workflow_runs=None,
         repo_owner="kuldeeep18",
     ):
         self._stargazers = {u.lower() for u in (stargazers or [])}
@@ -29,6 +30,7 @@ class FakeClient:
         self._open_prs = open_prs or []
         self._merged_today = {k.lower(): v for k, v in (merged_today or {}).items()}
         self._check_runs = check_runs or {}
+        self._workflow_runs = workflow_runs or {}
         self._repo_owner = repo_owner.lower()
         self.assigned_calls = []
         self.posted_comments = []
@@ -75,6 +77,9 @@ class FakeClient:
     def get_check_runs(self, sha):
         return self._check_runs.get(sha, [])
 
+    def get_workflow_runs(self, sha):
+        return self._workflow_runs.get(sha, [])
+
     def add_labels(self, number, labels):
         self.added_labels.append((number, labels))
 
@@ -88,6 +93,7 @@ class ParsingHelperTests(unittest.TestCase):
         self.assertTrue(ca.wants_issue_assignment("assign/"))
         self.assertTrue(ca.wants_issue_assignment("/claim"))
         self.assertTrue(ca.wants_issue_assignment("Hi @Kuldeeep18, please assign this issue to me"))
+        self.assertTrue(ca.wants_issue_assignment("Hello, I would like to work on this issue. Could you please assign it to me?"))
         self.assertTrue(ca.wants_issue_assignment("I'd like to take this issue for WoCS 2026"))
         self.assertFalse(ca.wants_issue_assignment("Do not assign this yet"))
         self.assertFalse(ca.wants_issue_assignment("Looks good to me!"))
@@ -149,7 +155,8 @@ class PrAutomationTests(unittest.TestCase):
         number=760,
         author="alice",
         body="Closes #746\n\nRemoved duplicate title tags from head.",
-        created="2026-11-27T10:00:00Z",
+        created="2026-11-28T10:00:00Z",
+        merge_state="CLEAN",
     ):
         return {
             "number": number,
@@ -160,7 +167,7 @@ class PrAutomationTests(unittest.TestCase):
             "createdAt": created,
             "isDraft": False,
             "mergeable": "MERGEABLE",
-            "mergeStateStatus": "CLEAN",
+            "mergeStateStatus": merge_state,
             "labels": [],
             "headRefOid": "abc123456789",
         }
@@ -257,6 +264,76 @@ class PrAutomationTests(unittest.TestCase):
         merged = ca.process_open_prs(client)
         self.assertEqual(merged, 0)
         self.assertEqual(client.merged_prs, [])
+
+    def test_non_stargazer_with_unstable_ci_gets_star_reminder(self):
+        pr = self._make_pr(number=765, author="newdev", merge_state="UNSTABLE")
+        client = FakeClient(
+            stargazers=[],
+            issues={746: {"number": 746, "state": "open", "title": "LO-135 [Easy]: Title", "assignees": [{"login": "newdev"}], "labels": [], "user": {"login": "kuldeeep18"}}},
+            open_prs=[pr],
+            workflow_runs={
+                "abc123456789": [{"name": "CI", "conclusion": "action_required", "html_url": "https://github.com/run/1"}]
+            },
+        )
+        merged = ca.process_open_prs(client)
+        self.assertEqual(merged, 0)
+        self.assertEqual(len(client.posted_comments), 1)
+        self.assertIn("LeadOrbit Bot here!", client.posted_comments[0][1])
+
+    def test_pre_cutoff_pr_merges_without_ci_once_author_stars(self):
+        pr = self._make_pr(number=744, author="emam2006", created="2026-11-24T10:23:41Z")
+        client = FakeClient(
+            stargazers=["emam2006"],
+            issues={746: {"number": 746, "state": "open", "title": "LO-108 [Easy]: Fix", "assignees": [], "labels": [], "user": {"login": "kuldeeep18"}}},
+            open_prs=[pr],
+            check_runs={"abc123456789": [{"name": "CodeRabbit", "status": "completed", "conclusion": "neutral"}]},
+        )
+        merged = ca.process_open_prs(client)
+        self.assertEqual(merged, 1)
+        self.assertEqual(client.added_labels, [(744, ["wocs", "level 1"])])
+        self.assertEqual(client.merged_prs, [744])
+
+    def test_post_cutoff_unassigned_issue_is_blocked(self):
+        pr = self._make_pr(number=766, author="bob", created="2026-11-28T10:00:00Z")
+        client = FakeClient(
+            stargazers=["bob"],
+            issues={746: {"number": 746, "state": "open", "title": "LO-135 [Easy]: Title", "assignees": [], "labels": [], "user": {"login": "kuldeeep18"}}},
+            open_prs=[pr],
+            check_runs={"abc123456789": self._passing_checks()},
+        )
+        merged = ca.process_open_prs(client)
+        self.assertEqual(merged, 0)
+        self.assertIn("comment `/assign` on issue #746 first", client.posted_comments[0][1])
+
+    def test_action_required_ci_posts_approval_notice(self):
+        pr = self._make_pr(number=759, author="wiwiwi2708", merge_state="UNSTABLE")
+        client = FakeClient(
+            stargazers=["wiwiwi2708"],
+            issues={746: {"number": 746, "state": "open", "title": "LO-138 [Easy]: Title", "assignees": [{"login": "wiwiwi2708"}], "labels": [], "user": {"login": "kuldeeep18"}}},
+            open_prs=[pr],
+            workflow_runs={
+                "abc123456789": [{"name": "CI", "conclusion": "action_required", "html_url": "https://github.com/run/46033247720"}]
+            },
+        )
+        merged = ca.process_open_prs(client)
+        self.assertEqual(merged, 0)
+        self.assertIn("Approve and run", client.posted_comments[0][1])
+        self.assertIn("https://github.com/run/46033247720", client.posted_comments[0][1])
+
+    def test_failed_ci_workflow_run_posts_failure_notice(self):
+        pr = self._make_pr(number=767, author="alice", merge_state="UNSTABLE")
+        client = FakeClient(
+            stargazers=["alice"],
+            issues={746: {"number": 746, "state": "open", "title": "LO-135 [Easy]: Title", "assignees": [{"login": "alice"}], "labels": [], "user": {"login": "kuldeeep18"}}},
+            open_prs=[pr],
+            workflow_runs={
+                "abc123456789": [{"name": "CI", "conclusion": "failure", "html_url": "https://github.com/run/999"}]
+            },
+        )
+        merged = ca.process_open_prs(client)
+        self.assertEqual(merged, 0)
+        self.assertIn("`CI` checks failed", client.posted_comments[0][1])
+        self.assertIn("https://github.com/run/999", client.posted_comments[0][1])
 
 
 if __name__ == "__main__":

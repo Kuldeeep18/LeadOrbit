@@ -35,6 +35,7 @@ from typing import Any
 
 DEFAULT_REPO = os.environ.get("GITHUB_REPOSITORY", "Kuldeeep18/LeadOrbit")
 ACTIVE_EPOCH_ISO = os.environ.get("LEADORBIT_ACTIVE_EPOCH", "2026-11-01T00:00:00Z")
+WORKFLOW_CUTOFF_ISO = os.environ.get("LEADORBIT_WORKFLOW_CUTOFF", "2026-11-27T14:35:00Z")
 MAX_MERGES_PER_DAY = int(os.environ.get("LEADORBIT_MAX_PRS_PER_DAY", "2"))
 REQUIRED_CI_CHECK_NAMES = tuple(
     name.strip()
@@ -51,7 +52,7 @@ ASSIGN_COMMAND_RE = re.compile(
     re.IGNORECASE,
 )
 ASSIGN_PHRASE_RE = re.compile(
-    r"\b(?:please\s+assign|assign\s+(?:this\s+)?(?:issue\s+)?to\s+me|assign\s+me|"
+    r"\b(?:please\s+assign|assign\s+(?:(?:this|the)\s+)?(?:issue\s+|it\s+)?to\s+me|assign\s+me|"
     r"i(?:'d| would)\s+like\s+to\s+(?:take|work\s+on)|can\s+i\s+(?:work\s+on|take)|"
     r"want\s+to\s+work\s+on)\b",
     re.IGNORECASE,
@@ -193,6 +194,15 @@ class GitHubClient:
         try:
             data = self.api_json(f"repos/{self.repo}/commits/{commit_sha}/check-runs")
             return data.get("check_runs", []) if isinstance(data, dict) else []
+        except RuntimeError:
+            return []
+
+    def get_workflow_runs(self, commit_sha: str) -> list[dict[str, Any]]:
+        if not commit_sha:
+            return []
+        try:
+            data = self.api_json(f"repos/{self.repo}/actions/runs?head_sha={commit_sha}")
+            return data.get("workflow_runs", []) if isinstance(data, dict) else []
         except RuntimeError:
             return []
 
@@ -460,6 +470,7 @@ def evaluate_pr(
         return False
 
     # Rule 2: Issue-first check (must reference a valid issue; cannot hijack someone else's assigned issue)
+    is_pre_cutoff = bool(created_at and created_at < WORKFLOW_CUTOFF_ISO)
     linked_nums = extract_linked_issue_numbers(pr.get("body") or "", pr.get("title") or "")
     linked_issue: dict[str, Any] | None = None
     for num in linked_nums:
@@ -505,7 +516,7 @@ def evaluate_pr(
                     "Please make sure you are assigned to an issue before submitting a PR for it.",
                 )
             return False
-        if not issue_assignees and issue_author != author.lower():
+        if not is_pre_cutoff and not issue_assignees and issue_author != author.lower():
             marker = f"<!-- leadorbit-bot:issue-not-assigned:{linked_issue['number']} -->"
             if not has_comment_marker(comments, marker):
                 client.post_comment(
@@ -529,8 +540,9 @@ def evaluate_pr(
     # Rule 3: Merge conflict / branch cleanliness check
     mergeable = pr.get("mergeable")
     merge_state = pr.get("mergeStateStatus")
+    head_sha = pr.get("headRefOid") or ""
     if mergeable == "CONFLICTING" or merge_state == "DIRTY":
-        marker = f"<!-- leadorbit-bot:conflict:{pr.get('headRefOid', '')[:12]} -->"
+        marker = f"<!-- leadorbit-bot:conflict:{head_sha[:12]} -->"
         if not has_comment_marker(comments, marker):
             client.post_comment(
                 pr_num,
@@ -540,14 +552,50 @@ def evaluate_pr(
             )
         return False
 
+    # Rule 4: CI check runs / fork workflow approval status
+    workflow_runs = client.get_workflow_runs(head_sha)
+    action_required_runs = [
+        run for run in workflow_runs
+        if str(run.get("name") or "").upper() == "CI" and run.get("conclusion") == "action_required"
+    ]
+    if action_required_runs:
+        run_url = action_required_runs[0].get("html_url") or ""
+        marker = f"<!-- leadorbit-bot:ci-approval-needed:{head_sha[:12]} -->"
+        if not has_comment_marker(comments, marker):
+            link_part = f" ([workflow run]({run_url}))" if run_url else ""
+            client.post_comment(
+                pr_num,
+                f"{marker}\n"
+                f"Hi @{author} 👋 — ⭐ star and issue checks passed! "
+                f"Because this is a first-time fork contribution, GitHub is waiting for a maintainer to click **Approve and run** on the `CI` workflow{link_part}. "
+                "Once `CI` finishes passing, this PR will auto-merge automatically!",
+            )
+        return False
+
+    failed_ci_runs = [
+        run for run in workflow_runs
+        if str(run.get("name") or "").upper() == "CI" and run.get("conclusion") in ("failure", "timed_out", "cancelled")
+    ]
+    if failed_ci_runs:
+        run_url = failed_ci_runs[0].get("html_url") or ""
+        marker = f"<!-- leadorbit-bot:ci-failed:{head_sha[:12]} -->"
+        if not has_comment_marker(comments, marker):
+            link_part = f" ([CI logs]({run_url}))" if run_url else ""
+            client.post_comment(
+                pr_num,
+                f"{marker}\n"
+                f"Hi @{author} 👋 — the `CI` checks failed on commit `{head_sha[:7]}`{link_part}. "
+                "Please fix the failing checks and push a new commit so the workflow can re-evaluate and merge this PR.",
+            )
+        return False
+
     if mergeable != "MERGEABLE" or merge_state != "CLEAN":
         print(f"PR #{pr_num}: not ready yet (mergeable={mergeable}, mergeStateStatus={merge_state}).")
         return False
 
-    # Rule 4: CI check runs must pass
-    head_sha = pr.get("headRefOid") or ""
     check_runs = client.get_check_runs(head_sha)
-    ci_ok, ci_msg = evaluate_ci_checks(check_runs)
+    required = () if is_pre_cutoff else REQUIRED_CI_CHECK_NAMES
+    ci_ok, ci_msg = evaluate_ci_checks(check_runs, required_checks=required)
     if not ci_ok:
         print(f"PR #{pr_num}: {ci_msg}")
         return False
