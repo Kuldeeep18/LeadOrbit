@@ -218,6 +218,16 @@
     <script type="module">
         import { fetchWithAuth } from './api.js';
 
+        function escapeHtml(value) {
+            return String(value ?? '').replace(/[&<>"']/g, (c) => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#39;',
+            }[c]));
+        }
+
         document.addEventListener('DOMContentLoaded', async () => {
             const timeRangeSelect = document.getElementById('time-range');
             const campaignSelect = document.getElementById('campaign-select');
@@ -455,15 +465,16 @@
                 const steps = campaign.steps || [];
                 const connected = campaign.connected_account?.email || 'Not connected';
                 const created = campaign.created_at ? new Date(campaign.created_at).toLocaleString() : '—';
+                const campaignId = encodeURIComponent(String(campaign.id ?? ''));
                 summaryEl.innerHTML = `
-                    <div class="fw-semibold">${campaign.name}</div>
-                    <div class="small text-muted mt-1">Status: <span class="fw-semibold">${campaign.status || 'DRAFT'}</span></div>
-                    <div class="small text-muted">Enrolled leads: <span class="fw-semibold">${campaign.enrolled_count || 0}</span></div>
-                    <div class="small text-muted">Steps configured: <span class="fw-semibold">${steps.length}</span></div>
-                    <div class="small text-muted">Sender account: <span class="fw-semibold">${connected}</span></div>
-                    <div class="small text-muted">Created: <span class="fw-semibold">${created}</span></div>
+                    <div class="fw-semibold">${escapeHtml(campaign.name)}</div>
+                    <div class="small text-muted mt-1">Status: <span class="fw-semibold">${escapeHtml(campaign.status || 'DRAFT')}</span></div>
+                    <div class="small text-muted">Enrolled leads: <span class="fw-semibold">${escapeHtml(campaign.enrolled_count || 0)}</span></div>
+                    <div class="small text-muted">Steps configured: <span class="fw-semibold">${escapeHtml(steps.length)}</span></div>
+                    <div class="small text-muted">Sender account: <span class="fw-semibold">${escapeHtml(connected)}</span></div>
+                    <div class="small text-muted">Created: <span class="fw-semibold">${escapeHtml(created)}</span></div>
                     <div class="mt-2">
-                        <a class="btn btn-sm btn-logout" href="/campaign-builder.html?id=${campaign.id}">
+                        <a class="btn btn-sm btn-logout" href="/campaign-builder.html?id=${escapeHtml(campaignId)}">
                             Open in Builder
                         </a>
                     </div>
