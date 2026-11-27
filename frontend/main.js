@@ -221,6 +221,39 @@ function initThemeToggle() {
     });
 }
 
+// ==========================================
+// BACK TO TOP FLOATING BUTTON
+// ==========================================
+
+function initBackToTop() {
+    const FAB = document.getElementById('back-to-top');
+    if (!FAB) return;
+
+    let scrollTimeout = null;
+
+    function handleScroll() {
+        if (window.pageYOffset > 400) {
+            FAB.classList.add('visible');
+        } else {
+            FAB.classList.remove('visible');
+        }
+    }
+
+    function scrollToTop() {
+        window.scrollTo({
+            top: 0,
+            behavior: 'smooth'
+        });
+    }
+
+    window.addEventListener('scroll', () => {
+        clearTimeout(scrollTimeout);
+        scrollTimeout = setTimeout(handleScroll, 10);
+    });
+
+    FAB.addEventListener('click', scrollToTop);
+}
+
 // Sync theme across multiple tabs
 window.addEventListener('storage', (event) => {
     if (event.key === THEME_STORAGE_KEY && event.newValue) {
@@ -393,6 +426,18 @@ async function initAppShell() {
     }
 
     injectProjectFooter();
+
+    const backToTopHTML = `
+        <button id="back-to-top" class="back-to-top" aria-label="Back to top" title="Back to top">
+            <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M13.5 13.5l4.545-4.545a1 1 0 0 1 1.418 1.418l-6.066 6.065a1 1 0 0 1-1.418-1.418l4.546-4.546a1 1 0 0 1 0-1.418L13.5 11.082a1 1 0 0 1-1.418-1.418l-6.066 6.065a1 1 0 0 1 1.418-1.418l4.545 4.545Z"/>
+            </svg>
+        </button>
+    `;
+
+    document.body.insertAdjacentHTML('beforeend', backToTopHTML);
+
+    initBackToTop();
 
     try {
         const res = await fetchWithAuth('/auth/me/');
