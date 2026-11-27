@@ -1,5 +1,9 @@
+import uuid
+
 from django.db.models import Q
+from django.utils.dateparse import parse_date
 from rest_framework import viewsets, parsers, status
+from rest_framework.exceptions import ValidationError
 from rest_framework.pagination import PageNumberPagination
 from rest_framework.decorators import action
 from rest_framework.response import Response
@@ -19,6 +23,26 @@ def _decode_csv_upload(raw):
         except UnicodeDecodeError:
             continue
     return raw.decode('latin-1')
+
+
+def _parse_tag_id(raw_tag_id):
+    try:
+        return uuid.UUID(raw_tag_id)
+    except ValueError:
+        raise ValidationError({'tags': f'Invalid tag UUID: "{raw_tag_id}".'})
+
+
+def _parse_date_param(params, field_name):
+    raw_value = params.get(field_name, '').strip()
+    if not raw_value:
+        return None
+    try:
+        parsed = parse_date(raw_value)
+    except ValueError:
+        parsed = None
+    if parsed is None:
+        raise ValidationError({field_name: 'Invalid date format. Expected YYYY-MM-DD.'})
+    return parsed
 
 
 class LeadImportJobPagination(PageNumberPagination):
@@ -61,18 +85,18 @@ class LeadViewSet(viewsets.ModelViewSet):
         # ── Tag filter ──────────────────────────────────────────────────────
         raw_tags = params.get('tags', '').strip()
         if raw_tags:
-            tag_ids = [t.strip() for t in raw_tags.split(',') if t.strip()]
+            tag_ids = [_parse_tag_id(t.strip()) for t in raw_tags.split(',') if t.strip()]
             for tag_id in tag_ids:
                 qs = qs.filter(lead_tags__tag__id=tag_id)
 
         # ── Date range ──────────────────────────────────────────────────────
-        created_after = params.get('created_after', '').strip()
-        if created_after:
-            qs = qs.filter(created_at__date__gte=created_after)
+        parsed_after = _parse_date_param(params, 'created_after')
+        if parsed_after is not None:
+            qs = qs.filter(created_at__date__gte=parsed_after)
 
-        created_before = params.get('created_before', '').strip()
-        if created_before:
-            qs = qs.filter(created_at__date__lte=created_before)
+        parsed_before = _parse_date_param(params, 'created_before')
+        if parsed_before is not None:
+            qs = qs.filter(created_at__date__lte=parsed_before)
 
         # ── Status (pipeline stage) ──────────────────────────────────────────
         status_param = params.get('status', '').strip().lower()
