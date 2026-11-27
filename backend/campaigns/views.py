@@ -508,8 +508,7 @@ class WebhookView(APIView):
 
 class DashboardAnalyticsView(APIView):
     """
-    Returns high-level aggregated metrics for the analytics page.
-    Accepts ?days=N query param (default 30).
+   
     """
     permission_classes = [IsAuthenticated]
 
