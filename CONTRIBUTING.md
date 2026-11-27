@@ -4,6 +4,23 @@ Thank you for your interest in contributing to LeadOrbit! 🚀
 
 We welcome contributions of all sizes, including bug fixes, documentation improvements, feature enhancements, testing, and UI updates.
 
+---
+
+## Contribution Rules (Issue-First Workflow)
+
+**Please open or get assigned to an issue *before* raising a Pull Request.**
+
+1. **Star & Fork**: Star ⭐ this repository and fork it to your GitHub account.
+2. **Open or Claim an Issue First**:
+   * **Existing issue**: Browse the open issues, comment with your proposed implementation approach, and wait for a maintainer to assign the issue to you. To keep things fair, contributors are assigned **one issue at a time**.
+   * **New bug or feature**: If the change is not covered by an existing issue, **open a new issue first** using our Bug Report or Feature Request template and wait for maintainer approval/assignment before writing code.
+   * **No unsolicited PRs**: Pull Requests without a linked, approved/assigned issue may be closed without review.
+3. **Human Review & Quality Policy**:
+   * Purely automated or AI-dumped PRs will **not** be merged.
+   * Contributors must manually test their changes locally, understand every line they submit, and be ready to explain their implementation and respond to review feedback.
+
+---
+
 ## Getting Started
 
 ### 1. Fork the Repository
@@ -140,14 +157,16 @@ Ensure all tests pass successfully.
 
 ## Pull Request Workflow
 
-1. Fork the repository
-2. Create a new branch
-3. Make your changes
-4. Test your changes
+1. **Open an issue first** (using the Bug Report / Feature Request template) or claim an existing open issue and wait for maintainer assignment
+2. Star and fork the repository
+3. Create a new branch from `main` (e.g., `fix/135-duplicate-title-tags`)
+4. Make your changes cleanly and test them locally
 5. Commit using conventional commits
-6. Push your branch
-7. Open a Pull Request
-8. Link the related issue
+6. Push your branch to your fork
+7. Open a Pull Request, fill out the PR template, and link the related issue (`Closes #<issue-number>`)
+8. Respond to maintainer feedback and verification questions during review
+
+> ⚠️ **Important:** Do **not** raise a PR directly without first opening an issue (or being assigned to an existing one). Unlinked PRs without prior issue approval will not be merged.
 
 Example:
 
