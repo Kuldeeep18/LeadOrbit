@@ -220,6 +220,21 @@ class GitHubClient:
             return
         self.run_gh(["pr", "merge", str(pr_number), "--repo", self.repo, "--merge"])
 
+    def close_issue(self, issue_number: int) -> None:
+        if self.dry_run:
+            print(f"[DRY-RUN] Close linked issue #{issue_number}")
+            return
+        self.run_gh([
+            "api",
+            "-X",
+            "PATCH",
+            f"repos/{self.repo}/issues/{issue_number}",
+            "-f",
+            "state=closed",
+            "-f",
+            "state_reason=completed",
+        ])
+
 
 def is_bot_user(username: str, user_type: str = "User") -> bool:
     return (
@@ -624,6 +639,8 @@ def evaluate_pr(
         client.add_labels(pr_num, desired_labels)
 
     client.merge_pr(pr_num)
+    if linked_issue and linked_issue.get("state") == "open":
+        client.close_issue(linked_issue["number"])
     merged_today_cache[author_key] += 1
     new_count = merged_today_cache[author_key]
 

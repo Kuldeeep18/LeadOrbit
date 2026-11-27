@@ -36,6 +36,7 @@ class FakeClient:
         self.posted_comments = []
         self.added_labels = []
         self.merged_prs = []
+        self.closed_issues = []
 
     def is_stargazer(self, username):
         return username.lower() in self._stargazers
@@ -85,6 +86,11 @@ class FakeClient:
 
     def merge_pr(self, pr_number):
         self.merged_prs.append(pr_number)
+
+    def close_issue(self, issue_number):
+        self.closed_issues.append(issue_number)
+        if issue_number in self._issues:
+            self._issues[issue_number]["state"] = "closed"
 
 
 class ParsingHelperTests(unittest.TestCase):
@@ -191,6 +197,7 @@ class PrAutomationTests(unittest.TestCase):
         self.assertEqual(merged, 1)
         self.assertEqual(client.added_labels, [(760, ["wocs", "level 1"])])
         self.assertEqual(client.merged_prs, [760])
+        self.assertEqual(client.closed_issues, [746])
 
     def test_third_pr_same_day_is_held_under_two_per_day_limit(self):
         pr = self._make_pr(number=762)
