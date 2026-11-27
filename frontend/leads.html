@@ -257,6 +257,14 @@
                                 <i class="bi bi-tags me-1"></i>Tags
                                 <span class="text-muted fw-normal">(click to toggle)</span>
                             </label>
+                            <div class="d-flex gap-2 mb-2">
+                                <button id="select-all-tags-btn" class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-check-all me-1" aria-hidden="true"></i>Select All
+                                </button>
+                                <button id="clear-all-tags-btn" class="btn btn-sm btn-outline-secondary">
+                                    <i class="bi bi-x-circle me-1" aria-hidden="true"></i>Clear All
+                                </button>
+                            </div>
                             <div id="tag-filter-chips" class="d-flex flex-wrap gap-2">
                                 <span class="text-muted small">Loading tags...</span>
                             </div>
@@ -792,6 +800,18 @@
             renderTagFilterChips();
             updateFilterIndicator({});
         }
+
+        document.getElementById('select-all-tags-btn').addEventListener('click', () => {
+            if (selectedTagIds.size === allTags.length) return;
+            selectedTagIds.clear();
+            allTags.forEach(tag => selectedTagIds.add(tag.id));
+            renderTagFilterChips();
+        });
+
+        document.getElementById('clear-all-tags-btn').addEventListener('click', () => {
+            selectedTagIds.clear();
+            renderTagFilterChips();
+        });
 
         // ─── Data loading ────────────────────────────────────────────────────
 
