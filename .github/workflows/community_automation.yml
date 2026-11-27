@@ -1,0 +1,96 @@
+name: LeadOrbit Community Automation
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_target:
+    types: [opened, reopened, synchronize, edited, ready_for_review]
+  workflow_run:
+    workflows: ["CI"]
+    types: [completed]
+  schedule:
+    # Periodic sweep catches contributors who star after opening a PR
+    # and merges PRs queued overnight by the 2 PRs/day cap.
+    - cron: "*/15 * * * *"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Preview actions without commenting, labeling, assigning, or merging"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: leadorbit-community-automation-${{ github.event.issue.number || github.event.pull_request.number || github.event_name }}
+  cancel-in-progress: false
+
+jobs:
+  issue-comment-handler:
+    if: >-
+      github.event_name == 'issue_comment' &&
+      !github.event.issue.pull_request &&
+      github.event.comment.user.type != 'Bot'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout trusted main branch
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Handle issue comment (welcome + auto-assign)
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          COMMENT_BODY: ${{ github.event.comment.body }}
+        run: |
+          python .github/scripts/community_automation.py \
+            --mode issue_comment \
+            --issue "${{ github.event.issue.number }}" \
+            --user "${{ github.event.comment.user.login }}" \
+            --user-type "${{ github.event.comment.user.type }}"
+
+  pr-automation:
+    if: >-
+      github.event_name == 'pull_request_target' ||
+      github.event_name == 'workflow_run' ||
+      github.event_name == 'schedule' ||
+      github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout trusted main branch
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+
+      - name: Evaluate PRs and merge eligible stargazer PRs
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          LEADORBIT_ACTIVE_EPOCH: "2026-11-01T00:00:00Z"
+          LEADORBIT_MAX_PRS_PER_DAY: "2"
+          LEADORBIT_REQUIRED_CHECKS: "backend-tests,frontend-checks"
+        run: |
+          DRY_FLAG=""
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            DRY_FLAG="--dry-run"
+          fi
+          if [ "${{ github.event_name }}" = "pull_request_target" ]; then
+            python .github/scripts/community_automation.py --mode pr --pr "${{ github.event.pull_request.number }}" $DRY_FLAG
+          else
+            python .github/scripts/community_automation.py --mode sweep $DRY_FLAG
+          fi

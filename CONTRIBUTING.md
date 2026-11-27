@@ -12,12 +12,12 @@ We welcome contributions of all sizes, including bug fixes, documentation improv
 
 1. **Star & Fork**: Star ⭐ this repository and fork it to your GitHub account.
 2. **Open or Claim an Issue First**:
-   * **Existing issue**: Browse the open issues, comment with your proposed implementation approach, and wait for a maintainer to assign the issue to you. To keep things fair, contributors are assigned **one issue at a time**.
+   * **Existing issue**: Browse the open issues and comment `/assign` (optionally with your short implementation plan). If you have starred the repo and don't already have an active assigned issue, our automation bot will assign it to you quickly! To keep things fair, contributors are assigned **one open issue at a time**.
    * **New bug or feature**: If the change is not covered by an existing issue, **open a new issue first** using our Bug Report or Feature Request template and wait for maintainer approval/assignment before writing code.
-   * **No unsolicited PRs**: Pull Requests without a linked, approved/assigned issue may be closed without review.
-3. **Human Review & Quality Policy**:
-   * Purely automated or AI-dumped PRs will **not** be merged.
-   * Contributors must manually test their changes locally, understand every line they submit, and be ready to explain their implementation and respond to review feedback.
+   * **No unsolicited PRs**: Pull Requests without a linked, approved/assigned issue (`Closes #<issue-number>`) will not be merged.
+3. **Human Review, CI & Rate Limits**:
+   * Purely automated or AI-dumped PRs are not accepted. Contributors must test changes locally, understand every line they submit, and pass all CI checks.
+   * **Max 2 PRs per day**: To ensure steady, high-quality reviews and fair participation, at most **2 Pull Requests per contributor can be merged per day** (UTC). Extra eligible PRs wait automatically until the next day.
 
 ---
 
