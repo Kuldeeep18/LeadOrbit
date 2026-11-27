@@ -1674,6 +1674,50 @@ class CampaignWorkflowTests(APITestCase):
             any('Webhook processing error for event=open email=lead@acme.test' in entry for entry in logs.output)
         )
 
+    def test_email_webhook_normalizes_recipient_email(self):
+        campaign = Campaign.objects.create(
+            organization=self.organization,
+            name='Webhook recipient matching',
+            status='ACTIVE',
+        )
+        events = (
+            ('open', 'last_opened_at', 'ACTIVE'),
+            ('click', 'last_clicked_at', 'ACTIVE'),
+            ('reply', 'last_replied_at', 'REPLIED'),
+            ('bounce', None, 'BOUNCED'),
+        )
+
+        for event, timestamp_field, expected_status in events:
+            email_pairs = (
+                (f'{event}-case@Acme.test', f'{event}-CASE@acme.test'),
+                (f'{event}-trim@acme.test', f' \t{event}-trim@acme.test '),
+                (f'{event}-both@acme.test', f' {event}-BOTH@Acme.test\t '),
+            )
+            for stored_email, webhook_email in email_pairs:
+                with self.subTest(event=event, email=webhook_email):
+                    lead = Lead.objects.create(
+                        organization=self.organization,
+                        email=stored_email,
+                    )
+                    campaign_lead = CampaignLead.objects.create(
+                        organization=self.organization,
+                        campaign=campaign,
+                        lead=lead,
+                        status='ACTIVE',
+                    )
+
+                    payload = {'event': event, 'email': webhook_email}
+                    with patch('campaigns.tasks.notify_email_bounced'):
+                        response = self._post_webhook(payload)
+
+                    self.assertEqual(response.status_code, status.HTTP_200_OK)
+                    campaign_lead.refresh_from_db()
+                    self.assertEqual(campaign_lead.status, expected_status)
+                    if timestamp_field:
+                        self.assertIsNotNone(
+                            getattr(campaign_lead, timestamp_field)
+                        )
+
     def test_email_webhook_bounce_marks_lead_bounced_and_stops_sequence(self):
         campaign = Campaign.objects.create(
             organization=self.organization,
