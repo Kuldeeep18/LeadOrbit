@@ -421,7 +421,15 @@ async function initAppShell() {
         if (userData.organization) {
             if (orgNameInput) orgNameInput.value = userData.organization.name || '';
             if (orgIdInput) orgIdInput.value = userData.organization.id || '';
-            if (geminiKeyInput) geminiKeyInput.value = userData.organization.gemini_api_key || '';
+            // The API never returns the secret itself, only has_gemini_api_key, so
+            // never fill the key field. Show the saved state instead; settings.html
+            // owns the status text and Clear Key button.
+            if (geminiKeyInput) {
+                geminiKeyInput.value = '';
+                if (userData.organization.has_gemini_api_key) {
+                    geminiKeyInput.placeholder = 'Saved — enter a new key to replace it';
+                }
+            }
             if (aiPersonalizationToggle) {
                 aiPersonalizationToggle.checked = userData.organization.enable_ai_personalization !== false;
             }

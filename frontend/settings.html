@@ -126,7 +126,9 @@
                             </div>
                             <div class="mb-3">
                                 <label class="form-label small text-muted fw-semibold">Gemini API Key</label>
-                                <input type="password" class="form-control" id="gemini-api-key" placeholder="Enter your Gemini API Key">
+                                <input type="password" class="form-control" id="gemini-api-key" placeholder="Enter your Gemini API Key" autocomplete="off">
+                                <div id="gemini-key-status" class="form-text">No Gemini API key saved.</div>
+                                <button type="button" class="btn btn-outline-danger btn-sm mt-2 d-none" id="clear-gemini-key-btn">Clear Key</button>
                             </div>
                             <div class="mb-3 form-check form-switch">
                                 <input class="form-check-input" type="checkbox" id="enable-ai-personalization" checked>
@@ -336,6 +338,19 @@
         // Same host as the API ('' means this site's own origin, as in Docker).
         const oauthHost = API_BASE.replace(/\/api\/v1$/, '');
 
+        // Server value of the AI personalization toggle, captured on load. The
+        // save handler only sends the toggle when it differs from this.
+        let initialAiPersonalization = true;
+
+        function updateGeminiKeyStatus(hasSavedKey) {
+            const input = document.getElementById('gemini-api-key');
+            const status = document.getElementById('gemini-key-status');
+            const clearBtn = document.getElementById('clear-gemini-key-btn');
+            if (input) input.placeholder = hasSavedKey ? 'Saved — enter a new key to replace it' : 'Enter your Gemini API Key';
+            if (status) status.textContent = hasSavedKey ? 'Saved — enter a new key to replace it.' : 'No Gemini API key saved.';
+            if (clearBtn) clearBtn.classList.toggle('d-none', !hasSavedKey);
+        }
+
         function copyToClipboard(text, button) {
             navigator.clipboard.writeText(text).then(() => {
                 const icon = button.querySelector('i');
@@ -433,6 +448,9 @@
                     if (user.organization) {
                         document.getElementById('org-name').value = user.organization.name;
                         document.getElementById('org-id').value = user.organization.id;
+                        updateGeminiKeyStatus(user.organization.has_gemini_api_key === true);
+                        initialAiPersonalization = user.organization.enable_ai_personalization !== false;
+                        document.getElementById('enable-ai-personalization').checked = initialAiPersonalization;
                     }
                 }
             } catch (e) {
@@ -445,6 +463,24 @@
                 copyToClipboard(orgId, copyOrgBtn);
             });
 
+            const clearKeyBtn = document.getElementById('clear-gemini-key-btn');
+            clearKeyBtn?.addEventListener('click', () => {
+                showConfirmModal('Clear Gemini API Key', 'Remove the saved Gemini API key from this organization? AI personalization will stop working until a new key is added.', 'Clear Key', async () => {
+                    try {
+                        const res = await fetchWithAuth('/auth/me/', { method: 'PATCH', body: JSON.stringify({ gemini_api_key: '' }) });
+                        if (!res.ok) {
+                            alert('Could not clear the key right now.');
+                            return;
+                        }
+                        document.getElementById('gemini-api-key').value = '';
+                        updateGeminiKeyStatus(false);
+                        alert('Gemini API key cleared.');
+                    } catch (e) {
+                        alert('Could not clear the key right now.');
+                    }
+                });
+            });
+
             const saveBtn = document.getElementById('save-profile-btn');
             if (saveBtn) {
                 saveBtn.addEventListener('click', async () => {
@@ -455,12 +491,18 @@
                     const payload = {};
                     if (organization_name) payload.organization_name = organization_name;
                     if (new_password) payload.new_password = new_password;
-                    if (Object.keys(payload).length === 0 && gemini_api_key === '' && enable_ai_personalization === true) {
+                    // Only send a key when the user typed a new one. An empty field means
+                    // "keep the saved key", so the field is left out entirely.
+                    if (gemini_api_key) payload.gemini_api_key = gemini_api_key;
+                    // Only send the toggle when it actually changed, so turning it on or
+                    // off alone is no longer dropped by the "Nothing to update" check.
+                    if (enable_ai_personalization !== initialAiPersonalization) {
+                        payload.enable_ai_personalization = enable_ai_personalization;
+                    }
+                    if (Object.keys(payload).length === 0) {
                         alert('Nothing to update.');
                         return;
                     }
-                    payload.gemini_api_key = gemini_api_key || null;
-                    payload.enable_ai_personalization = enable_ai_personalization;
                     saveBtn.disabled = true;
                     saveBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-1" aria-hidden="true"></span>Saving...';
                     try {
@@ -476,8 +518,11 @@
                             const updated = await res.json();
                             if (updated.organization) {
                                 document.getElementById('org-name').value = updated.organization.name || organization_name;
+                                updateGeminiKeyStatus(updated.organization.has_gemini_api_key === true);
+                                initialAiPersonalization = updated.organization.enable_ai_personalization !== false;
                             }
                             document.getElementById('new-password').value = '';
+                            document.getElementById('gemini-api-key').value = '';
                             alert('Settings saved.');
                         }
                     } catch (e) {
