@@ -143,6 +143,21 @@ class AuthMeViewTests(APITestCase):
         self.organization.refresh_from_db()
         self.assertIsNone(self.organization.gemini_api_key)
 
+    def test_patch_me_without_gemini_key_leaves_saved_key_untouched(self):
+        self.organization.gemini_api_key = 'AIza-secret-key'
+        self.organization.save(update_fields=['gemini_api_key'])
+
+        response = self.client.patch(
+            '/api/v1/auth/me/',
+            {'organization_name': 'Org After'},
+            format='json',
+        )
+
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.organization.refresh_from_db()
+        self.assertEqual(self.organization.gemini_api_key, 'AIza-secret-key')
+        self.assertTrue(response.data['organization']['has_gemini_api_key'])
+
 
 class RegistrationAndLoginTests(APITestCase):
     def test_register_rejects_weak_password_without_creating_an_organization(self):
